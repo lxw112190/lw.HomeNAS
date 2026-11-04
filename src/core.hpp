@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.2.2-dev";
+constexpr const char* Version = "0.2.4-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -44,6 +44,7 @@ uint64_t number(const json& value, const char* field);
 std::string text(const json& value, const char* field, size_t maximum, bool optional = false);
 std::string readText(const fs::path& path, size_t maximum = 65536);
 void writeText(const fs::path& path, const std::string& data);
+void consoleText(const std::string& utf8, bool error = false);
 fs::path executableDirectory();
 std::vector<std::string> ipv4Addresses();
 void ensureCertificate(const fs::path& data);

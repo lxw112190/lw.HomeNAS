@@ -19,3 +19,7 @@
 - 地址草稿与已认证endpoint分开保存；失败测试不能改变Keystore密文AAD或将原队列路由到新服务器。HTTP需电脑显式开放；HTTPS不静默降级。
 - 离线管理员密码工具必须取得相同实例锁、拒绝运行中的资料库，不启动后台恢复/媒体处理线程，不打印或保存自选明文密码。
 - Android仪器测试结束后应用可能已卸载；CI采集截图前重新安装APK并解析实际Launcher，不硬编码applicationId与Activity组合。测试失败仍保留原退出码并在模拟器结束前采集日志。
+- Windows控制台中文统一使用consoleText：控制台走WriteConsoleW，文件/管道/服务日志保留UTF-8。不要强制修改父控制台代码页；PowerShell交互入口避免二次解码。兼容检查可运行tests/console_encoding.py，不能将本机代码页测试称为Server 2012 R2实机通过。
+
+- 客户端维护分为APK版本与已签名Web资源版本，原生桥协议变化须调整兼容要求。资源私钥仅保存在仓库忽略的local-signing目录或CI Secrets，源码只提交公钥；不得打进部署包。
+- 防火墙脚本仅生成或验证计划，不自行在开发机开放端口；用户显式运行Open/Remove时才修改当前程序路径对应的受管规则。

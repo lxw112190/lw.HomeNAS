@@ -19,3 +19,5 @@ __pycache__/
 /android/app/build/
 /android/local.properties
 /android/.idea/
+
+/local-signing/

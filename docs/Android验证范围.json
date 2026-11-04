@@ -1,12 +1,12 @@
 {
   "date": "2026-11-04",
-  "android_source_version": "0.3.1-dev",
-  "server_compatibility": "0.2.0-dev and 0.2.1-dev (request correlation)",
+  "android_source_version": "0.4.0-dev",
+  "server_compatibility": "0.2.4-dev for client maintenance; existing backup endpoints unchanged",
   "host_has_android_sdk": false,
   "local_checks": {
     "java_grammar": {
       "result": "passed",
-      "files": 19
+      "files": 22
     },
     "xml_manifest_resources": "passed",
     "javascript_syntax": "passed",
@@ -34,8 +34,8 @@
   },
   "ci_executed": false,
   "apk_generated": false,
-  "jvm_tests": "new cases written; pending CI for 0.3.1-dev",
-  "android_15_instrumentation_tests": "4 tests written; pending CI for 0.3.1-dev",
+  "jvm_tests": "UI rollback test added; pending CI for 0.4.0",
+  "android_15_instrumentation_tests": "existing device tests pending CI on this version",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -49,5 +49,10 @@
     "workflow_result": "failed during later screenshot launch (Activity Error type 3)",
     "url": "https://github.com/lxw112190/lw.HomeNAS/actions/runs/41775941648",
     "does_not_validate_current_unpushed_changes": true
-  }
+  },
+  "new_features_not_device_verified": [
+    "signed UI staging/activation/rollback",
+    "APK signing verification and system install",
+    "native diagnostic upload"
+  ]
 }

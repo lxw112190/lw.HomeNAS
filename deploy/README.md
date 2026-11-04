@@ -52,3 +52,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action I
 ```
 
 批处理包装与PowerShell脚本随源码和运行包一起提供。Windows服务必须通过SCM启动；直接在终端运行 `NasServer.exe --service` 会明确报1063，不会伪装服务成功。
+
+0.2.3起，EXE直接使用Unicode控制台输出，不再切换CMD代码页。Console/AdminPassword入口让原生程序直接继承控制台，避免PowerShell二次解码；更新EXE时也请更新本目录的service.ps1。重定向及service.log仍为UTF-8。详见[控制台兼容记录](../docs/20261104-控制台中文输出兼容.md)。
+
+新增open_firewall.bat、remove_firewall.bat、status_firewall.bat，按EXE配置的HTTP/HTTPS端口及程序路径管理Windows入站TCP规则。Open/Remove需管理员权限，仅操作本工具对应的规则；云安全组需另行配置。详见[维护说明](../docs/20261104-客户端更新与日志反馈.md)。

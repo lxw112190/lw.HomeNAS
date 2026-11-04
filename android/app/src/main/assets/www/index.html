@@ -20,7 +20,7 @@
 <div class="tip">只有电脑完成整文件 SHA256 校验并确认入库，才显示“已备份”。手机删除文件不会删除电脑原件。电脑副本也建议再备份到第二块硬盘。</div>
 </section>
 <section id="page-library" hidden><div class="panel"><div class="section-title"><h2>电脑里的共享资料</h2><button id="load-library">刷新文件</button></div><p>家庭账号共享资料库；可将原件另存到手机并校验摘要。</p><div id="library" class="gallery"></div><button id="more" hidden>加载更多</button></div></section>
-<section id="page-settings" hidden>
+<section id="page-settings" hidden><div class="panel"><h2>应用更新与故障反馈</h2><p id="update-info">资源下载后下次打开生效。</p><div class="actions"><button id="check-updates">检查更新</button><button id="update-resources">下载资源更新</button><button id="install-apk">下载并安装新版APK</button><label>问题描述<input id="report-note" maxlength="500" placeholder="可选：发生时间和操作步骤"></label><button id="upload-logs">上传诊断日志</button></div></div>
 <form id="login" class="panel"><h2>连接家庭服务器</h2><p>电脑IP和端口分开填写，不用输入冒号。下面是示例IP，请改成电脑服务显示的地址。</p>
 <label>连接方式<select id="protocol" aria-label="连接方式"><option value="http">HTTP · 家庭内网</option><option value="https">HTTPS · 加密连接</option></select></label>
 <div class="connection-grid"><label>电脑IP或主机名<input id="host" type="text" inputmode="text" value="192.168.1.100" placeholder="192.168.1.100" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="256" required></label><label>端口<input id="port" type="number" inputmode="numeric" value="8787" min="1" max="65535" required></label></div>

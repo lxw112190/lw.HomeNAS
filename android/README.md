@@ -1,3 +1,5 @@
+> 当前源码已升级0.4.0-dev（versionCode 5）。资源更新、APK更新、日志上传见[维护说明](../docs/20261104-客户端更新与日志反馈.md)，本轮编译和真机验证待CI。下文保留原客户端基础功能说明。
+
 # Android 家庭备份客户端
 
 源码版本0.3.1-dev（versionCode 4），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。

@@ -65,7 +65,7 @@ final class NativeApi {
         return (X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(pem.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
     }
     private Request.Builder request(String path) throws IOException {
-        if(!path.matches("(server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
+        if(!path.matches("(client/latest|diagnostics|server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
         Request.Builder request=new Request.Builder().url(endpoint+"/api/v1/"+path);
         if(!token.isEmpty())request.header("Authorization","Bearer "+token);
         return request;
@@ -116,4 +116,16 @@ final class NativeApi {
         if(!Protocol.assetId(id))throw new IOException("文件ID不合法");
         return execute(request("assets/"+id+"/original").build(),control,true);
     }
+    Response packageFile(String hash,String extension,RunControl control) throws Exception {
+        if(!hash.matches("[a-f0-9]{64}")||!(extension.equals(".apk")||extension.equals(".zip")))throw new IOException("更新包路径无效");
+        Request.Builder builder=new Request.Builder().url(endpoint+"/api/v1/client/packages/"+hash+extension);
+        if(!token.isEmpty())builder.header("Authorization","Bearer "+token);
+        return execute(builder.build(),control,true);
+    }
+    JSONObject uploadReport(java.io.File file,RunControl control,String note) throws Exception {
+        try(Response response=execute(request("diagnostics").header("X-NAS-Note-Base64",android.util.Base64.encodeToString(note.getBytes(java.nio.charset.StandardCharsets.UTF_8),android.util.Base64.NO_WRAP)).post(RequestBody.create(MediaType.get("application/zip"),file)).build(),control,true)){
+            return new JSONObject(new String(readLimited(response.body().byteStream(),65536),java.nio.charset.StandardCharsets.UTF_8));
+        }finally{control.detach();}
+    }
+
 }

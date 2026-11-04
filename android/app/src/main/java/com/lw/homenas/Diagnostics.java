@@ -114,7 +114,7 @@ final class Diagnostics {
         return data;
     }
     private static JSONObject summary(Context context) throws Exception {
-        Settings settings=new Settings(context);JSONObject data=device().put("session",SESSION).put("exported_at",TIME.format(OffsetDateTime.now())).put("network",network(context));
+        Settings settings=new Settings(context);JSONObject data=device().put("resource_version",new ClientMaintenance(context).version()).put("session",SESSION).put("exported_at",TIME.format(OffsetDateTime.now())).put("network",network(context));
         data.put("server",Diagnostics.server(settings.prefs.getString("draft_endpoint",settings.prefs.getString("endpoint",""))))
             .put("credential_present",settings.prefs.contains("token")).put("auto",settings.prefs.getBoolean("auto",false)).put("paused",settings.paused())
             .put("wifi_only",settings.prefs.getBoolean("wifi",true)).put("charging",settings.prefs.getBoolean("charging",false)).put("selected_album_count",settings.albums().size())

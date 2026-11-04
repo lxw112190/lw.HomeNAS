@@ -44,6 +44,8 @@ public final class MainActivity extends Activity {
     private final ThreadPoolExecutor io=new ThreadPoolExecutor(2,2,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
     private final ConcurrentHashMap<String,JSONObject> assets=new ConcurrentHashMap<>();
     private WebView web;
+    private ClientMaintenance maintenance;
+    private java.io.File loadedUi;
     private Settings settings;
     private JSONObject pendingDownload;
     private Settings.Session downloadSession;
@@ -64,17 +66,17 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle state) {
-        super.onCreate(state);settings=new Settings(this);Diagnostics.initialize(this);Diagnostics.event("activity.create","restored="+(state!=null));
+        super.onCreate(state);maintenance=new ClientMaintenance(this);loadedUi=maintenance.beginLaunch();settings=new Settings(this);Diagnostics.initialize(this);Diagnostics.event("activity.create","restored="+(state!=null));
         if(!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             Diagnostics.event("webview.unsupported","WEB_MESSAGE_LISTENER unavailable");TextView error=new TextView(this);error.setPadding(30,60,30,30);error.setText("请先更新 Android System WebView 或 Chrome，再打开家庭备份。");setContentView(error);return;
         }
         web=new WebView(this);web.setBackgroundColor(Color.rgb(241,246,245));
-        WebSettings prefs=web.getSettings();prefs.setJavaScriptEnabled(true);prefs.setDomStorageEnabled(false);
+        WebSettings prefs=web.getSettings();prefs.setJavaScriptEnabled(true);prefs.setDomStorageEnabled(false);prefs.setCacheMode(WebSettings.LOAD_NO_CACHE);
         prefs.setAllowContentAccess(false);prefs.setAllowFileAccess(false);prefs.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         prefs.setSupportMultipleWindows(false);prefs.setJavaScriptCanOpenWindowsAutomatically(false);prefs.setSafeBrowsingEnabled(true);
         web.setWebChromeClient(new android.webkit.WebChromeClient(){@Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message){if(message.messageLevel()==android.webkit.ConsoleMessage.MessageLevel.ERROR||message.messageLevel()==android.webkit.ConsoleMessage.MessageLevel.WARNING)Diagnostics.event("webview.console","level="+message.messageLevel()+" line="+message.lineNumber()+" text omitted");return true;}});
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-        WebViewAssetLoader loader=new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build();
+        WebViewAssetLoader loader=loadedUi==null?new WebViewAssetLoader.Builder().addPathHandler("/assets/",new WebViewAssetLoader.AssetsPathHandler(this)).build():new WebViewAssetLoader.Builder().addPathHandler("/assets/www/",new WebViewAssetLoader.InternalStoragePathHandler(this,loadedUi)).build();
         web.setWebViewClient(new WebViewClient(){
             @Override public void onPageFinished(WebView view,String url){Diagnostics.event("webview.ready","local="+local(Uri.parse(url)));}
             @Override public void onReceivedError(WebView view,WebResourceRequest request,android.webkit.WebResourceError error){Diagnostics.event("webview.load_error","code="+error.getErrorCode()+" main="+request.isForMainFrame());}
@@ -116,6 +118,7 @@ public final class MainActivity extends Activity {
             else view.setPadding(insets.getSystemWindowInsetLeft(),insets.getSystemWindowInsetTop(),insets.getSystemWindowInsetRight(),insets.getSystemWindowInsetBottom());
             return insets;
         });setContentView(root);root.requestApplyInsets();web.loadUrl(ORIGIN+"/assets/www/index.html");
+        io.execute(()->{try{if(settings.session()!=null){maintenance.check();settings.message("更新检查完成；当前资源 "+maintenance.version()+"，可在设置查看更新");}}catch(Exception error){Diagnostics.error("updates.check",error);}});
     }
     static boolean local(Uri uri){return "https".equals(uri.getScheme())&&"appassets.androidplatform.net".equals(uri.getAuthority())&&uri.getPath()!=null&&uri.getPath().startsWith("/assets/www/");}
     private static WebResourceResponse blocked(){return new WebResourceResponse("text/plain","utf-8",403,"Forbidden",Collections.emptyMap(),new ByteArrayInputStream(new byte[0]));}
@@ -133,7 +136,7 @@ public final class MainActivity extends Activity {
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
     private JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session());
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version());
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope));
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
@@ -146,6 +149,18 @@ public final class MainActivity extends Activity {
     private Object dispatch(JSONObject input) throws Exception {
         String action=input.getString("action");JSONObject data=input.optJSONObject("data");if(data==null)data=new JSONObject();
         switch(action) {
+            case "uiReady": maintenance.ready();return new JSONObject();
+            case "checkUpdates": return maintenance.check();
+            case "updateResources": settings.message(maintenance.stageUi());return snapshot();
+            case "uploadLogs": settings.message(maintenance.uploadLogs(data.optString("description","")));return snapshot();
+            case "installApk": {
+                java.io.File apk=maintenance.prepareApk();ui(()->{
+                    if(!getPackageManager().canRequestPackageInstalls()){startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,Uri.parse("package:"+getPackageName())));settings.message("允许安装应用后，请再次点击APK升级");return;}
+                    Uri uri=androidx.core.content.FileProvider.getUriForFile(this,getPackageName()+".updates",apk);
+                    settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));
+                    startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
+                });return new JSONObject();
+            }
             case "snapshot": return snapshot();
             case "diagnostics": return Diagnostics.view(this);
             case "clientLog": {

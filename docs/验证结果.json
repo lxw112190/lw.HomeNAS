@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.2.2-dev",
+  "version": "0.2.4-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "passed",
@@ -107,13 +107,14 @@
   },
   "service_scripts": {
     "powershell_syntax": "passed",
-    "batch_entry_points": 12,
+    "batch_entry_points": 15,
     "unicode_spaced_path_and_quoting_plan": "passed",
     "outside_SCM_rejected_1063": "passed",
     "actual_SCM_installation": false,
     "system_service_ACL_firewall_changes_performed": false,
     "default_and_http_lan_mode_plans": "passed",
-    "both_non_SCM_modes_rejected_1063": "passed"
+    "both_non_SCM_modes_rejected_1063": "passed",
+    "firewall_open_remove_plans": "passed, no rules changed"
   },
   "browser": {
     "widths_checked": [
@@ -134,11 +135,11 @@
     }
   },
   "executable": {
-    "sha256": "a926e7b6f909cb55e50cc1b5f44c33a1636ff538b2738ef17fb93c570a82d8d4",
-    "bytes": 2787840
+    "sha256": "965d1511466ec54f76f94f7b39fa3c3e526ee9e55d5f02eb76b05a7a930fb77d",
+    "bytes": 2837504
   },
   "package": {
-    "version": "0.2.2-dev",
+    "version": "0.2.4-dev",
     "private_runtime_files_excluded": true,
     "checksum_location": "adjacent .zip.sha256; archive hash omitted here to avoid self-reference"
   },
@@ -147,7 +148,8 @@
     "Android automatic/background backup",
     "full upload above 4 GiB",
     "physical power-cut recovery",
-    "Windows SCM service registration/start/stop under virtual service account"
+    "Windows SCM service registration/start/stop under virtual service account",
+    "Windows Server 2012 R2 physical console/font/runtime validation"
   ],
   "http_and_admin_tests": {
     "count": 13,
@@ -167,9 +169,9 @@
       "server logs omit login and reset passwords"
     ],
     "scope": "native console HTTP and offline local admin maintenance; no SCM installed",
-    "last_executed_version": "0.2.1-dev"
+    "last_executed_version": "0.2.3-dev"
   },
-  "android_version": "0.3.1-dev (source, awaiting CI)",
+  "android_version": "0.4.0-dev source; CI and phone tests pending",
   "external_hosts_tests": {
     "count": 13,
     "checks": [
@@ -188,6 +190,55 @@
       "non-boolean external setting is rejected clearly"
     ],
     "scope": "local server with public/DNS Host headers; no real public deployment changed",
-    "public_server_tested": false
+    "public_server_tested": false,
+    "last_executed_version": "0.2.2-dev"
+  },
+  "console_encoding_tests": {
+    "count": 14,
+    "checks": [
+      "stderr Unicode console cells are correct at code page 437",
+      "executable leaves caller code pages unchanged at 437",
+      "stderr Unicode console cells are correct at code page 936",
+      "executable leaves caller code pages unchanged at 936",
+      "stderr Unicode console cells are correct at code page 65001",
+      "executable leaves caller code pages unchanged at 65001",
+      "real server startup banner has correct Chinese console cells",
+      "Unicode data path is correct in console cells",
+      "interactive password prompts use Unicode console output",
+      "password prompt output does not echo redirected test input",
+      "PowerShell 5.1 Console wrapper preserves Unicode error and exit code",
+      "PowerShell 5.1 AdminPassword wrapper preserves Unicode error and exit code",
+      "redirected stderr is strict UTF-8",
+      "redirected real startup log is strict UTF-8"
+    ],
+    "scope": "Windows 10 hidden console readback, real PowerShell 5.1, UTF-8 pipes/files; Server 2012 R2 physical test pending",
+    "last_executed_version": "0.2.3-dev"
+  },
+  "maintenance_tests": {
+    "count": 16,
+    "checks": [
+      "unpublished download state is explicit and public",
+      "anonymous package publishing is rejected",
+      "package upload is hashed by real server",
+      "published APK metadata is publicly readable",
+      "web APK download is byte-identical before login",
+      "signed UI archive upload succeeds",
+      "resource signature envelope is preserved unchanged",
+      "diagnostic ZIP receives report identifier",
+      "Unicode problem description survives upload",
+      "diagnostic reports are not public",
+      "administrator can list uploaded reports",
+      "diagnostic ZIP download preserves bytes",
+      "diagnostic logs do not enter shared media library",
+      "non-admin cannot read reports or publish packages",
+      "administrator can delete report",
+      "administrator can withdraw APK release"
+    ]
+  },
+  "maintenance_browser": {
+    "APK_publish": "synthetic non-installable fixture passed",
+    "signed_ui_publish": "passed",
+    "public_APK_link": "passed",
+    "physical_APK_installation": false
   }
 }

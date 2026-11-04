@@ -125,6 +125,6 @@
     <ClCompile Include="third_party\mbedtls\library\x509write_crt.c" />
     <ClCompile Include="third_party\mbedtls\library\x509write_csr.c" />
   </ItemGroup>
-  <ItemGroup><ClInclude Include="src\core.hpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="src\core.hpp" /><ClInclude Include="src\maintenance.hpp" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

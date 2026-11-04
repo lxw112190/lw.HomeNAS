@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <ctime>
 #include <windows.h>
+#include <wincrypt.h>
 
 namespace nas {
 namespace {
@@ -78,10 +79,11 @@ struct LoginLimiter {
     void check(const std::string& ip){std::lock_guard<std::mutex> lock(mutex);auto& item=failures[ip];if(millis()-item.second>60000)item={0,millis()};if(item.first>=8)throw Error(429,"TRY_LATER","尝试过于频繁，请一分钟后再试");}
     void failed(const std::string& ip){std::lock_guard<std::mutex> lock(mutex);if(failures.size()>2048)failures.clear();++failures[ip].first;}
 };
+#include "maintenance.hpp"
 void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,const std::shared_ptr<RequestLog>& logs) {
     auto limiter=std::make_shared<LoginLimiter>();
     server.new_task_queue=[] {return new httplib::ThreadPool(8,16,64);};
-    server.set_payload_max_length(static_cast<size_t>(store.config.chunkBytes));
+    server.set_payload_max_length(static_cast<size_t>(128ULL*1024*1024));
     server.set_read_timeout(30,0);server.set_write_timeout(30,0);server.set_keep_alive_timeout(2);
     server.set_logger([logs](const auto& request,const auto& response){logs->response(request,response);});
     server.set_exception_handler([logs](const httplib::Request& request,httplib::Response& response,std::exception_ptr exception){
@@ -99,7 +101,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
         if(!origin.empty()&&origin!=(std::string(https?"https://":"http://")+host)){
             reply(response,{{"code","ORIGIN_REJECTED"},{"message","不接受来自其他网站的请求"}},403);return httplib::Server::HandlerResponse::Handled;
         }
-        if(request.path.rfind("/api/",0)==0 && request.path!="/api/v1/server" && request.path!="/api/v1/login"){
+        if(request.path.rfind("/api/",0)==0 && request.path!="/api/v1/server" && request.path!="/api/v1/login" && request.path!="/api/v1/client/latest" && request.path.rfind("/api/v1/client/packages/",0)!=0){
             try{store.authenticate(token(request));}catch(const Error& e){reply(response,{{"code",e.code},{"message",e.what()}},e.status);return httplib::Server::HandlerResponse::Handled;}
         }
         return httplib::Server::HandlerResponse::Unhandled;
@@ -135,6 +137,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Get("/api/v1/assets/([a-f0-9]{48})/original",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);auto type=row["mime"].template get<std::string>();serveFile(request,response,store.originalPath(row),type,row["name"],request.get_param_value("download")=="1"||type=="application/octet-stream");});
     server.Get("/api/v1/assets/([a-f0-9]{48})/thumbnail",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);if(row["preview"]!="READY")throw Error(404,"PREVIEW_UNAVAILABLE","缩略图尚未生成或该格式暂不支持预览");serveFile(request,response,store.config.data/"cache"/(row["id"].template get<std::string>()+".jpg"),"image/jpeg","",false);});
     server.Get("/api/v1/certificate",[&store](const auto& request,auto& response){admin(store.authenticate(token(request)));serveFile(request,response,store.config.data/"server-cert.pem","application/x-pem-file","lw.HomeNAS.crt",true);});
+    maintenanceRoutes(server,store);
     for(const auto& name:{"index.html","app.js","style.css","sha256.js","hash-worker.js"}){
         const std::string file=name;auto path=store.config.web/fs::u8path(file);auto route=file=="index.html"?"/":"/"+file;
         server.Get(route,[path,file](const auto&,auto& response){auto type=file=="index.html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
@@ -163,20 +166,20 @@ int runServer(Config config,bool insecureLan,const std::function<void()>& ready)
     if(!tls.bind_to_port(config.host,config.httpsPort))throw std::runtime_error("Cannot bind HTTPS port");
     {std::lock_guard<std::mutex> guard(lifecycleMutex);if(stopRequested)return 0;httpServer=&http;tlsServer=&tls;runningStore=&store;}
     if(!ready)SetConsoleCtrlHandler(stopConsole,TRUE);
-    std::cout<<"lw.HomeNAS "<<Version<<"\n电脑管理：http://127.0.0.1:"<<config.httpPort<<"/\n";
+    std::ostringstream banner;banner<<"lw.HomeNAS "<<Version<<"\n电脑管理：http://127.0.0.1:"<<config.httpPort<<"/\n";
     for(const auto& ip:ipv4Addresses())if(ip!="127.0.0.1"){
-        std::cout<<"局域网 HTTPS：https://"<<ip<<":"<<config.httpsPort<<"/\n";
-        if(insecureLan)std::cout<<"局域网 HTTP：http://"<<ip<<":"<<config.httpPort<<"/\n";
+        banner<<"局域网 HTTPS：https://"<<ip<<":"<<config.httpsPort<<"/\n";
+        if(insecureLan)banner<<"局域网 HTTP：http://"<<ip<<":"<<config.httpPort<<"/\n";
     }
-    std::cout<<"数据目录："<<config.data.u8string()<<"\n证书 SHA256："<<certificateFingerprint(config.data/"server-cert.pem")<<"\n";
-    std::cout<<"默认管理员用户名：admin\n";
+    banner<<"数据目录："<<config.data.u8string()<<"\n证书 SHA256："<<certificateFingerprint(config.data/"server-cert.pem")<<"\n";
+    banner<<"默认管理员用户名：admin\n";
     if(fs::exists(config.data/"initial-admin-password.txt")){
-        if(!ready)std::cout<<"首次管理员密码："<<readText(config.data/"initial-admin-password.txt")<<"登录后请修改密码。\n";
-        else std::cout<<"首次管理员密码位于数据目录的 initial-admin-password.txt，不写入服务日志。\n";
+        if(!ready)banner<<"首次管理员密码："<<readText(config.data/"initial-admin-password.txt")<<"登录后请修改密码。\n";
+        else banner<<"首次管理员密码位于数据目录的 initial-admin-password.txt，不写入服务日志。\n";
     }
-    if(insecureLan)std::cout<<"当前已显式开启局域网 HTTP 试用模式，传输未加密，仅用于前台联调。\n";
-    if(config.allowExternalHosts)std::cout<<"公网地址测试已开启：接受公网IP或域名Host，不限本机网卡地址；账号登录仍需用户名和密码。\n";
-    std::cout<<"按 Ctrl+C 停止服务；关闭浏览器不影响服务。"<<std::endl;
+    if(insecureLan)banner<<"当前已显式开启局域网 HTTP 试用模式，传输未加密，仅用于前台联调。\n";
+    if(config.allowExternalHosts)banner<<"公网地址测试已开启：接受公网IP或域名Host，不限本机网卡地址；账号登录仍需用户名和密码。\n";
+    banner<<"按 Ctrl+C 停止服务；关闭浏览器不影响服务。\n";consoleText(banner.str());
     std::thread local([&]{http.listen_after_bind();});
     if(ready)ready();
     bool result=tls.listen_after_bind();http.stop();if(local.joinable())local.join();

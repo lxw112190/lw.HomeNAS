@@ -5,6 +5,7 @@
 #include <iphlpapi.h>
 #include <bcrypt.h>
 #include <fstream>
+#include <iostream>
 #include <set>
 #include <mbedtls/ctr_drbg.h>
 #include <mbedtls/entropy.h>
@@ -28,6 +29,9 @@ void initializeTlsThreads() {
     (void)initialized;
 }
 namespace {
+std::streambuf* const initialOutputBuffer=std::cout.rdbuf();
+std::streambuf* const initialErrorBuffer=std::cerr.rdbuf();
+std::mutex consoleMutex;
 void checked(NTSTATUS result) { if (result < 0) throw std::runtime_error("Windows cryptography operation failed"); }
 std::string hex(const unsigned char* bytes, size_t count) {
     static const char* digits = "0123456789abcdef";
@@ -41,6 +45,28 @@ std::wstring nativePath(const fs::path& path) {
     return value.rfind(L"\\\\", 0) == 0 ? L"\\\\?\\UNC\\" + value.substr(2) : L"\\\\?\\" + value;
 }
 void tlsCheck(int value) { if (value != 0) throw std::runtime_error("TLS certificate operation failed: " + std::to_string(value)); }
+}
+void consoleText(const std::string& utf8,bool error) {
+    std::lock_guard<std::mutex> guard(consoleMutex);
+    auto& stream=error?std::cerr:std::cout;
+    HANDLE handle=GetStdHandle(error?STD_ERROR_HANDLE:STD_OUTPUT_HANDLE);DWORD mode=0;
+    // A redirected stream (including the SCM service log) keeps its original UTF-8 bytes.
+    if(stream.rdbuf()!=(error?initialErrorBuffer:initialOutputBuffer)||!GetConsoleMode(handle,&mode)) {
+        stream.write(utf8.data(),static_cast<std::streamsize>(utf8.size()));stream.flush();return;
+    }
+    if(utf8.empty())return;
+    int length=MultiByteToWideChar(CP_UTF8,0,utf8.data(),static_cast<int>(utf8.size()),nullptr,0);
+    if(length<=0){stream.setstate(std::ios::badbit);return;}
+    std::wstring wide(static_cast<size_t>(length),L'\0');
+    MultiByteToWideChar(CP_UTF8,0,utf8.data(),static_cast<int>(utf8.size()),wide.data(),length);
+    std::wstring normalized;normalized.reserve(wide.size()+32);
+    for(size_t i=0;i<wide.size();++i){if(wide[i]==L'\n'&&(i==0||wide[i-1]!=L'\r'))normalized+=L'\r';normalized+=wide[i];}
+    for(size_t offset=0;offset<normalized.size();) {
+        DWORD count=static_cast<DWORD>(std::min<size_t>(8192,normalized.size()-offset)),written=0;
+        if(offset+count<normalized.size()&&normalized[offset+count-1]>=0xd800&&normalized[offset+count-1]<=0xdbff)--count;
+        if(!WriteConsoleW(handle,normalized.data()+offset,count,&written,nullptr)||!written){stream.setstate(std::ios::badbit);return;}
+        offset+=written;
+    }
 }
 uint64_t millis() { return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()); }
 uint64_t number(const json& j, const char* field) {

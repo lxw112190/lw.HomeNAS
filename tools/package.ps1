@@ -21,11 +21,13 @@ foreach ($file in @('README.md','build.gradle','settings.gradle','gradle.propert
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/build.gradle') -Destination (Join-Path $androidStage 'app')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/src') -Destination (Join-Path $androidStage 'app') -Recurse
+New-Item -ItemType Directory -Path (Join-Path $stage 'tools') | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/build-ui-bundle.py') -Destination (Join-Path $stage 'tools')
 New-Item -ItemType Directory -Path (Join-Path $stage 'licenses') | Out-Null
 foreach ($pair in @(@('third_party/httplib/LICENSE','httplib-LICENSE'), @('third_party/json/LICENSE.MIT','json-LICENSE.MIT'), @('third_party/mbedtls/LICENSE','mbedtls-LICENSE'))) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $pair[0]) -Destination (Join-Path $stage ('licenses/'+$pair[1]))
 }
-$launch = "@echo off`r`nchcp 65001 >nul`r`n`"%~dp0NasServer.exe`"`r`npause`r`n"
+$launch = "@echo off`r`n`"%~dp0NasServer.exe`"`r`npause`r`n"
 [IO.File]::WriteAllText((Join-Path $stage '启动服务.cmd'), $launch, [Text.UTF8Encoding]::new($false))
 $quickStart = @'
 lw.HomeNAS 家庭备份开发预览
@@ -36,6 +38,7 @@ lw.HomeNAS 家庭备份开发预览
 服务首次安装HTTP：deploy/install_http_service.bat；已有服务切换：deploy/configure_http_service.bat。
 HTTP传输未加密。默认服务仍是局域网HTTPS，HTTP仅本机；详见deploy/README.md。
 公网IP测试：config/server.json中设置allow_external_hosts为true，http_port按需设为8080，再启动HTTP入口。
+网页设置页支持APK/签名资源发布及诊断报告；防火墙脚本见deploy/open_firewall.bat与remove_firewall.bat。
 Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不在此Windows包内。
 手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；本轮Android尚待CI/真机验证。
 管理员可创建普通/只读账号。服务脚本支持安装、启停、查询与卸载，卸载保留数据。

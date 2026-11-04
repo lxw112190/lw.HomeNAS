@@ -77,15 +77,16 @@ try {
     if ($PlanOnly) { Get-Layout | ConvertTo-Json -Depth 3; exit 0 }
     if ($Action -eq 'AdminPassword') {
         $layout = Get-Layout
-        & $layout.Executable --config $layout.Config --initialize-admin
-        exit $LASTEXITCODE
+        # Inherit the console directly instead of PowerShell 5.1 decoding native output through a pipe.
+        $process = Start-Process -FilePath $layout.Executable -ArgumentList ('--config "'+$layout.Config+'" --initialize-admin') -NoNewWindow -Wait -PassThru
+        try { exit $process.ExitCode } finally { $process.Dispose() }
     }
     if ($Action -eq 'Console') {
         $layout = Get-Layout
-        $arguments = @('--config', $layout.Config)
-        if ($AllowInsecureLan) { $arguments += '--allow-insecure-lan' }
-        & $layout.Executable @arguments
-        exit $LASTEXITCODE
+        $arguments = '--config "'+$layout.Config+'"'
+        if ($AllowInsecureLan) { $arguments += ' --allow-insecure-lan' }
+        $process = Start-Process -FilePath $layout.Executable -ArgumentList $arguments -NoNewWindow -Wait -PassThru
+        try { exit $process.ExitCode } finally { $process.Dispose() }
     }
     if ($Action -eq 'Status') {
         $service = Get-NasService

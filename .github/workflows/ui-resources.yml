@@ -1,0 +1,38 @@
+name: Android UI resources
+on:
+  workflow_dispatch:
+    inputs:
+      revision:
+        description: Resource revision (positive integer, increase on every release)
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install signing dependency
+        run: python -m pip install cryptography
+      - name: Build signed UI bundle without Android SDK
+        env:
+          UI_SIGNING_KEY_BASE64: ${{ secrets.UI_SIGNING_KEY_BASE64 }}
+          UI_REVISION: ${{ inputs.revision }}
+        shell: bash
+        run: |
+          test -n "$UI_SIGNING_KEY_BASE64" || { echo 'Configure UI_SIGNING_KEY_BASE64 using the existing resource signing key.'; exit 1; }
+          umask 077
+          key="$RUNNER_TEMP/ui-signing.pem"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$UI_SIGNING_KEY_BASE64" | base64 --decode > "$key"
+          python tools/build-ui-bundle.py --revision "$UI_REVISION" --key "$key" --output deliveries/ui
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Android-UI-r${{ inputs.revision }}
+          path: deliveries/ui/
+          if-no-files-found: error
+          retention-days: 14
