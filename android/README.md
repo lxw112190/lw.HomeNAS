@@ -2,9 +2,9 @@
 
 # Android 家庭备份客户端
 
-源码版本0.3.1-dev（versionCode 4），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
+源码版本0.5.0-dev（versionCode 6，待CI），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
 
-**当前状态：** [上一版CI](https://github.com/lxw112190/lw.HomeNAS/actions/runs/41775941648)的APK构建、lint/JVM测试及3项模拟器测试通过；随后截图步骤启动Activity失败。本轮已改为测试后重新安装APK、解析真实Launcher并收集日志，新增连接与日志测试。0.3.1的编译/设备测试等待用户推送后的CI。本机无Android SDK，未做真机验收。
+**当前状态：** 发布包仍使用已核验的CI3 0.4.0-dev / versionCode 5，签名资源r2兼容该APK，带独立登录页、密码查看、底部导航及分页界面。0.5.0源码新增完整原生队列分页、批量入队和摘要进度，需CI编译及真机验收；本地仅完成Java语法/XML/JS检查及浏览器模拟布局，不等同Android运行测试。[本轮说明](../docs/20261104-大批量备份与页面拆分.md)。
 
 ## 不装Android环境，使用CI生成APK
 
@@ -37,7 +37,7 @@ CI只在push或手动运行时使用这些Secrets；未配置时只生成测试A
 
 1. 家庭HTTP模式：电脑运行 `deploy/start_console_http.bat`；Windows服务新安装用 `install_http_service.bat`，已有服务用 `configure_http_service.bat`。默认服务仍只对局域网开放HTTPS，HTTP需显式启用。
 2. 手机首次显示HTTP、电脑IP示例 `192.168.1.100`、端口8787。将IP改为电脑真实局域网地址即可，不需要打冒号；协议和端口可以单独修改，也可粘贴完整URL自动拆分。点击“测试连接”，无需密码，先确认是否能访问。修改后测试或登录会记住地址；失败测试不会改变已有账号的会话和队列归属。
-3. 输入用户名和密码登录。管理员名admin；可在电脑停止服务后用 `set_admin_password.bat` 设置好记的10位以上密码，再启动服务。建议为手机创建普通用户。资料库仍为家庭共享；viewer只能浏览下载。
+3. 输入用户名和密码登录。管理员名admin；可在电脑停止服务后用 `set_admin_password.bat` 设置至少6个字符的密码，再启动服务。建议为手机创建普通用户。资料库仍为家庭共享；viewer只能浏览下载。
 4. 在“备份”选择照片、视频或文档/录音等文件；使用系统文档选择器的持久读取授权，加入本机SQLite队列。点击“立即备份 / 继续”。
 5. 相册增量：先授权照片/视频访问，再到设置中刷新相册、勾选、保存；可立即扫描或打开定时备份。Android14+只授权部分照片时，软件只扫描实际授权范围，不称“全量备份”。权限缩小后需要重新授权和重试受影响项。
    如需保留照片中的原始位置元数据，点击“保留照片原始元数据”授权；对MediaStore使用requireOriginal。未授权时系统可能提供脱敏版本；第三方文件提供器也可能提供转换版本。摘要校验针对实际获准读取的字节，不能恢复提供器已移除的信息。授权变化后重新扫描会区分原始/普通读取URI。
@@ -76,3 +76,9 @@ CI只在push或手动运行时使用这些Secrets；未配置时只生成测试A
 当前通用Web2Android Packer以精简DEX注入为主，不支持直接携带WorkManager等完整资源依赖。因此本项目通过Gradle输出完整APK，**不把该APK/DEX冒充可直接注入的通用Runtime包**。`project.example.json`仅保留早期远程网页壳示例，不是当前原生备份客户端的构建入口。
 
 源码布局检查：`python tools/check-android.py`；真正编译与测试以GitHub Actions报告为准。后续优先验证实际手机的文件选择、权限缩小、锁屏、进程回收、Wi-Fi断连、大视频恢复与原件下载。
+
+## 页面维护
+
+`app/src/main/assets/www/index.html` 是安卓页面外壳；`boot.js` 加载独立的 `views/login.html`、`backup.html`、`library.html`、`settings.html`、`dialogs.html`，再执行 `app.js`。Web页面独立位于根目录 `web/views/`，两端不复用同一份HTML。未登录时只进入登录或连接设置；登录后显示备份、资料库、连接与设置三个底部入口。原生桥和服务端仍负责权限校验。
+
+修改页面资源后应提高资源revision重新签名；修改Java原生能力需增加versionCode，通过CI构建APK。保持资源签名身份，私钥不得进Git或部署包。

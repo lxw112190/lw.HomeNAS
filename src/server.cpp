@@ -133,14 +133,15 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/uploads/([a-f0-9]{48})/complete",[&store](const auto& request,auto& response){body(request);reply(response,store.complete(request.matches[1],store.authenticate(token(request))),202);});
     server.Post("/api/v1/uploads/([a-f0-9]{48})/cancel",[&store](const auto& request,auto& response){body(request);reply(response,store.cancel(request.matches[1],store.authenticate(token(request))));});
     server.Get("/api/v1/tasks",[&store](const auto& request,auto& response){reply(response,store.tasks(store.authenticate(token(request))));});
-    server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");reply(response,store.assets(request.get_param_value("before"),request.get_param_value("type"),search));});
+    server.Get("/api/v1/tasks/page",[&store](const auto& request,auto& response){reply(response,store.taskPage(store.authenticate(token(request)),request.get_param_value("before"),request.get_param_value("filter")));});
+    server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");reply(response,store.assets(request.get_param_value("before"),request.get_param_value("type"),search,request.has_param("limit")?static_cast<int>(std::min<uint64_t>(number(json{{"limit",request.get_param_value("limit")}},"limit"),101)):60));});
     server.Get("/api/v1/assets/([a-f0-9]{48})/original",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);auto type=row["mime"].template get<std::string>();serveFile(request,response,store.originalPath(row),type,row["name"],request.get_param_value("download")=="1"||type=="application/octet-stream");});
     server.Get("/api/v1/assets/([a-f0-9]{48})/thumbnail",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);if(row["preview"]!="READY")throw Error(404,"PREVIEW_UNAVAILABLE","缩略图尚未生成或该格式暂不支持预览");serveFile(request,response,store.config.data/"cache"/(row["id"].template get<std::string>()+".jpg"),"image/jpeg","",false);});
     server.Get("/api/v1/certificate",[&store](const auto& request,auto& response){admin(store.authenticate(token(request)));serveFile(request,response,store.config.data/"server-cert.pem","application/x-pem-file","lw.HomeNAS.crt",true);});
     maintenanceRoutes(server,store);
-    for(const auto& name:{"index.html","app.js","style.css","sha256.js","hash-worker.js"}){
+    for(const auto& name:{"index.html","boot.js","app.js","style.css","sha256.js","hash-worker.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
         const std::string file=name;auto path=store.config.web/fs::u8path(file);auto route=file=="index.html"?"/":"/"+file;
-        server.Get(route,[path,file](const auto&,auto& response){auto type=file=="index.html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
+        server.Get(route,[path,file](const auto&,auto& response){auto type=file.size()>=5&&file.substr(file.size()-5)==".html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
     }
 }
 }

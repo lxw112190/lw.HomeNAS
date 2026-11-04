@@ -1,7 +1,7 @@
 {
   "date": "2026-11-04",
-  "android_source_version": "0.4.0-dev",
-  "server_compatibility": "0.2.4-dev for client maintenance; existing backup endpoints unchanged",
+  "android_source_version": "0.5.0-dev",
+  "server_compatibility": "0.2.5-dev; UI r2 minNative1 compatible with shipped CI3 0.4.0/code5",
   "host_has_android_sdk": false,
   "local_checks": {
     "java_grammar": {
@@ -25,17 +25,19 @@
       "count": 3
     },
     "web_preview_actions": [
-      "bare IP / port split",
-      "HTTP / HTTPS mode changes defaults",
-      "pasted URL normalizes before test",
-      "no-password mock connection test",
-      "diagnostic modal"
+      "standalone login",
+      "login to connection settings and return",
+      "show/hide password",
+      "mock login to bottom navigation",
+      "mock library page",
+      "logout hides navigation",
+      "390px no overflow"
     ]
   },
   "ci_executed": false,
-  "apk_generated": true,
-  "jvm_tests": "UI rollback test added; pending CI for 0.4.0",
-  "android_15_instrumentation_tests": "existing device tests pending CI on this version",
+  "apk_generated": false,
+  "jvm_tests": "pending CI for 0.5.0",
+  "android_15_instrumentation_tests": "new login navigation and 501-row queue pagination tests added; pending CI",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -64,5 +66,17 @@
     "content_digest": "independently verified",
     "CI_test_reports_received": false,
     "physical_phone_tests": "not performed"
+  },
+  "default_apk": {
+    "version": "0.4.0-dev",
+    "versionCode": 5,
+    "source": "CI3 previously verified artifact",
+    "unchanged": true
+  },
+  "signed_ui": {
+    "revision": 2,
+    "minNative": 1,
+    "signature": "verified with embedded public key",
+    "runtime_phone_test": "pending"
   }
 }

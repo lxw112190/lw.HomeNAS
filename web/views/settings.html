@@ -1,0 +1,130 @@
+<section class="page hidden" id="page-settings">
+ <div class="panel admin-only">
+  <h2>
+   安卓客户端发布
+  </h2>
+  <form class="account-form" id="publish-apk">
+   <label>
+    APK
+    <input accept=".apk" id="apk-file" required="" type="file"/>
+   </label>
+   <label>
+    versionCode
+    <input id="apk-code" min="1" required="" type="number"/>
+   </label>
+   <label>
+    版本名称
+    <input id="apk-name" maxlength="64" placeholder="例如 0.4.0" required=""/>
+   </label>
+   <label>
+    更新说明
+    <input id="apk-notes" maxlength="2000"/>
+   </label>
+   <button class="primary">
+    上传并发布 APK
+   </button>
+  </form>
+  <p>
+   CI编译后发布同一签名的APK，手机才能覆盖升级。
+  </p>
+  <form class="account-form" id="publish-ui">
+   <label>
+    资源 ZIP
+    <input accept=".zip" id="ui-file" required="" type="file"/>
+   </label>
+   <label>
+    签名清单 release.json
+    <input accept=".json" id="ui-manifest" required="" type="file"/>
+   </label>
+   <button class="primary">
+    上传并发布资源
+   </button>
+  </form>
+  <p id="publish-status" role="status">
+  </p>
+  <button id="withdraw-apk">
+   撤回APK发布
+  </button>
+  <button id="withdraw-ui">
+   撤回资源发布
+  </button>
+ </div>
+ <div class="panel admin-only">
+  <h2>
+   手机诊断报告
+  </h2>
+  <button id="load-reports">
+   刷新报告
+  </button>
+  <div id="reports">
+  </div>
+ </div>
+ <div class="panel">
+  <h2>
+   我的账号
+  </h2>
+  <p id="profile-summary">
+  </p>
+  <button class="secondary" id="profile-logout">
+   退出当前账号
+  </button>
+ </div>
+ <div class="panel admin-only">
+  <h2>
+   存储位置
+  </h2>
+  <p class="path" id="data-path">
+   —
+  </p>
+  <p>
+   目录与端口在 config/server.json 中设置，修改后重启服务。路径按配置文件所在目录解析。
+  </p>
+  <h3>
+   局域网地址
+  </h3>
+  <div class="address-list" id="addresses">
+  </div>
+  <h3>
+   HTTPS 证书 SHA256
+  </h3>
+  <code class="fingerprint" id="certificate-hash">
+   —
+  </code>
+  <p class="fine">
+   首次连接需核对服务器身份。现有 Web2Android 远程网址模式需要受 WebView 信任的证书；不通过忽略证书错误连接。
+  </p>
+  <a class="button secondary admin-only" href="./api/v1/certificate" id="download-certificate">
+   下载服务器证书
+  </a>
+ </div>
+ <div class="panel">
+  <h2>
+   修改我的密码
+  </h2>
+  <form class="password-form" id="password-form">
+   <label>
+    当前密码
+    <input autocomplete="current-password" id="old-password" required="" type="password"/>
+   </label>
+   <label>
+    新密码（至少6个字符）
+    <input autocomplete="new-password" id="new-password" minlength="6" required="" type="password"/>
+   </label>
+   <button class="primary">
+    保存并重新登录
+   </button>
+  </form>
+ </div>
+ <div class="panel">
+  <h2>
+   文件保留规则
+  </h2>
+  <p>
+   手机删除照片、移动相册或禁用账号，都不会删除电脑原件。本版没有自动清理手机空间或服务器原件的操作。
+  </p>
+  <p>
+   “已入库”表示电脑副本通过接收校验。第二硬盘副本与视频转码尚未接入；安卓相册备份请在客户端设置。
+  </p>
+ </div>
+</section>
+

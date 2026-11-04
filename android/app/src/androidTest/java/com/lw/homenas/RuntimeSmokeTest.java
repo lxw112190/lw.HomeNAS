@@ -29,13 +29,38 @@ public class RuntimeSmokeTest {
             while(System.nanoTime()<deadline){version=read(scenario,"document.getElementById('version')?.textContent || ''");if(version.contains(BuildConfig.VERSION_NAME))break;Thread.sleep(200);}
             assertTrue("Native snapshot did not reach local Web page: "+version,version.contains(BuildConfig.VERSION_NAME));
             assertTrue(read(scenario,"document.body.innerText").contains("我的家庭备份"));
-            read(scenario,"document.getElementById('go-connect').click(); document.getElementById('page-settings').hidden");
+            assertEquals("false",read(scenario,"document.getElementById('page-login').hidden"));
+            assertEquals("true",read(scenario,"document.getElementById('bottom-nav').hidden"));
+            read(scenario,"page('library')");
+            assertEquals("true",read(scenario,"document.getElementById('page-library').hidden"));
+            read(scenario,"document.getElementById('login-settings').click(); document.getElementById('page-settings').hidden");
             assertEquals("false",read(scenario,"document.getElementById('page-settings').hidden"));
             assertEquals("\"http\"",read(scenario,"document.getElementById('protocol').value"));
             assertEquals("\"192.168.1.100\"",read(scenario,"document.getElementById('host').value"));
             assertEquals("\"8787\"",read(scenario,"document.getElementById('port').value"));
             assertEquals("false",read(scenario,"document.documentElement.scrollWidth > window.innerWidth"));
         }
+    }
+    @Test public void queuePagesAreBoundedStableAndAccountScoped() throws Exception {
+        android.content.Context context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext();
+        TaskStore store=TaskStore.get(context);String scope="ci-page-"+java.util.UUID.randomUUID();
+        android.database.sqlite.SQLiteDatabase db=store.getWritableDatabase();
+        try {
+            db.beginTransaction();try {
+                for(int i=0;i<501;i++)store.enqueue(scope,"source-"+i,"content://ci/"+i,"synthetic-"+i,"",1,0);
+                store.enqueue(scope+"-other","other","content://ci/other","other","",1,0);
+                db.setTransactionSuccessful();
+            } finally {db.endTransaction();}
+            String before="";java.util.Set<String> seen=new java.util.HashSet<>();int pages=0;
+            do {
+                org.json.JSONObject result=store.summary(scope,before,"all");org.json.JSONArray items=result.getJSONArray("items");assertTrue(items.length()<=50);
+                for(int i=0;i<items.length();i++){assertTrue(items.getJSONObject(i).getString("name").startsWith("synthetic-"));assertTrue(seen.add(items.getJSONObject(i).getString("diagnostic_id")));}
+                before=result.getString("next");assertTrue(++pages<20);
+            } while(!before.isEmpty());
+            assertEquals(501,seen.size());assertEquals(11,pages);
+            assertEquals(0,store.summary(scope,"","ready").getJSONArray("items").length());
+            try {store.summary(scope,"bad","all");fail("Invalid cursor accepted");}catch(IllegalArgumentException expected){}
+        } finally {db.delete("tasks","scope IN (?,?)",new String[]{scope,scope+"-other"});}
     }
     @Test public void sessionSurvivesReloadWithoutPlaintextTokenOrPassword() throws Exception {
         android.content.Context context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext();Settings settings=new Settings(context);

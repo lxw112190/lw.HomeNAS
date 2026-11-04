@@ -12,7 +12,7 @@ try:
  h.post('admin/client/apk/publish',{**blob,'versionCode':6,'versionName':'test-only','notes':'fixture'})
  latest=requests.get(h.url+'client/latest').json()['apk'];h.check(latest['versionCode']==6,'published APK metadata is publicly readable')
  h.check(requests.get(h.url+'client/packages/'+blob['sha256']+'.apk').content==fake,'web APK download is byte-identical before login')
- envelope=json.loads((ROOT/'deliveries/ui/release.json').read_text());ui=(ROOT/'deliveries/ui/ui-r1.zip').read_bytes()
+ envelope=json.loads((ROOT/'deliveries/ui/release.json').read_text());revision=json.loads(base64.b64decode(envelope['payload']))['revision'];ui=(ROOT/f'deliveries/ui/ui-r{revision}.zip').read_bytes()
  h.check(h.admin.post(h.url+'admin/client/ui/blob',data=ui).status_code==200,'signed UI archive upload succeeds')
  h.post('admin/client/ui/publish',envelope);h.check(requests.get(h.url+'client/latest').json()['ui']==envelope,'resource signature envelope is preserved unchanged')
  archive=io.BytesIO()

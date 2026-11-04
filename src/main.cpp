@@ -21,11 +21,11 @@ int initializeAdmin(const nas::Config& config) {
     HANDLE instance=CreateFileW((config.data/"instance.lock").c_str(),GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(instance==INVALID_HANDLE_VALUE)throw std::runtime_error("请先停止 Windows 服务或前台程序，再设置管理员密码");
     struct Close{HANDLE handle;~Close(){CloseHandle(handle);}}close{instance};
-    nas::consoleText("设置本机管理员 admin 密码（不改其他账号，不删除资料）。\n请输入至少10位、方便你输入的密码：");
+    nas::consoleText("设置本机管理员 admin 密码（不改其他账号，不删除资料）。\n请输入至少6位、方便你输入的密码：");
     auto password=readPassword();nas::consoleText("请再次输入：");auto repeated=readPassword();
     struct Clear{std::string& a;std::string& b;~Clear(){if(!a.empty())SecureZeroMemory(a.data(),a.size());if(!b.empty())SecureZeroMemory(b.data(),b.size());}}clear{password,repeated};
     if(password!=repeated)throw std::runtime_error("两次密码不一致，未修改");
-    if(password.size()<10||password.size()>256||password.find_first_of(std::string("\0\r\n",3))!=std::string::npos)throw std::runtime_error("密码需10至256字节且不含换行，未修改");
+    if(nas::passwordCharacters(password)<6||password.size()>256||password.find_first_of(std::string("\0\r\n",3))!=std::string::npos)throw std::runtime_error("密码至少6个字符、最多256字节，且不含换行，未修改");
     nas::Store store(config,false);
     store.updateUser("administrator",{{"new_password",password},{"role","admin"},{"enabled",true}},nas::Identity{"administrator","admin","本机维护","admin",true});
     nas::consoleText("已设置管理员 admin 密码；旧管理员会话已失效。请启动服务后使用新密码登录。\n");return 0;

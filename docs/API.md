@@ -20,8 +20,9 @@
 | PUT /api/v1/uploads/{id}/data | 顺序二进制块上传 |
 | POST /api/v1/uploads/{id}/complete | 完整校验排队，返回202；重复调用返回同一结果 |
 | POST /api/v1/uploads/{id}/cancel | 取消尚未入库的UPLOADING任务，丢弃临时进度并释放容量预留；重复调用幂等 |
+| GET /api/v1/tasks/page | `{items,next}`，每页50条，before游标，filter=all/active/failed/ready；保持账号任务隔离 |
 | GET /api/v1/tasks | 最近100条任务；用户只看自己的任务，管理员看全部 |
-| GET /api/v1/assets | `{items,next}`，每页60条 |
+| GET /api/v1/assets | `{items,next}`，limit默认60，范围1至100，Web使用48 |
 | GET /api/v1/assets/{id}/original | 原件/单段Range，`?download=1`强制下载 |
 | GET /api/v1/assets/{id}/thumbnail | JPEG缩略图；不可用时404 |
 | GET /api/v1/certificate | 管理员下载公开服务器证书 |
@@ -50,4 +51,4 @@ JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`�
 
 暂停前台传输可以直接终止请求，确认块不会被撤销。取消任务会丢弃未入库的临时进度并释放容量预留；不能取消正在校验/入库或已经READY的文件。此预览版尚未实现会话自动过期，长期未完成项可在任务页手动取消。
 
-`GET assets` 可使用 `type=image|video|file`、`q=文件名` 和上次返回的 `before=next` 游标。原件路径不对客户端开放。
+`GET assets` 可使用 `type=image|video|file`、`q=文件名` 、`limit=1..100` 和上次返回的 `before=next` 游标。原件路径不对客户端开放。

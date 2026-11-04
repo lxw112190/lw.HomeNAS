@@ -1,0 +1,66 @@
+<div>
+ <dialog id="user-editor">
+  <div class="preview-head">
+   <h2 id="edit-user-title">
+    编辑账号
+   </h2>
+   <button class="secondary" id="close-user-editor">
+    关闭 ✕
+   </button>
+  </div>
+  <form class="account-form" id="edit-user-form">
+   <label>
+    显示名称
+    <input id="edit-display-name" maxlength="48" required=""/>
+   </label>
+   <label>
+    角色
+    <select id="edit-role">
+     <option value="member">
+      普通用户
+     </option>
+     <option value="viewer">
+      只读用户
+     </option>
+     <option value="admin">
+      管理员
+     </option>
+    </select>
+   </label>
+   <label class="check-label">
+    <input id="edit-enabled" type="checkbox"/>
+    启用此账号
+   </label>
+   <label>
+    重置密码（留空保留原密码）
+    <input autocomplete="new-password" id="edit-password" maxlength="256" placeholder="如需重置，至少6个字符" type="password"/>
+   </label>
+   <div>
+    <button class="primary">
+     保存账号
+    </button>
+   </div>
+  </form>
+  <p class="error" id="edit-user-error" role="alert">
+  </p>
+ </dialog>
+ <dialog id="preview">
+  <div class="preview-head">
+   <strong id="preview-title">
+   </strong>
+   <button class="secondary" id="close-preview">
+    关闭 ✕
+   </button>
+  </div>
+  <div id="preview-content">
+  </div>
+  <div class="preview-footer">
+   <span id="preview-info">
+   </span>
+   <a class="button primary" id="download-original">
+    下载原文件
+   </a>
+  </div>
+ </dialog>
+</div>
+

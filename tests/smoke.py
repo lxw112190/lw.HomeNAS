@@ -106,7 +106,7 @@ class Harness:
     def run(self):
         self.start()
         try:
-            for resource in ['', 'app.js', 'style.css', 'sha256.js', 'hash-worker.js']:
+            for resource in ['', 'boot.js', 'app.js', 'style.css', 'sha256.js', 'hash-worker.js'] + ['views/'+name+'.html' for name in ['login','home','library','transfers','users','settings','dialogs']]:
                 response=requests.get(self.url.replace('/api/v1/','/')+resource,timeout=10)
                 self.check(response.status_code==200 and len(response.content)>50,'bundled web resource: '+(resource or 'index.html'))
             self.check(requests.get(self.url + 'assets').status_code == 401, 'anonymous media access rejected')
@@ -129,7 +129,13 @@ class Harness:
             self.post('users', {'username':'FAMILY_MEMBER','display_name':'重复账号','role':'member','password':member_password},status=409)
             self.post('users', {'username':'bad/name','display_name':'非法用户名','role':'member','password':member_password},status=400)
             self.post('users', {'username':'bad_role','display_name':'非法角色','role':'owner','password':member_password},status=400)
-            self.post('users', {'username':'weak_password','display_name':'弱密码','role':'member','password':'123'},status=400)
+            self.post('users', {'username':'weak_password','display_name':'弱密码','role':'member','password':'12345'},status=400)
+            self.check(True,'five-character password rejected')
+            self.post('users',{'username':'six_chars','display_name':'fixture','role':'viewer','password':'123456'},status=201)
+            self.check(self.post('login',{'username':'six_chars','password':'123456'},session=requests.Session())['role']=='viewer','six-character password accepted')
+            self.post('users',{'username':'unicode_chars','display_name':'fixture','role':'viewer','password':'一二三四五六'},status=201)
+            self.post('users',{'username':'unicode_short','display_name':'fixture','role':'viewer','password':'一二三四五'},status=400)
+            self.check(True,'password character length applies to Unicode')
             phone=requests.Session()
             login=self.post('login', {'username':'FAMILY_MEMBER','password':member_password},session=phone)
             self.check(login['role']=='member' and login['can_upload'],'username/password member login is case-insensitive')

@@ -43,6 +43,7 @@ public final class MainActivity extends Activity {
     private static final int FILES=10,CERTIFICATE=11,SAVE=12,EXPORT_LOGS=13,MEDIA_PERMISSION=20,NOTIFICATION_PERMISSION=21,METADATA_PERMISSION=22;
     private final ThreadPoolExecutor io=new ThreadPoolExecutor(2,2,0,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<>(16));
     private final ConcurrentHashMap<String,JSONObject> assets=new ConcurrentHashMap<>();
+    private volatile String queueBefore="",queueFilter="active";
     private WebView web;
     private ClientMaintenance maintenance;
     private java.io.File loadedUi;
@@ -135,9 +136,9 @@ public final class MainActivity extends Activity {
         Settings.Session session=settings.session();if(session==null)throw new SecurityException("请先登录家庭服务器");
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
-    private JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version());
-        Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope));
+    private synchronized JSONObject snapshot() throws Exception {
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",2).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
         return result;
@@ -161,6 +162,7 @@ public final class MainActivity extends Activity {
                     startActivity(new Intent(Intent.ACTION_VIEW).setDataAndType(uri,"application/vnd.android.package-archive").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION));
                 });return new JSONObject();
             }
+            case "queuePage": {Settings.Session session=requireSession(false);String before=data.optString("before",""),filter=data.optString("filter","active");TaskStore.get(this).summary(session.scope,before,filter);synchronized(this){queueBefore=before;queueFilter=filter;return snapshot();}}
             case "snapshot": return snapshot();
             case "diagnostics": return Diagnostics.view(this);
             case "clientLog": {
@@ -186,11 +188,11 @@ public final class MainActivity extends Activity {
                 JSONObject result;try{result=probe.post("login",login,control);}finally{login.remove("password");data.remove("password");}
                 String token=result.getString("token");if(!token.matches("[a-f0-9]{64}"))throw new java.io.IOException("登录响应不合法");
                 JSONObject me=new NativeApi(endpoint,pem,http,token).get("me",control);
-                settings.save(endpoint,pem,http,server.getString("server_id"),me,token);BackupScheduler.cancel(this);assets.clear();resetApi();
+                queueBefore="";queueFilter="active";settings.save(endpoint,pem,http,server.getString("server_id"),me,token);BackupScheduler.cancel(this);assets.clear();resetApi();
                 Diagnostics.event("login.saved","role="+me.optString("role")+" can_upload="+me.optBoolean("can_upload")+" encrypted_session=true");
                 settings.message("登录成功；请选择文件或相册，点击立即备份");return snapshot();
             }
-            case "logout": {
+            case "logout": {queueBefore="";queueFilter="active";
                 Settings.Session old=settings.session();settings.clear();BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));BackupScheduler.cancel(this);assets.clear();resetApi();
                 if(old!=null)try{new NativeApi(old).post("logout",new JSONObject(),new RunControl(12000));}catch(Exception ignored){}
                 return snapshot();
@@ -215,9 +217,10 @@ public final class MainActivity extends Activity {
             case "overview": {Settings.Session session=requireSession(false);return authenticatedGet(session,"overview");}
             case "assets": {
                 Settings.Session session=requireSession(false);String cursor=data.optString("before","");if(cursor.length()>100)throw new IllegalArgumentException("分页游标无效");
-                String path="assets"+(cursor.isEmpty()?"":"?before="+java.net.URLEncoder.encode(cursor,"UTF-8"));
+                String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8");
+                String path="assets?"+query;
                 JSONObject result=authenticatedGet(session,path);if(!settings.current(session))throw new SecurityException("登录身份已改变");
-                if(assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}return result;
+                if(data.optBoolean("pageMode")||assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}return result;
             }
             case "download": {
                 Settings.Session session=requireSession(false);JSONObject item=assets.get(data.getString("id"));if(item==null)throw new IllegalArgumentException("请刷新文件列表后重试");
@@ -270,15 +273,17 @@ public final class MainActivity extends Activity {
                     settings.prefs.edit().putString("pending_cert",pem).commit();settings.message("公开证书已读取，请对照电脑SHA256摘要后勾选确认，再登录");
                 }else if(request==FILES) {
                     Settings.Session session=requireSession(true);int count=0;ClipData clips=intent.getClipData();int total=clips==null?1:clips.getItemCount();
-                    for(int i=0;i<Math.min(total,500);i++) {
+                    android.database.sqlite.SQLiteDatabase queueDb=TaskStore.get(this).getWritableDatabase();queueDb.beginTransaction();
+                    try{for(int i=0;i<Math.min(total,5000);i++) {
                         Uri uri=clips==null?intent.getData():clips.getItemAt(i).getUri();if(uri==null||!"content".equals(uri.getScheme()))continue;
                         getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         uri=MediaCatalog.originalIfAllowed(this,uri);
                         MediaCatalog.Info info=MediaCatalog.describe(getContentResolver(),uri);
                         String source=Protocol.key("chosen:"+uri+":"+info.size+":"+(info.modified==0?UUID.randomUUID():info.modified));
                         if(TaskStore.get(this).enqueue(session.scope,source,uri.toString(),info.name,"手动选择",info.size,info.modified)!=-1)count++;
-                    }
-                    settings.message("已加入 "+count+" 项，请点击立即备份"+(total>500?"；单次最多500项，请分批选择":""));
+                        if((i+1)%100==0){queueDb.setTransactionSuccessful();queueDb.endTransaction();queueDb.beginTransaction();}
+                    }queueDb.setTransactionSuccessful();}finally{queueDb.endTransaction();}
+                    settings.message("已加入 "+count+" 项，请点击立即备份"+(total>5000?"；单次最多5000项，大相册可使用相册扫描":""));
                     Diagnostics.event("picker.enqueued","selected="+total+" added="+count);
                 }
             }catch(Exception error){settings.message("选择未完成："+safeError(error)+" ["+Diagnostics.error("picker.read",error)+"]");}

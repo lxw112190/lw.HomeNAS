@@ -1,0 +1,37 @@
+<section id="page-login">
+ <div class="panel login-card">
+  <div class="eyebrow">
+   WELCOME HOME
+  </div>
+  <h2>
+   登录我的家庭备份
+  </h2>
+  <p>
+   使用家庭服务器上的用户名和密码。
+  </p>
+  <code id="login-server">
+  </code>
+  <form id="login">
+   <div class="form-grid">
+    <label>
+     用户名
+     <input autocomplete="username" id="username" maxlength="32" required="" value="admin"/>
+    </label>
+    <label>
+     密码
+     <input autocomplete="current-password" id="password" maxlength="256" required="" type="password"/>
+    </label>
+   </div>
+   <button class="primary" type="submit">
+    登录家庭备份
+   </button>
+   <p class="subtle">
+    不保存密码，会话由 Android Keystore 加密保存。
+   </p>
+  </form>
+  <button id="login-settings" type="button">
+   设置服务器地址 →
+  </button>
+ </div>
+</section>
+

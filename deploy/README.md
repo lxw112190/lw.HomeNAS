@@ -28,7 +28,7 @@
 ## 测试时使用好记的密码
 
 1. 已运行服务的，先执行 `stop_service.bat`；前台运行的，先正常关闭控制台程序。
-2. 运行 `set_admin_password.bat`，输入两遍自己的密码，至少10位。例如可自行输入 `nas12345678`，这是示例，不是程序内置默认密码；输入时不回显。
+2. 运行 `set_admin_password.bat`，输入两遍自己的密码，至少6位。例如可自行输入 `nas12345678`，这是示例，不是程序内置默认密码；输入时不回显。
 3. 执行 `start_service.bat`，或使用相应前台入口。用户名为 `admin`。
 
 首次启动前也可以先设置。工具只修改本机内置管理员密码、恢复其启用和管理员身份，并撤销该管理员旧会话；保留其他账号、原件和上传进度。自选密码不落明文文件；程序运行时会拒绝修改。若服务目录限制写入，可右键以管理员身份运行。命令行等价入口为 `NasServer.exe --config "配置路径" --initialize-admin`，通过交互输入密码，避免把密码放进命令参数。
@@ -56,3 +56,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action I
 0.2.3起，EXE直接使用Unicode控制台输出，不再切换CMD代码页。Console/AdminPassword入口让原生程序直接继承控制台，避免PowerShell二次解码；更新EXE时也请更新本目录的service.ps1。重定向及service.log仍为UTF-8。详见[控制台兼容记录](../docs/20261104-控制台中文输出兼容.md)。
 
 新增open_firewall.bat、remove_firewall.bat、status_firewall.bat，按EXE配置的HTTP/HTTPS端口及程序路径管理Windows入站TCP规则。Open/Remove需管理员权限，仅操作本工具对应的规则；云安全组需另行配置。详见[维护说明](../docs/20261104-客户端更新与日志反馈.md)。
+
+本轮0.2.5包中的 `deploy/import_android.bat` 会同时导入默认CI3 APK和签名资源r2。导入前停止NAS；脚本不修改账号/原件/上传进度，已有更高资源revision会保留。同revision但不同摘要会拒绝覆盖。导入后，网页首页和登录页均可下载默认APK；手机在设置检查更新并下载资源，重新打开后进入新登录页。完整原生队列分页需等待0.5.0 APK经CI编译。[详细说明](../docs/20261104-大批量备份与页面拆分.md)。

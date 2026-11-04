@@ -1,0 +1,48 @@
+<section hidden="" id="page-library">
+ <div class="panel">
+  <div class="section-title">
+   <h2>
+    电脑里的共享资料
+   </h2>
+   <button id="load-library">
+    刷新文件
+   </button>
+  </div>
+  <p>
+   家庭账号共享资料库；可将原件另存到手机并校验摘要。
+  </p>
+  <div class="actions">
+   <select aria-label="文件类型" id="library-type">
+    <option value="all">
+     全部文件
+    </option>
+    <option value="image">
+     照片
+    </option>
+    <option value="video">
+     视频
+    </option>
+    <option value="file">
+     其他文件
+    </option>
+   </select>
+   <input aria-label="搜索文件名" id="library-search" maxlength="128" placeholder="搜索文件名"/>
+   <button id="library-search-button">
+    搜索
+   </button>
+  </div>
+  <div class="gallery" id="library">
+  </div>
+  <div class="actions">
+   <button disabled="" id="library-prev">
+    上一页
+   </button>
+   <span id="library-page" role="status">
+   </span>
+   <button disabled="" id="more">
+    下一页
+   </button>
+  </div>
+ </div>
+</section>
+

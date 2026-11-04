@@ -2,7 +2,7 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-电脑服务当前为 **0.2.4-dev 开发预览**，Android源码为 **0.4.0-dev**。新增手机IP/端口分开填写、连接测试和可导出的诊断日志；Windows服务支持显式开放局域网HTTP和自选管理员密码。上一版CI已生成APK并通过3项模拟器测试，后续截图启动失败已修复；本轮新版仍待推送后的CI与真机验证。本机不安装Android SDK。入口见[Android说明](android/README.md)、[本轮改进记录](docs/20261104-内网调试与诊断改进.md)。
+电脑服务当前为 **0.2.5-dev 开发预览**，Android源码为 **0.5.0-dev（versionCode 6，待CI）**。本包默认APK保持已核验的 **CI3 0.4.0-dev / versionCode 5**。新增大批文件上传优化、文件/任务分页、Web折叠菜单、首页和登录页App下载、六字符密码及显示/隐藏密码。Web与安卓分别拆分页面；安卓签名资源r2兼容默认APK，含独立登录页和底部导航。详见[本轮使用与验证记录](docs/20261104-大批量备份与页面拆分.md)。本机不安装Android SDK，原生新增功能等待CI和真机验证。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
@@ -35,7 +35,7 @@ Windows 10/11 x64，安装 VS2022 的“使用 C++ 的桌面开发”和 Windows
 1. 打开根目录 `lw.HomeNAS.sln`，选择 `Release | x64`，生成解决方案。
 2. 运行根目录 `Run.cmd`，或直接运行 `out/Release/NasServer.exe`。
 3. 电脑打开 `http://127.0.0.1:8787/`。
-4. 用户名为 `admin`。默认首次随机密码见控制台及该运行目录的 `data/initial-admin-password.txt`。测试时可以先关闭前台程序、停止服务，再运行 `deploy/set_admin_password.bat` 输入自己的密码（至少10位，无需大小写/符号组合），然后启动服务；也可在首次启动前设置。自选密码不写入初始密码文件。
+4. 用户名为 `admin`。默认首次随机密码见控制台及该运行目录的 `data/initial-admin-password.txt`。测试时可以先关闭前台程序、停止服务，再运行 `deploy/set_admin_password.bat` 输入自己的密码（至少6位，无需大小写/符号组合），然后启动服务；也可在首次启动前设置。自选密码不写入初始密码文件。
 
 依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码包不附带任何预设密码。
 

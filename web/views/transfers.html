@@ -1,0 +1,101 @@
+<section class="page hidden" id="page-transfers">
+ <div class="drop-zone upload-only" id="drop-zone">
+  <span>
+   ⇧
+  </span>
+  <h2>
+   把文件带回家
+  </h2>
+  <p>
+   拖入照片、视频或文件，也可以点击选择。原文件不会被修改。
+  </p>
+  <button class="primary" id="choose-files">
+   选择文件
+  </button>
+  <label class="button secondary desktop-only">
+   选择文件夹
+   <input hidden="" id="folder-input" multiple="" type="file" webkitdirectory=""/>
+  </label>
+ </div>
+ <div class="section-head">
+  <h2>
+   本次选择
+  </h2>
+  <div class="upload-only">
+   <button class="secondary" id="resume">
+    继续上传
+   </button>
+   <button class="secondary" id="pause">
+    暂停
+   </button>
+  </div>
+ </div>
+ <p id="queue-summary" role="status">
+ </p>
+ <div class="pager">
+  <select aria-label="本地任务筛选" id="local-filter">
+   <option value="all">
+    全部任务
+   </option>
+   <option value="active">
+    等待/处理中
+   </option>
+   <option value="failed">
+    失败任务
+   </option>
+   <option value="ready">
+    已完成
+   </option>
+  </select>
+  <button class="secondary" id="clear-finished">
+   清理本次完成项
+  </button>
+ </div>
+ <div class="task-list" id="local-tasks">
+ </div>
+ <div class="pager">
+  <button id="local-prev">
+   上一页
+  </button>
+  <span id="local-page">
+  </span>
+  <button id="local-next">
+   下一页
+  </button>
+ </div>
+ <div class="section-head">
+  <h2>
+   服务器任务记录
+  </h2>
+  <button class="link" id="refresh-tasks">
+   刷新
+  </button>
+ </div>
+ <select aria-label="服务器任务筛选" id="remote-filter">
+  <option value="all">
+   全部
+  </option>
+  <option value="active">
+   处理中
+  </option>
+  <option value="failed">
+   失败/已取消
+  </option>
+  <option value="ready">
+   已完成
+  </option>
+ </select>
+ <div class="task-list" id="server-tasks">
+ </div>
+ <div class="pager">
+  <button id="remote-prev">
+   上一页
+  </button>
+  <span id="remote-page">
+  </span>
+  <button id="remote-next">
+   下一页
+  </button>
+ </div>
+</section>
+

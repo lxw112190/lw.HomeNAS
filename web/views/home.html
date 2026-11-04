@@ -1,0 +1,104 @@
+<section class="page" id="page-home">
+ <div class="hero">
+  <div>
+   <span class="badge">
+    你的文件，你来保管
+   </span>
+   <h2>
+    手机里的珍贵瞬间，
+    <br/>
+    在家也有一份。
+   </h2>
+   <p>
+    照片、视频、文档和录音，完整保存原件。
+    <br/>
+    支持分块续传与 SHA256 校验。
+   </p>
+   <button class="primary upload-only" id="hero-upload">
+    开始备份　↗
+   </button>
+   <p class="app-download">
+    <a class="button secondary hidden" id="home-android-download">
+     下载安卓 App
+    </a>
+    <span id="home-android-info">
+     安卓安装包尚未发布
+    </span>
+   </p>
+  </div>
+  <div aria-hidden="true" class="hero-art">
+   <div class="photo-card">
+    ☀
+    <span>
+     HOME / MEMORIES
+    </span>
+   </div>
+   <div class="storage-card">
+    ✓
+    <span>
+     原件已校验
+    </span>
+   </div>
+  </div>
+ </div>
+ <div class="stats">
+  <article>
+   <span>
+    已入库文件
+   </span>
+   <strong id="stat-files">
+    —
+   </strong>
+   <small>
+    完整校验后计入
+   </small>
+  </article>
+  <article>
+   <span>
+    原件占用
+   </span>
+   <strong id="stat-bytes">
+    —
+   </strong>
+   <small>
+    保留原始文件
+   </small>
+  </article>
+  <article>
+   <span>
+    磁盘可用
+   </span>
+   <strong id="stat-free">
+    —
+   </strong>
+   <small id="stat-reserved">
+    正在读取容量
+   </small>
+  </article>
+  <article>
+   <span>
+    待完成任务
+   </span>
+   <strong id="stat-active">
+    —
+   </strong>
+   <small>
+    可重选文件后续传
+   </small>
+  </article>
+ </div>
+ <div class="section-head">
+  <h2>
+   最近入库
+  </h2>
+  <button class="link" id="see-all">
+   查看全部 →
+  </button>
+ </div>
+ <div class="gallery" id="recent">
+ </div>
+ <p class="hint">
+  本网页上传需保持页面打开；刷新后重选相同文件可继续。安卓客户端提供原生队列与定时相册备份。
+ </p>
+</section>
+

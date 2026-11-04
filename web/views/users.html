@@ -1,0 +1,57 @@
+<section class="page hidden" id="page-users">
+ <div class="panel">
+  <h2>
+   新增家庭账号
+  </h2>
+  <p>
+   家庭资料库共享。普通用户可上传、浏览和下载；只读用户可浏览和下载；管理员还可管理账号与设置。
+  </p>
+  <form class="account-form" id="create-user-form">
+   <label>
+    用户名
+    <input autocomplete="off" id="create-username" maxlength="32" pattern="[A-Za-z0-9_.-]{3,32}" placeholder="例如 dad，3至32位英文字母或数字" required=""/>
+   </label>
+   <label>
+    显示名称
+    <input id="create-display-name" maxlength="48" placeholder="例如 爸爸" required=""/>
+   </label>
+   <label>
+    角色
+    <select id="create-role">
+     <option value="member">
+      普通用户 · 上传与浏览
+     </option>
+     <option value="viewer">
+      只读用户 · 浏览与下载
+     </option>
+     <option value="admin">
+      管理员 · 管理所有账号
+     </option>
+    </select>
+   </label>
+   <label>
+    初始密码
+    <input autocomplete="new-password" id="create-password" maxlength="256" minlength="6" placeholder="至少6个字符" required="" type="password"/>
+   </label>
+   <div>
+    <button class="primary">
+     创建账号
+    </button>
+   </div>
+  </form>
+ </div>
+ <div class="section-head">
+  <h2>
+   家庭账号
+  </h2>
+  <button class="link" id="refresh-users">
+   刷新
+  </button>
+ </div>
+ <div class="device-list" id="user-list">
+ </div>
+ <p class="hint">
+  禁用账号、调整角色或重置密码会让该账号已登录的会话失效。用户和文件不会被删除。
+ </p>
+</section>
+

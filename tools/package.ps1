@@ -34,7 +34,7 @@ $quickStart = @'
 lw.HomeNAS 家庭备份开发预览
 运行 启动服务.cmd，保持窗口运行，然后浏览器打开 http://127.0.0.1:8787/ 。
 用户名 admin，默认首次随机密码见控制台与 data/initial-admin-password.txt。
-测试时可先关闭前台程序/停止服务，运行 deploy/set_admin_password.bat 自选至少10位密码，再启动。
+测试时可先关闭前台程序/停止服务，运行 deploy/set_admin_password.bat 自选至少6个字符的密码，再启动。
 家庭内网HTTP前台入口：deploy/start_console_http.bat。
 服务首次安装HTTP：deploy/install_http_service.bat；已有服务切换：deploy/configure_http_service.bat。
 HTTP传输未加密。默认服务仍是局域网HTTPS，HTTP仅本机；详见deploy/README.md。
@@ -44,7 +44,7 @@ Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不
 手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；本轮Android尚待CI/真机验证。
 管理员可创建普通/只读账号。服务脚本支持安装、启停、查询与卸载，卸载保留数据。
 '@
-if($ClientReleaseDirectory){ $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。','本包附带CI APK：先停止NAS，运行deploy/import_android.bat导入，再启动即可网页下载。') }
+if($ClientReleaseDirectory){ $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。','本包附带CI APK：先停止NAS，运行deploy/import_android.bat导入，再启动即可网页下载；同时导入签名资源r2，手机检查更新、下载资源并重新打开。') }
 [IO.File]::WriteAllText((Join-Path $stage '开始使用.txt'), $quickStart, [Text.UTF8Encoding]::new($true))
 $archive = $stage + '.zip'
 Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal

@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.2.4-dev",
+  "version": "0.2.5-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "passed",
@@ -240,5 +240,17 @@
     "signed_ui_publish": "passed",
     "public_APK_link": "passed",
     "physical_APK_installation": false
+  },
+  "current_round": {
+    "smoke_checks": 84,
+    "pagination_checks": 9,
+    "pagination_assets": 10001,
+    "pagination_tasks": 10001,
+    "http_admin_checks": 13,
+    "maintenance_checks": 16,
+    "hash_checks": 8,
+    "browser_actual_uploads": 120,
+    "split_page_new_upload_bytes": 114688,
+    "native_android_tests": "pending CI"
   }
 }

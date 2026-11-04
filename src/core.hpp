@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.2.4-dev";
+constexpr const char* Version = "0.2.5-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -37,6 +37,7 @@ struct Config {
 std::string randomHex(size_t bytes = 24);
 std::string sha256(const void* data, size_t size);
 std::string hashFile(const fs::path& path, const std::atomic<bool>* stopping = nullptr);
+size_t passwordCharacters(const std::string& value);
 std::string passwordHash(const std::string& password, const std::string& salt);
 bool secureEqual(const std::string& a, const std::string& b);
 uint64_t millis();
@@ -103,9 +104,10 @@ public:
                     const std::function<bool(const std::function<bool(const char*, size_t)>&)>& reader);
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
-    json assets(const std::string& before, const std::string& category, const std::string& search);
+    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60);
     json asset(const std::string& id);
     json tasks(const Identity& who);
+    json taskPage(const Identity& who, const std::string& before, const std::string& filter);
     json overview(const Identity& caller);
     fs::path originalPath(const json& asset) const;
     std::atomic<bool> stopping{false};

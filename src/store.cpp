@@ -48,7 +48,7 @@ std::string userRole(const json& input) {
     auto value=text(input,"role",16);
     if(value!="admin"&&value!="member"&&value!="viewer")throw Error(400,"INVALID_ROLE","角色只能是管理员、普通用户或只读用户");return value;
 }
-std::string newPassword(const json& input,const char* field) {auto value=text(input,field,256);if(value.size()<10)throw Error(400,"WEAK_PASSWORD","密码至少10个字符");return value;}
+std::string newPassword(const json& input,const char* field) {auto value=text(input,field,256);if(passwordCharacters(value)<6)throw Error(400,"WEAK_PASSWORD","密码至少6个字符");return value;}
 const std::string UserFields="SELECT u.id,u.username,u.display_name,u.role,u.enabled,u.created,d.last_seen FROM users u JOIN devices d ON d.id=u.id ";
 }
 Database::Database(const fs::path& file) {
@@ -99,7 +99,8 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
         writeText(config.data/"initial-admin-password.txt",password+"\r\n");
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
-    migrateAccounts();serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
+    migrateAccounts();
+    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
 }
 Store::~Store() { stopping=true; queueCondition_.notify_all(); if(worker_.joinable()) worker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
@@ -340,21 +341,40 @@ void Store::recover() {
 json Store::asset(const std::string& id) {
     auto rows=db.query("SELECT * FROM assets WHERE id=? AND state='READY'",{id});if(rows.empty())throw Error(404,"ASSET_NOT_FOUND","文件不存在或原件需要恢复检查");return rows[0];
 }
-json Store::assets(const std::string& before,const std::string& type,const std::string& search) {
-    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview FROM assets WHERE state='READY'";
+json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit) {
+    if(limit<1||limit>100)throw Error(400,"INVALID_LIMIT","每页数量需1至100");
+    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview FROM assets INDEXED BY "+std::string((type=="image"||type=="video"||type=="file")?"asset_category_timeline":"asset_ready_timeline")+" WHERE state='READY'";
     if(!before.empty()){
         auto colon=before.find(':');if(colon==std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");auto time=before.substr(0,colon),id=before.substr(colon+1);
-        sql+=" AND (created<? OR (created=? AND id<?))";params.insert(params.end(),{time,time,id});
+        if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
+        sql+=" AND (created,id)<(?,?)";params.insert(params.end(),{time,id});
     }
     if(type=="image"||type=="video"||type=="file"){sql+=" AND category=?";params.push_back(type);}
     if(!search.empty()){sql+=" AND name LIKE ?";params.push_back("%"+search+"%");}
-    sql+=" ORDER BY created DESC,id DESC LIMIT 60";auto rows=db.query(sql,params);std::string next;
-    if(rows.size()==60){auto last=rows.back();next=last["created"].get<std::string>()+":"+last["id"].get<std::string>();}
+    sql+=" ORDER BY created DESC,id DESC LIMIT "+std::to_string(limit+1);auto rows=db.query(sql,params);std::string next;
+    if(rows.size()>static_cast<size_t>(limit)){rows.erase(rows.end()-1);}
+    else limit=0;
+    if(limit>0){auto last=rows.back();next=last["created"].get<std::string>()+":"+last["id"].get<std::string>();}
     return {{"items",rows},{"next",next}};
 }
 json Store::tasks(const Identity& who) {
     auto sql=std::string("SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,updated FROM uploads ");
     return db.query(sql+(who.admin?"":"WHERE user_id=? ")+"ORDER BY updated DESC,id DESC LIMIT 100",who.admin?Params{}:Params{who.userId});
+}
+json Store::taskPage(const Identity& who,const std::string& before,const std::string& filter){
+    Params values;std::string sql="SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,created,updated FROM uploads WHERE 1=1";
+    if(!who.admin){sql+=" AND user_id=?";values.push_back(who.userId);}
+    if(filter=="active")sql+=" AND state IN ('UPLOADING','VERIFYING','COMMITTING')";
+    else if(filter=="failed")sql+=" AND state IN ('ERROR','CANCELLED')";
+    else if(filter=="ready")sql+=" AND state='READY'";
+    else if(!filter.empty()&&filter!="all")throw Error(400,"INVALID_FILTER","任务筛选无效");
+    if(!before.empty()){
+        auto colon=before.find(':');auto time=before.substr(0,colon),id=colon==std::string::npos?std::string{}:before.substr(colon+1);
+        if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
+        sql+=" AND (created,id)<(?,?)";values.insert(values.end(),{time,id});
+    }
+    auto rows=db.query(sql+" ORDER BY created DESC,id DESC LIMIT 51",values);bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
+    std::string next;if(more)next=rows.back()["created"].get<std::string>()+":"+rows.back()["id"].get<std::string>();return {{"items",rows},{"next",next}};
 }
 json Store::overview(const Identity& caller){
     auto counts=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(size),0) AS bytes,COALESCE(SUM(category='image'),0) AS images,COALESCE(SUM(category='video'),0) AS videos FROM assets WHERE state='READY'")[0];

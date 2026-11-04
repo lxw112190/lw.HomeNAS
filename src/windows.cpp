@@ -127,6 +127,7 @@ std::string hashFile(const fs::path& path, const std::atomic<bool>* stopping) {
         unsigned char result[32]; tlsCheck(mbedtls_sha256_finish(&context, result)); mbedtls_sha256_free(&context); return hex(result, 32);
     } catch (...) { mbedtls_sha256_free(&context); throw; }
 }
+size_t passwordCharacters(const std::string& value){size_t count=0;for(unsigned char ch:value)if((ch&0xc0)!=0x80)++count;return count;}
 std::string passwordHash(const std::string& password, const std::string& salt) {
     BCRYPT_ALG_HANDLE algorithm = nullptr;
     checked(BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, BCRYPT_ALG_HANDLE_HMAC_FLAG));

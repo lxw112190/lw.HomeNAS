@@ -18,6 +18,7 @@ final class TaskStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE tasks(id INTEGER PRIMARY KEY,scope TEXT NOT NULL,source TEXT NOT NULL,uri TEXT NOT NULL,name TEXT NOT NULL,album TEXT NOT NULL,size INTEGER NOT NULL,modified INTEGER NOT NULL,client TEXT NOT NULL,sha TEXT NOT NULL DEFAULT '',remote TEXT NOT NULL DEFAULT '',offset INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'QUEUED',error TEXT NOT NULL DEFAULT '',UNIQUE(scope,source))");
         db.execSQL("CREATE INDEX task_scope_state ON tasks(scope,state,id)");
     }
+    @Override public void onOpen(SQLiteDatabase db){super.onOpen(db);db.execSQL("CREATE INDEX IF NOT EXISTS task_scope_timeline ON tasks(scope,id DESC)");}
     public void onUpgrade(SQLiteDatabase db,int old,int next) { throw new IllegalStateException("Unsupported queue schema"); }
     static final class Task {
         final long id,size,modified,offset;
@@ -44,13 +45,21 @@ final class TaskStore extends SQLiteOpenHelper {
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
-    JSONObject summary(String scope) throws Exception {
-        JSONArray items=new JSONArray();JSONObject counts=new JSONObject();SQLiteDatabase db=getReadableDatabase();
-        try(Cursor c=db.rawQuery("SELECT state,COUNT(*) FROM tasks WHERE scope=? GROUP BY state",new String[]{scope})) {while(c.moveToNext())counts.put(c.getString(0),c.getLong(1));}
-        try(Cursor c=db.rawQuery("SELECT name,size,offset,state,error,id FROM tasks WHERE scope=? ORDER BY CASE WHEN state='READY' THEN 1 ELSE 0 END,id DESC LIMIT 100",new String[]{scope})) {
-            while(c.moveToNext())items.put(new JSONObject().put("name",c.getString(0)).put("size",Long.toString(c.getLong(1))).put("offset",Long.toString(c.getLong(2))).put("state",c.getString(3)).put("error",c.getString(4)).put("diagnostic_id",c.getLong(5)));
+    JSONObject summary(String scope) throws Exception {return summary(scope,"","active");}
+    JSONObject summary(String scope,String before,String filter) throws Exception {
+        SQLiteDatabase db=getReadableDatabase();String where="scope=?";java.util.ArrayList<String> args=new java.util.ArrayList<>();args.add(scope);
+        if(filter.equals("active"))where+=" AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING')";
+        else if(filter.equals("failed"))where+=" AND state IN ('ERROR','SOURCE_MISSING')";
+        else if(filter.equals("ready"))where+=" AND state='READY'";
+        else if(!filter.equals("all"))throw new IllegalArgumentException("任务筛选无效");
+        if(!before.isEmpty()){if(!before.matches("[1-9][0-9]{0,18}"))throw new IllegalArgumentException("任务游标无效");Long.parseLong(before);where+=" AND id<?";args.add(before);}
+        JSONArray items=new JSONArray();String next="";
+        try(Cursor c=db.rawQuery("SELECT name,size,offset,state,error,id FROM tasks WHERE "+where+" ORDER BY id DESC LIMIT 51",args.toArray(new String[0]))){
+            while(c.moveToNext()){if(items.length()==50){next=items.getJSONObject(49).getString("diagnostic_id");break;}
+                items.put(new JSONObject().put("name",c.getString(0)).put("size",Long.toString(c.getLong(1))).put("offset",Long.toString(c.getLong(2))).put("state",c.getString(3)).put("error",c.getString(4)).put("diagnostic_id",Long.toString(c.getLong(5))));
+            }
         }
-        return new JSONObject().put("counts",counts).put("items",items);
+        return new JSONObject().put("counts",counts(scope)).put("items",items).put("next",next);
     }
     JSONObject counts(String scope) throws Exception {
         JSONObject result=new JSONObject();try(Cursor c=getReadableDatabase().rawQuery("SELECT state,COUNT(*) FROM tasks WHERE scope=? GROUP BY state",new String[]{scope})){while(c.moveToNext())result.put(c.getString(0),c.getLong(1));}return result;

@@ -1,0 +1,178 @@
+<section hidden="" id="page-settings">
+ <section class="panel" id="connection-settings">
+  <h2>
+   连接家庭服务器
+  </h2>
+  <button id="back-login" type="button">
+   返回登录
+  </button>
+  <p>
+   电脑IP和端口分开填写，不用输入冒号。下面是示例IP，请改成电脑服务显示的地址。
+  </p>
+  <label>
+   连接方式
+   <select aria-label="连接方式" id="protocol">
+    <option value="http">
+     HTTP · 家庭内网
+    </option>
+    <option value="https">
+     HTTPS · 加密连接
+    </option>
+   </select>
+  </label>
+  <div class="connection-grid">
+   <label>
+    电脑IP或主机名
+    <input autocapitalize="none" autocomplete="off" id="host" inputmode="text" maxlength="256" placeholder="192.168.1.100" required="" spellcheck="false" type="text" value="192.168.1.100"/>
+   </label>
+   <label>
+    端口
+    <input id="port" inputmode="numeric" max="65535" min="1" required="" type="number" value="8787"/>
+   </label>
+  </div>
+  <p class="subtle">
+   也支持直接粘贴完整网址，会自动拆分。HTTP默认8787，HTTPS默认9443；自定义端口以电脑配置为准。
+  </p>
+  <code id="resolved-endpoint">
+   http://192.168.1.100:8787
+  </code>
+  <p class="subtle" id="http-note">
+   HTTP明文传输，适用于你自己的可信内网。电脑服务需启用 --allow-insecure-lan。
+  </p>
+  <button id="test-connection" type="button">
+   测试连接（无需密码）
+  </button>
+  <div class="certificate" hidden="" id="certificate-options">
+   <h3>
+    使用电脑自签名证书
+   </h3>
+   <p>
+    从电脑管理页面导出公开证书，传到手机后导入。不要导入 server-key.pem 私钥。
+   </p>
+   <div class="actions">
+    <button id="import-cert" type="button">
+     导入公开证书
+    </button>
+    <button id="clear-cert" type="button">
+     清除待用证书
+    </button>
+   </div>
+   <code id="certificate">
+    使用系统信任的证书，或导入电脑公开证书。
+   </code>
+   <label class="check">
+    <input id="trust-cert" type="checkbox"/>
+    已与电脑显示的 SHA256 摘要核对一致
+   </label>
+  </div>
+  <button hidden="" id="logout" type="button">
+   退出当前账号
+  </button>
+  <p class="subtle">
+   不保存密码；会话令牌由 Android Keystore 加密保存。更换账号后队列按账号区分，相册自动备份需重新开启。
+  </p>
+ </section>
+ <div class="panel">
+  <h2>
+   应用更新与故障反馈
+  </h2>
+  <p id="update-info">
+   资源下载后下次打开生效。
+  </p>
+  <div class="actions">
+   <button id="check-updates">
+    检查更新
+   </button>
+   <button id="update-resources">
+    下载资源更新
+   </button>
+   <button id="install-apk">
+    下载并安装新版APK
+   </button>
+   <label>
+    问题描述
+    <input id="report-note" maxlength="500" placeholder="可选：发生时间和操作步骤"/>
+   </label>
+   <button id="upload-logs">
+    上传诊断日志
+   </button>
+  </div>
+ </div>
+ <form class="panel upload-only" hidden="" id="preferences">
+  <div class="section-title">
+   <h2>
+    相册与自动备份
+   </h2>
+   <button id="load-albums" type="button">
+    刷新相册
+   </button>
+  </div>
+  <p id="album-hint">
+   请先授权照片/视频访问。Android 14及以上可以只授权部分照片。
+  </p>
+  <div class="albums" id="albums">
+   <p class="empty">
+    尚未读取相册。
+   </p>
+  </div>
+  <label class="check">
+   <input checked="" id="wifi" type="checkbox"/>
+   仅在 Wi-Fi / 非计费网络上传
+  </label>
+  <label class="check">
+   <input id="charging" type="checkbox"/>
+   自动备份仅在充电时执行
+  </label>
+  <label class="check">
+   <input id="auto" type="checkbox"/>
+   启用定时增量备份（已选相册）
+  </label>
+  <div class="actions">
+   <button class="primary" type="submit">
+    保存相册与设置
+   </button>
+   <button id="scan" type="button">
+    扫描已选相册
+   </button>
+  </div>
+  <p class="subtle">
+   定时任务由系统调度，周期至少15分钟，受省电、网络和厂商后台策略影响。首次大量文件或大视频建议使用“立即备份”；超长摘要计算可能超过定时批次预算。强制停止后需重新打开应用。
+  </p>
+ </form>
+ <div class="panel">
+  <h2>
+   备份方式
+  </h2>
+  <p>
+   立即备份：通知栏显示进度，可暂停；受 Android 同步时限约束，系统结束后可手动继续。
+  </p>
+  <p>
+   定时备份：每轮处理小批任务；保持本机队列和服务器确认进度，不依赖页面运行。
+  </p>
+  <p>
+   本版面向家庭局域网，暂无外网穿透、手机自动清理及个人文件隔离。
+  </p>
+ </div>
+ <div class="panel">
+  <h2>
+   测试与诊断日志
+  </h2>
+  <p>
+   遇到问题后先导出ZIP，连同操作步骤、出错时间和截图一起反馈。
+  </p>
+  <div class="actions">
+   <button id="view-logs" type="button">
+    查看最近日志
+   </button>
+   <button id="export-logs" type="button">
+    导出诊断日志 ZIP
+   </button>
+  </div>
+  <small id="log-session">
+  </small>
+  <p class="subtle">
+   本机轮转日志最多约10 MiB。导出包含电脑地址、设备/应用版本、权限、网络状态、请求耗时和错误栈；不附带密码、令牌、照片、录音或数据库，不自动上传。
+  </p>
+ </div>
+</section>
+

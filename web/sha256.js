@@ -17,9 +17,9 @@
       const w=this.w,h=this.h;
       for(let i=0;i<16;i++){const p=offset+i*4;w[i]=((data[p]<<24)|(data[p+1]<<16)|(data[p+2]<<8)|data[p+3])>>>0;}
       for(let i=16;i<64;i++){const a=w[i-15],b=w[i-2];w[i]=(w[i-16]+(rotate(a,7)^rotate(a,18)^(a>>>3))+w[i-7]+(rotate(b,17)^rotate(b,19)^(b>>>10)))>>>0;}
-      let [a,b,c,d,e,f,g,k]=h;
+      let a=h[0],b=h[1],c=h[2],d=h[3],e=h[4],f=h[5],g=h[6],k=h[7];
       for(let i=0;i<64;i++){const t1=(k+(rotate(e,6)^rotate(e,11)^rotate(e,25))+((e&f)^(~e&g))+K[i]+w[i])>>>0;const t2=((rotate(a,2)^rotate(a,13)^rotate(a,22))+((a&b)^(a&c)^(b&c)))>>>0;k=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;}
-      const v=[a,b,c,d,e,f,g,k];for(let i=0;i<8;i++)h[i]=(h[i]+v[i])>>>0;
+      h[0]=(h[0]+a)>>>0;h[1]=(h[1]+b)>>>0;h[2]=(h[2]+c)>>>0;h[3]=(h[3]+d)>>>0;h[4]=(h[4]+e)>>>0;h[5]=(h[5]+f)>>>0;h[6]=(h[6]+g)>>>0;h[7]=(h[7]+k)>>>0;
     }
     update(input) {
       if(this.finished)throw new Error('Hash already finalized');const data=input instanceof Uint8Array?input:new Uint8Array(input);this.bytes+=data.length;let p=0;

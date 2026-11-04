@@ -20,6 +20,7 @@ final class BackupEngine {
     private final Context context;
     private final Settings settings;
     private final TaskStore tasks;
+    private long nextNetworkCheck;
     interface Progress { void update(String message); }
     BackupEngine(Context context){this.context=context.getApplicationContext();settings=new Settings(context);tasks=TaskStore.get(context);}
     void run(RunControl control,Progress progress) throws Exception {
@@ -33,9 +34,10 @@ final class BackupEngine {
             if(!session.serverId.equals(api.get("server",control).getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
             JSONObject overview=api.get("overview",control);long advertised=Long.parseLong(overview.getString("chunk_bytes"));
             int block=(int)Math.min(8*1024*1024L,advertised);if(block<1)throw new IOException("服务器块大小无效");
-            progress.update("正在扫描已选择的相册");long added=MediaCatalog.scan(context,session,control);Diagnostics.event("scan.done","new_tasks="+added+" selected_albums="+settings.albums().size());
-            TaskStore.Task task;
-            while((task=tasks.next(session.scope))!=null) {
+            boolean scanned=false;TaskStore.Task task;
+            while(true) {
+                check(session,control);task=tasks.next(session.scope);
+                if(task==null){if(scanned)break;progress.update("正在扫描已选相册");long added=MediaCatalog.scan(context,session,control);scanned=true;Diagnostics.event("scan.done","new_tasks="+added);continue;}
                 check(session,control);progress.update("正在备份："+task.name);
                 Diagnostics.event("task.start","task="+task.id+" state="+task.state+" size="+task.size+" confirmed="+task.offset+" digest_cached="+!task.sha.isEmpty());
                 try { send(task,session,api,block,control,progress); }
@@ -55,6 +57,7 @@ final class BackupEngine {
     }
     private void check(Settings.Session session,RunControl control) throws Exception {
         control.check();if(settings.paused()||!settings.current(session))throw new InterruptedIOException("已暂停或登录身份已改变");
+        long now=System.nanoTime();if(now<nextNetworkCheck)return;nextNetworkCheck=now+1000000000L;
         ConnectivityManager manager=(ConnectivityManager)context.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkCapabilities capabilities=manager.getNetworkCapabilities(manager.getActiveNetwork());
         if(capabilities==null)throw new IOException("等待网络连接");
@@ -81,10 +84,11 @@ final class BackupEngine {
         if(hash.isEmpty()) {
             long hashStarted=System.nanoTime();Diagnostics.event("hash.start","task="+task.id+" size="+size);
             tasks.state(task.id,"HASHING","");progress.update("计算文件摘要："+task.name);
-            MessageDigest digest=MessageDigest.getInstance("SHA-256");long length=0;byte[] buffer=new byte[256*1024];
+            MessageDigest digest=MessageDigest.getInstance("SHA-256");long length=0,lastHashProgress=0;byte[] buffer=new byte[256*1024];
             try(InputStream input=context.getContentResolver().openInputStream(uri)) {
                 if(input==null)throw new java.io.FileNotFoundException();int n;
-                while((n=input.read(buffer))!=-1){check(session,control);digest.update(buffer,0,n);length=Math.addExact(length,n);}
+                while((n=input.read(buffer))!=-1){check(session,control);digest.update(buffer,0,n);length=Math.addExact(length,n);
+                    long now=android.os.SystemClock.elapsedRealtime();if(now-lastHashProgress>=1000){lastHashProgress=now;progress.update("校验文件："+task.name+" · "+(before.size>0?Math.min(100,Math.round(100.0*length/before.size))+"%":"已读取 "+(length/(1024*1024))+" MiB"));}}
             }
             if((before.size>=0&&before.size!=length)||changed(before,MediaCatalog.describe(context.getContentResolver(),uri))) {
                 tasks.state(task.id,"ERROR","计算摘要时源文件发生变化，未上传");return;
