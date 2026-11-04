@@ -1,0 +1,32 @@
+name: Prepare Android signing key
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  key:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate encrypted JKS once
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          EXISTING_KEY: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [ -n "$EXISTING_KEY" ]; then echo 'A signing key is already configured. Keep the existing identity.'; exit 1; fi
+          if [ ${#ANDROID_KEYSTORE_PASSWORD} -lt 16 ] || [ ${#ANDROID_KEY_PASSWORD} -lt 16 ]; then echo 'Set both password Secrets to strong values of at least 16 characters first.'; exit 1; fi
+          umask 077
+          keytool -genkeypair -storetype JKS -keystore "$RUNNER_TEMP/homenas-release.jks" -alias homenas -keyalg RSA -keysize 3072 -sigalg SHA256withRSA -validity 10000 -dname 'CN=lw.HomeNAS' -storepass:env ANDROID_KEYSTORE_PASSWORD -keypass:env ANDROID_KEY_PASSWORD
+          echo 'Download the encrypted JKS artifact, back it up offline, configure ANDROID_KEYSTORE_BASE64 and ANDROID_KEY_ALIAS=homenas, then delete this artifact. Never regenerate an identity already used for distributed APKs.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-android-signing-key
+          path: ${{ runner.temp }}/homenas-release.jks
+          retention-days: 1
+          if-no-files-found: error

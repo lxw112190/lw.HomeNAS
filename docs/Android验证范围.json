@@ -1,0 +1,30 @@
+{
+  "date": "2026-11-04",
+  "android_source_version": "0.3.0-dev",
+  "server_compatibility": "0.2.0-dev",
+  "host_has_android_sdk": false,
+  "local_checks": {
+    "java_grammar": {
+      "result": "passed",
+      "files": 16
+    },
+    "xml_manifest_resources": "passed",
+    "javascript_syntax": "passed",
+    "workflow_yaml": "passed",
+    "web_preview_width": 390,
+    "web_preview_horizontal_overflow": false,
+    "web_preview_is_simulation": true,
+    "google_maven_aar_min_compile_sdk": {
+      "webkit_1.15.0": 33,
+      "core_1.15.0": 35,
+      "work_runtime_2.10.1": 35
+    },
+    "final_preview_javascript_errors": 0
+  },
+  "ci_executed": false,
+  "apk_generated": false,
+  "jvm_tests": "written, pending CI",
+  "android_15_instrumentation_tests": "written, pending CI",
+  "physical_phone_tests": "not performed",
+  "git_commit_push": "user managed; not performed"
+}

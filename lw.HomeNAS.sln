@@ -1,0 +1,18 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{BC8A1FFA-BEE3-4634-8014-F334798102B3}") = "lw.HomeNAS", "lw.HomeNAS.vcxproj", "{D33CA4C7-7504-46FC-BBCC-827BB6A33A21}"
+EndProject
+Global
+ GlobalSection(SolutionConfigurationPlatforms) = preSolution
+  Release|x64 = Release|x64
+  Debug|x64 = Debug|x64
+ EndGlobalSection
+ GlobalSection(ProjectConfigurationPlatforms) = postSolution
+  {D33CA4C7-7504-46FC-BBCC-827BB6A33A21}.Release|x64.ActiveCfg = Release|x64
+  {D33CA4C7-7504-46FC-BBCC-827BB6A33A21}.Release|x64.Build.0 = Release|x64
+  {D33CA4C7-7504-46FC-BBCC-827BB6A33A21}.Debug|x64.ActiveCfg = Debug|x64
+  {D33CA4C7-7504-46FC-BBCC-827BB6A33A21}.Debug|x64.Build.0 = Debug|x64
+ EndGlobalSection
+EndGlobal

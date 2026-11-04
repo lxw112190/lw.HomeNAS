@@ -1,0 +1,6 @@
+file(COPY "${SOURCE}/web" DESTINATION "${APP}")
+file(COPY "${SOURCE}/deploy" DESTINATION "${APP}")
+file(MAKE_DIRECTORY "${APP}/config")
+if(NOT EXISTS "${APP}/config/server.json")
+  file(COPY "${SOURCE}/config/server.json" DESTINATION "${APP}/config")
+endif()

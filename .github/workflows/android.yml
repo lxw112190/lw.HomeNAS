@@ -1,0 +1,123 @@
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      emulator:
+        description: Run Android 15 emulator smoke test
+        type: boolean
+        default: true
+  push:
+    branches: [main]
+    paths: ['android/**', 'tools/check-android.py', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['android/**', 'tools/check-android.py', '.github/workflows/android.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Validate Android source layout
+        run: python3 tools/check-android.py
+      - name: Lint, JVM tests and debug APK
+        run: gradle -p android --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
+      - name: Record resolved runtime dependencies
+        run: gradle -p android --no-daemon :app:dependencies --configuration debugRuntimeClasspath > android/app/build/reports/runtime-dependencies.txt
+      - name: Optional stable signed release
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            umask 077
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/homenas-release.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/homenas-release.jks"
+            trap 'rm -f "$ANDROID_KEYSTORE_PATH"' EXIT
+            gradle -p android --no-daemon :app:assembleRelease
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
+          else
+            echo 'No signing secret configured. Debug APK is available; its CI signing key is temporary.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: APK checksums and signing information
+        shell: bash
+        run: |
+          find android/app/build/outputs/apk -name '*.apk' -type f -print0 | xargs -0 sha256sum > android/app/build/outputs/apk/SHA256SUMS.txt
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug-signing.txt
+          echo 'Download APKs from the lw.HomeNAS-Android artifact. See android/README.md for connection and signing instructions.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lw.HomeNAS-Android-${{ github.run_number }}
+          path: android/app/build/outputs/apk/
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Android-build-reports-${{ github.run_number }}
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+          retention-days: 7
+
+  emulator:
+    needs: apk
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            gradle -p android --no-daemon :app:connectedDebugAndroidTest
+            adb shell am start -n com.lxw.homenas/com.lw.homenas.MainActivity
+            mkdir -p android/app/build/outputs/device-evidence
+            adb exec-out screencap -p > android/app/build/outputs/device-evidence/phone.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Android-emulator-reports-${{ github.run_number }}
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+            android/app/build/outputs/device-evidence/
+          retention-days: 7

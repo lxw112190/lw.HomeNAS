@@ -1,0 +1,122 @@
+# lw.HomeNAS
+
+轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
+
+电脑服务当前为 **0.2.0-dev 开发预览**，网页前台备份已跑通。新增 **Android 0.3.0-dev源码与CI**：原生队列、相册扫描、分块续传、前台服务和定时任务已编写；本机不安装Android SDK，编译与设备结果待CI/真机验证。入口见[Android说明](android/README.md)。
+
+![用户名密码登录](docs/images/login-accounts.png)
+
+![用户管理，使用独立测试账号](docs/images/users-desktop.png)
+
+## 已实现
+
+- 本机 HTTP 管理口与局域网 HTTPS，首次生成独立服务器证书。
+- 用户名/密码登录、管理员创建账号、角色调整、禁用账号、重置密码与本人修改密码。
+- 共享家庭资料库，支持管理员/普通用户/只读用户；上传任务按账号归属，暂不提供个人文件隔离。
+- 多文件前台上传、Web Worker 分段 SHA256、服务端流式写盘、有界并发。
+- 上传会话持久化、重选文件续传、块摘要及整文件校验、完整校验后台执行。
+- 临时文件尾部回退与 COMMITTING 中间状态恢复；原件丢失不会误报去重成功。
+- 精确内容去重、同名不同文件分别保留、文件名搜索与游标分页。
+- Windows WIC 图片缩略图与8种 EXIF方向处理；原件下载、视频/音频的浏览器原生播放与单段 Range 读取。
+- 手机删除或禁用账号不删除电脑原件，本版没有自动删除原件的功能。
+
+HEIC/RAW等文件可以按原件保存，预览由本机WIC/浏览器实际支持决定；本版未做视频封面或兼容转码。超过4GiB长度的协议字段已检查，但完整超4GiB上传仍需后续真机测试。
+
+## 编译与运行
+
+Windows 10/11 x64，安装 VS2022 的“使用 C++ 的桌面开发”和 Windows SDK。
+
+1. 打开根目录 `lw.HomeNAS.sln`，选择 `Release | x64`，生成解决方案。
+2. 运行根目录 `Run.cmd`，或直接运行 `out/Release/NasServer.exe`。
+3. 电脑打开 `http://127.0.0.1:8787/`。
+4. 初始用户名为 `admin`。首次管理员密码见控制台，也保存在该运行目录的 `data/initial-admin-password.txt`。登录后可修改；修改后初始密码文件被移除。
+
+依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码包不附带任何预设密码。
+
+也可使用 CMake 3.24+：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
+.\build\app\Release\NasServer.exe
+```
+
+服务器需要保持运行；关闭浏览器不影响服务，关闭服务器控制台会停止服务。也可以通过 [deploy](deploy/README.md) 内的批处理安装为 Windows 自动启动服务。服务模式的首次密码只保存在初始密码文件，不写入服务日志。
+
+## 手机局域网访问
+
+服务控制台及“存储与设置”显示当前 IPv4 HTTPS 地址，默认端口9443。手机与电脑连接可互访的局域网，并由用户按需要允许 Windows 防火墙的专用网络入站访问；程序不自动更改防火墙或开放外网。手机使用管理员创建的账号和密码登录，不使用配对码。
+
+首次连接使用自签名证书，需要核对服务器证书摘要并配置可信证书。IP变化后，旧证书中的IP名称可能不匹配；不要通过关闭证书验证解决。现有 Web2Android 的远程网址模式要求证书受 WebView 信任，具体系统/WebView行为要在真机验证。
+
+如果只想先联调网页前台上传，可以显式运行：
+
+```powershell
+.\out\Release\NasServer.exe --allow-insecure-lan
+```
+
+此参数把8787端口从仅本机改为局域网 HTTP，页面会显示“传输未加密”。它是明确的临时联调选项，不是默认正式备份配置。Android 打包步骤见 [android/README.md](android/README.md)。
+
+## 账号与权限
+
+| 角色 | 浏览、下载共享资料 | 上传与管理自己的任务 | 管理账号、服务信息 |
+| --- | --- | --- | --- |
+| 管理员 admin | 是 | 是，可管理全部任务 | 是 |
+| 普通用户 member | 是 | 是 | 否 |
+| 只读用户 viewer | 是 | 否 | 否 |
+
+管理员在“用户管理”中创建账号、修改显示名称/角色、禁用或启用、重置密码；每位用户可在设置中修改自己的密码。用户名3至32位英文字母/数字/下划线/点/短横线，显示名称支持中文。至少保留一个启用的管理员。
+
+禁用、角色调整和重置密码会撤销该账号已有会话，下次请求需重新登录。数据不会因账号禁用被删除。当前为共享资料库，角色限制操作能力，不代表个人照片隔离。
+
+从0.1升级时：停服务并保留资料库备份，新版自动升级到数据库schema 2；原管理员用户名为admin、密码保持原值，原件与未完成进度保留。旧配对会话全部失效，旧版设备来源仍保留，旧上传任务归管理员管理。升级后不要直接用0.1程序打开新版数据库。
+
+## Windows 服务批处理
+
+`deploy/install_service.bat`、`start_service.bat`、`stop_service.bat`、`restart_service.bat`、`status_service.bat`、`uninstall_service.bat`，另有 `start_console.bat`。
+
+安装与启停管理请右键“以管理员身份运行”；安装后服务自动启动，停止/重启等待真实状态。卸载保留数据、配置和证书。运行身份为独立虚拟服务账号，数据目录授予修改权限，程序目录只授予读取执行。
+
+启动错误可查看 `data/logs/service.log` 及 Windows 事件查看器。脚本及安装计划已做非安装检查；SCM实际安装/启停仍需在目标机执行验证。
+
+## 配置与数据
+
+默认配置为 exe 旁的 `config/server.json`。`data_dir` / `web_dir` 相对于该配置文件所在目录解析。可用 `--config 绝对或当前目录相对路径` 指定另一配置文件。
+
+```json
+{
+  "schema_version": 1,
+  "name": "我的家庭 NAS",
+  "http_port": 8787,
+  "https_port": 9443,
+  "https_host": "0.0.0.0",
+  "data_dir": "../data",
+  "web_dir": "../web",
+  "chunk_bytes": 8388608,
+  "minimum_free_bytes": 268435456,
+  "maximum_file_bytes": 137438953472
+}
+```
+
+支持选择其他数据盘。修改配置后重启；移动已有资料库时需整体迁移原件和数据库，并在停止服务后操作，不能只改路径后指望旧库自动出现。
+
+原件与临时上传位于同一数据根目录；缓存可重建。`data/catalog.db` 是 SQLite WAL 数据库，运行时不要只复制 `.db` 文件作为备份；当前可停止服务后整体备份数据目录。第二硬盘自动副本与在线数据库备份后续加入。
+
+## 验证
+
+```powershell
+python tests/smoke.py
+```
+
+测试依赖 Python、requests、Pillow，使用独立 `test-results` 目录并只终止自己启动的测试进程。覆盖账号密码、角色权限、禁用/改密/改角色后的会话失效、TLS证书/主机名、错误块、续传、强制重启、去重、原件下载、Range、零字节文件、WIC缩略图、8种EXIF方向对照、入库崩溃恢复及原件缺失识别。
+
+网页已实际测试批量上传与预览，桌面1366px和手机390px宽度无横向溢出。未在真实Android设备验证后台行为或达到任何吞吐指标。
+
+## 后续重点
+
+先推送源码，通过[Android APK工作流](.github/workflows/android.yml)编译、运行测试并取得APK，再验证手机相册授权、锁屏/省电、断网、大视频续传与下载恢复。源码已提供相应原生模块，编写完成不等于真机验收。其后完善视频封面、成员隔离、第二份副本。外网接入另行设计。
+
+当前传输 API 草案见 [docs/API.md](docs/API.md)，开发与验证记录见 [docs/开发记录.md](docs/开发记录.md)。
+
+## 许可
+
+自有代码 MIT，第三方组件保留各自许可，见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。

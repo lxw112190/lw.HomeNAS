@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "name": "我的家庭 NAS",
+  "http_port": 8787,
+  "https_port": 9443,
+  "https_host": "0.0.0.0",
+  "data_dir": "../data",
+  "web_dir": "../web",
+  "chunk_bytes": 8388608,
+  "minimum_free_bytes": 268435456,
+  "maximum_file_bytes": 137438953472
+}

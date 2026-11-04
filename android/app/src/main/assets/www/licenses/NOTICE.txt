@@ -1,0 +1,7 @@
+lw.HomeNAS Android
+Own code: MIT, see MIT.txt.
+Architecture reference: lw.Web2Android (MIT), https://github.com/lxw112190/lw.Web2Android
+AndroidX Core 1.15.0, WebKit 1.15.0, WorkManager 2.10.1: Apache-2.0, Copyright The Android Open Source Project, https://github.com/androidx/androidx
+OkHttp 4.12.0 and transitive Okio: Apache-2.0, Copyright Square, Inc., https://github.com/square/okhttp and https://github.com/square/okio
+Transitive Kotlin standard libraries: Apache-2.0, Copyright JetBrains s.r.o. and Kotlin Programming Language contributors, https://github.com/JetBrains/kotlin
+CI records the resolved runtime dependency tree. Complete Apache-2.0 terms: APACHE-2.0.txt.
