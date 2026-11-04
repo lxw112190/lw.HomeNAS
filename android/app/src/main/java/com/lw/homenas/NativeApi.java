@@ -22,6 +22,7 @@ final class NativeApi {
     final String endpoint;
     private final String token;
     private final OkHttpClient client;
+    private static final java.util.concurrent.atomic.AtomicLong REQUESTS=new java.util.concurrent.atomic.AtomicLong();
     static final class Failure extends IOException {
         final int status;
         Failure(int status,String message) { super(message);this.status=status; }
@@ -32,6 +33,12 @@ final class NativeApi {
         this.endpoint=Protocol.endpoint(endpoint,allowHttp);this.token=token;
         OkHttpClient.Builder builder=new OkHttpClient.Builder().followRedirects(false).followSslRedirects(false)
             .connectTimeout(10,TimeUnit.SECONDS).readTimeout(25,TimeUnit.SECONDS).writeTimeout(25,TimeUnit.SECONDS).callTimeout(35,TimeUnit.SECONDS);
+        builder.eventListenerFactory(call->new okhttp3.EventListener(){
+            private String id(){return String.valueOf(call.request().tag(String.class));}
+            @Override public void dnsStart(Call current,String domain){Diagnostics.event("http.dns","request="+id());}
+            @Override public void connectStart(Call current,java.net.InetSocketAddress address,java.net.Proxy proxy){Diagnostics.event("http.connect","request="+id()+" port="+address.getPort()+" proxy="+proxy.type());}
+            @Override public void secureConnectStart(Call current){Diagnostics.event("http.tls","request="+id());}
+        });
         if (!pem.isEmpty()) {
             X509Certificate trusted=certificate(pem);trusted.checkValidity();
             KeyStore store=KeyStore.getInstance(KeyStore.getDefaultType());store.load(null);store.setCertificateEntry("nas",trusted);
@@ -72,13 +79,16 @@ final class NativeApi {
     }
     private Response execute(Request request,RunControl control,boolean streaming) throws IOException {
         control.check();long timeout=streaming?control.remainingMillis():Math.min(35000,control.remainingMillis());
+        String id="H"+REQUESTS.incrementAndGet();long started=System.nanoTime();request=request.newBuilder().tag(String.class,id).header("X-NAS-Trace",Diagnostics.session()+"-"+id).build();
+        long bytes=-1;try{if(request.body()!=null&&!request.url().encodedPath().endsWith("/login"))bytes=request.body().contentLength();}catch(IOException ignored){}
+        Diagnostics.event("http.start","request="+id+" "+request.method()+" "+request.url().encodedPath()+" "+Diagnostics.server(endpoint)+" bytes="+bytes+" offset="+request.header("X-Upload-Offset")+" timeout_ms="+timeout);
         Call call=client.newBuilder().callTimeout(timeout,TimeUnit.MILLISECONDS).build().newCall(request);control.attach(call);
-        try { Response response=call.execute();if(response.isSuccessful())return response;
+        try { Response response=call.execute();Diagnostics.event("http.response","request="+id+" status="+response.code()+" ms="+((System.nanoTime()-started)/1000000));if(response.isSuccessful())return response;
             try(Response failed=response){String message="服务器返回 "+response.code();
-                try{message=new JSONObject(new String(readLimited(failed.body().byteStream(),65536),java.nio.charset.StandardCharsets.UTF_8)).optString("message",message);}catch(Exception ignored){}
+                try{JSONObject body=new JSONObject(new String(readLimited(failed.body().byteStream(),65536),java.nio.charset.StandardCharsets.UTF_8));message=body.optString("message",message);String code=body.optString("code","");if(code.matches("[A-Z0-9_]{1,64}"))Diagnostics.event("http.rejected","request="+id+" code="+code);}catch(Exception ignored){}
                 throw new Failure(response.code(),message);
             }
-        }catch(IOException error){control.detach();throw error;}
+        }catch(IOException error){Diagnostics.error("http.failure request="+id,error);control.detach();throw error;}
     }
     JSONObject json(String method,String path,JSONObject input,RunControl control) throws Exception {
         Request.Builder builder=request(path);

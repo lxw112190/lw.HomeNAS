@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.2.0-dev";
+constexpr const char* Version = "0.2.1-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -83,7 +83,7 @@ struct Identity {
 
 class Store {
 public:
-    explicit Store(Config config);
+    explicit Store(Config config,bool startBackground=true);
     ~Store();
     Config config;
     Database db;

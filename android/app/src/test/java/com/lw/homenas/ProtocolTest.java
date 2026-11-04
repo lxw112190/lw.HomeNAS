@@ -5,6 +5,16 @@ import java.io.ByteArrayInputStream;
 import static org.junit.Assert.*;
 
 public class ProtocolTest {
+    @Test public void phoneAddressDoesNotRequireTypingSchemeOrColon() {
+        assertEquals("http://192.168.1.100:8787",Protocol.connectionAddress("192.168.1.100","http",""));
+        assertEquals("https://192.168.1.100:9443",Protocol.connectionAddress("192.168.1.100","https",""));
+        assertEquals("http://192.168.1.100:9090",Protocol.connectionAddress("192.168.1.100:9090","http","8787"));
+        assertEquals("http://192.168.1.100:80",Protocol.connectionAddress("http://192.168.1.100:80/","http","8787"));
+        assertEquals("http://192.168.1.100:8787",Protocol.connectionAddress("192.168.1.100\uff1a8787","http","8787"));
+        assertThrows(IllegalArgumentException.class,()->Protocol.connectionAddress("http://192.168.1.100:8787","https","9443"));
+        for(String host:new String[]{"http://user:password@nas.local","192.168.1.100/api","192.168.1.100?token=abc","192.168.1.100:"})assertThrows(IllegalArgumentException.class,()->Protocol.connectionAddress(host,"http","8787"));
+        assertThrows(IllegalArgumentException.class,()->Protocol.connectionAddress("192.168.1.100","http","65536"));
+    }
     @Test public void normalizeAndRequireExplicitHttp() {
         assertEquals("https://nas.local:9443",Protocol.endpoint(" https://NAS.local:9443/ ",false));
         assertEquals("http://127.0.0.1:8787",Protocol.endpoint("http://127.0.0.1:8787",true));

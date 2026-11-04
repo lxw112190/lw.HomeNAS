@@ -1,5 +1,6 @@
 ﻿param(
-    [ValidateSet('Install','Start','Stop','Restart','Status','Uninstall','Console')][string]$Action = 'Status',
+    [ValidateSet('Install','Configure','Start','Stop','Restart','Status','Uninstall','Console','AdminPassword')][string]$Action = 'Status',
+    [switch]$AllowInsecureLan,
     [switch]$PlanOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -31,7 +32,8 @@ function Get-Layout {
         Data = $dataPath
         Web = $webPath
         Account = "NT SERVICE\$serviceName"
-        BinaryPath = ('"'+$exe+'" --service --config "'+$configPath+'"')
+        BinaryPath = ('"'+$exe+'" --service --config "'+$configPath+'"'+$(if($AllowInsecureLan){' --allow-insecure-lan'}else{''}))
+        AllowInsecureLan = [bool]$AllowInsecureLan
         HttpUrl = ('http://127.0.0.1:'+[int]$config.http_port+'/')
     }
 }
@@ -73,9 +75,16 @@ function Grant-Directory([string]$Path,[string]$Rights,[string]$Sid) {
 }
 try {
     if ($PlanOnly) { Get-Layout | ConvertTo-Json -Depth 3; exit 0 }
+    if ($Action -eq 'AdminPassword') {
+        $layout = Get-Layout
+        & $layout.Executable --config $layout.Config --initialize-admin
+        exit $LASTEXITCODE
+    }
     if ($Action -eq 'Console') {
         $layout = Get-Layout
-        & $layout.Executable --config $layout.Config
+        $arguments = @('--config', $layout.Config)
+        if ($AllowInsecureLan) { $arguments += '--allow-insecure-lan' }
+        & $layout.Executable @arguments
         exit $LASTEXITCODE
     }
     if ($Action -eq 'Status') {
@@ -111,6 +120,20 @@ try {
             Write-Host ('Service log: '+(Join-Path $layout.Data 'logs/service.log'))
         }
         'Start' { Start-NasService; Write-Host 'lw.HomeNAS is running.' }
+        'Configure' {
+            $layout = Get-Layout
+            $existing = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
+            if (-not $existing) { throw 'Service not installed. Use install_service.bat or install_http_service.bat first.' }
+            $expectedPrefix = '"'+$layout.Executable+'"'
+            if (-not $existing.PathName.StartsWith($expectedPrefix+' ',[StringComparison]::OrdinalIgnoreCase)) { throw 'The installed service points to another application path. Configure it from the matching installation directory.' }
+            $wasRunning = $existing.State -ne 'Stopped'
+            Stop-NasService
+            $changed = Invoke-CimMethod -InputObject $existing -MethodName Change -Arguments @{PathName=$layout.BinaryPath}
+            if ($changed.ReturnValue -ne 0) { throw ('Service configuration failed, code '+$changed.ReturnValue) }
+            Write-Host ('LAN HTTP enabled: '+$layout.AllowInsecureLan)
+            if ($wasRunning) { Start-NasService; Write-Host 'Configuration applied and service restarted.' }
+            else { Write-Host 'Configuration applied. Service remains stopped; run start_service.bat when ready.' }
+        }
         'Stop' { Stop-NasService; Write-Host 'lw.HomeNAS is stopped; data retained.' }
         'Restart' { Stop-NasService; Start-NasService; Write-Host 'lw.HomeNAS restarted.' }
         'Uninstall' {

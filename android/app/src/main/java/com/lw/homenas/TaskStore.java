@@ -31,7 +31,7 @@ final class TaskStore extends SQLiteOpenHelper {
     Task next(String scope) {
         try(Cursor c=getReadableDatabase().rawQuery("SELECT id,scope,uri,name,album,size,modified,client,sha,remote,offset,state FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING') ORDER BY id LIMIT 1",new String[]{scope})) { return c.moveToFirst()?new Task(c):null; }
     }
-    void state(long id,String state,String message) { ContentValues v=new ContentValues();v.put("state",state);v.put("error",message);getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)}); }
+    void state(long id,String state,String message) { ContentValues v=new ContentValues();v.put("state",state);v.put("error",message);getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)});Diagnostics.event("task.state","task="+id+" state="+state); }
     void hashed(long id,long size,String sha) { ContentValues v=new ContentValues();v.put("size",size);v.put("sha",sha);v.put("state","UPLOADING");getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)}); }
     void confirmed(long id,JSONObject remote) throws Exception {
         ContentValues v=new ContentValues();v.put("remote",remote.getString("id"));v.put("offset",remote.getString("offset"));v.put("state",remote.getString("state"));v.put("error",remote.optString("error",""));getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)});
@@ -47,9 +47,12 @@ final class TaskStore extends SQLiteOpenHelper {
     JSONObject summary(String scope) throws Exception {
         JSONArray items=new JSONArray();JSONObject counts=new JSONObject();SQLiteDatabase db=getReadableDatabase();
         try(Cursor c=db.rawQuery("SELECT state,COUNT(*) FROM tasks WHERE scope=? GROUP BY state",new String[]{scope})) {while(c.moveToNext())counts.put(c.getString(0),c.getLong(1));}
-        try(Cursor c=db.rawQuery("SELECT name,size,offset,state,error FROM tasks WHERE scope=? ORDER BY CASE WHEN state='READY' THEN 1 ELSE 0 END,id DESC LIMIT 100",new String[]{scope})) {
-            while(c.moveToNext())items.put(new JSONObject().put("name",c.getString(0)).put("size",Long.toString(c.getLong(1))).put("offset",Long.toString(c.getLong(2))).put("state",c.getString(3)).put("error",c.getString(4)));
+        try(Cursor c=db.rawQuery("SELECT name,size,offset,state,error,id FROM tasks WHERE scope=? ORDER BY CASE WHEN state='READY' THEN 1 ELSE 0 END,id DESC LIMIT 100",new String[]{scope})) {
+            while(c.moveToNext())items.put(new JSONObject().put("name",c.getString(0)).put("size",Long.toString(c.getLong(1))).put("offset",Long.toString(c.getLong(2))).put("state",c.getString(3)).put("error",c.getString(4)).put("diagnostic_id",c.getLong(5)));
         }
         return new JSONObject().put("counts",counts).put("items",items);
+    }
+    JSONObject counts(String scope) throws Exception {
+        JSONObject result=new JSONObject();try(Cursor c=getReadableDatabase().rawQuery("SELECT state,COUNT(*) FROM tasks WHERE scope=? GROUP BY state",new String[]{scope})){while(c.moveToNext())result.put(c.getString(0),c.getLong(1));}return result;
     }
 }

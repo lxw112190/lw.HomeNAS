@@ -9,9 +9,9 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['android/**', 'tools/check-android.py', '.github/workflows/android.yml']
+    paths: ['android/**', 'tools/*android*.py', 'tests/test_android_emulator_check.py', '.github/workflows/android.yml']
   pull_request:
-    paths: ['android/**', 'tools/check-android.py', '.github/workflows/android.yml']
+    paths: ['android/**', 'tools/*android*.py', 'tests/test_android_emulator_check.py', '.github/workflows/android.yml']
 
 permissions:
   contents: read
@@ -38,6 +38,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Validate Android source layout
         run: python3 tools/check-android.py
+      - name: Check emulator evidence flow
+        run: python3 -m unittest discover -s tests -p test_android_emulator_check.py
       - name: Lint, JVM tests and debug APK
         run: gradle -p android --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
       - name: Record resolved runtime dependencies
@@ -107,11 +109,7 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: |
-            gradle -p android --no-daemon :app:connectedDebugAndroidTest
-            adb shell am start -n com.lxw.homenas/com.lw.homenas.MainActivity
-            mkdir -p android/app/build/outputs/device-evidence
-            adb exec-out screencap -p > android/app/build/outputs/device-evidence/phone.png
+          script: python3 tools/android-emulator-check.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:

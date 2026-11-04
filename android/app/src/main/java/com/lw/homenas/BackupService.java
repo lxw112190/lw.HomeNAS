@@ -26,6 +26,7 @@ public final class BackupService extends Service {
             .addAction(new Notification.Action.Builder(null,"暂停",pause).build()).build();
     }
     public int onStartCommand(Intent intent,int flags,int startId) {
+        Diagnostics.initialize(this);Diagnostics.event("service.start","pause="+(intent!=null&&STOP.equals(intent.getAction()))+" start_id="+startId);
         if(intent!=null&&STOP.equals(intent.getAction())) {new Settings(this).pause(true);BackupEngine.stopActive();if(control!=null)control.cancel();stopSelf();return START_NOT_STICKY;}
         startForeground(42,notification("准备原生备份，关闭页面后可继续"),ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         if(worker!=null)return START_NOT_STICKY;
@@ -37,11 +38,11 @@ public final class BackupService extends Service {
                 if(android.os.Build.VERSION.SDK_INT<33||checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)==android.content.pm.PackageManager.PERMISSION_GRANTED)
                     ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(42,notification(message));
             });}
-            catch(Exception error){settings.message("备份已暂停："+MainActivity.safeError(error));}
+            catch(Exception error){settings.message("备份已暂停："+MainActivity.safeError(error)+" ["+Diagnostics.error("service.worker",error)+"]");}
             finally{stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
         },"nas-manual-backup");worker.start();return START_NOT_STICKY;
     }
-    @Override public void onTimeout(int startId,int fgsType){new Settings(this).message("系统已到同步时限，进度保留，请稍后手动继续");if(control!=null)control.cancel();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
-    public void onDestroy(){if(control!=null)control.cancel();if(wakeLock!=null&&wakeLock.isHeld())wakeLock.release();super.onDestroy();}
+    @Override public void onTimeout(int startId,int fgsType){Diagnostics.event("service.timeout","start_id="+startId+" type="+fgsType);new Settings(this).message("系统已到同步时限，进度保留，请稍后手动继续");if(control!=null)control.cancel();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
+    public void onDestroy(){Diagnostics.event("service.destroy","");if(control!=null)control.cancel();if(wakeLock!=null&&wakeLock.isHeld())wakeLock.release();super.onDestroy();}
     public IBinder onBind(Intent intent){return null;}
 }

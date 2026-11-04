@@ -1,12 +1,12 @@
 {
   "date": "2026-11-04",
-  "android_source_version": "0.3.0-dev",
-  "server_compatibility": "0.2.0-dev",
+  "android_source_version": "0.3.1-dev",
+  "server_compatibility": "0.2.0-dev and 0.2.1-dev (request correlation)",
   "host_has_android_sdk": false,
   "local_checks": {
     "java_grammar": {
       "result": "passed",
-      "files": 16
+      "files": 19
     },
     "xml_manifest_resources": "passed",
     "javascript_syntax": "passed",
@@ -19,12 +19,35 @@
       "core_1.15.0": 35,
       "work_runtime_2.10.1": 35
     },
-    "final_preview_javascript_errors": 0
+    "final_preview_javascript_errors": 0,
+    "ci_evidence_helper_regressions": {
+      "result": "passed",
+      "count": 3
+    },
+    "web_preview_actions": [
+      "bare IP / port split",
+      "HTTP / HTTPS mode changes defaults",
+      "pasted URL normalizes before test",
+      "no-password mock connection test",
+      "diagnostic modal"
+    ]
   },
   "ci_executed": false,
   "apk_generated": false,
-  "jvm_tests": "written, pending CI",
-  "android_15_instrumentation_tests": "written, pending CI",
+  "jvm_tests": "new cases written; pending CI for 0.3.1-dev",
+  "android_15_instrumentation_tests": "4 tests written; pending CI for 0.3.1-dev",
   "physical_phone_tests": "not performed",
-  "git_commit_push": "user managed; not performed"
+  "git_commit_push": "user managed; not performed",
+  "baseline_ci": {
+    "version": "0.3.0-dev",
+    "run": 41775941648,
+    "commit": "5f6af2c06811e75d5b1628a9722db5a390b7d878",
+    "apk_job": "passed",
+    "lint_and_jvm_tests": "passed",
+    "emulator_test_count": 3,
+    "emulator_test_result": "passed",
+    "workflow_result": "failed during later screenshot launch (Activity Error type 3)",
+    "url": "https://github.com/lxw112190/lw.HomeNAS/actions/runs/41775941648",
+    "does_not_validate_current_unpushed_changes": true
+  }
 }

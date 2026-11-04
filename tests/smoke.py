@@ -48,7 +48,7 @@ class Harness:
 
     def start(self):
         self.log = (self.home / ('server-' + str(time.time_ns()) + '.log')).open('wb')
-        self.process = subprocess.Popen([str(self.exe), '--config', str(self.config)], cwd=self.home,
+        self.process = subprocess.Popen([str(self.exe), '--config', str(self.config), *getattr(self, 'extra_args', [])], cwd=self.home,
                                         stdout=self.log, stderr=subprocess.STDOUT,
                                         creationflags=subprocess.CREATE_NO_WINDOW)
         for _ in range(150):

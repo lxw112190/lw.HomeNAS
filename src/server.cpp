@@ -4,6 +4,10 @@
 #include <csignal>
 #include <iostream>
 #include <set>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
+#include <ctime>
 #include <windows.h>
 
 namespace nas {
@@ -13,6 +17,33 @@ httplib::Server* tlsServer=nullptr;
 Store* runningStore=nullptr;
 std::mutex lifecycleMutex;
 std::atomic<bool> stopRequested{false};
+struct RequestLog {
+    fs::path folder;std::mutex mutex;
+    explicit RequestLog(const fs::path& data):folder(data/"logs"){}
+    static std::string route(const httplib::Request& request){
+        const auto& path=request.path;
+        static const std::set<std::string> known={"/api/v1/server","/api/v1/login","/api/v1/logout","/api/v1/me","/api/v1/overview","/api/v1/users","/api/v1/password","/api/v1/uploads","/api/v1/tasks","/api/v1/assets","/api/v1/certificate"};
+        if(known.count(path))return path;
+        for(const std::string prefix:{"/api/v1/uploads/","/api/v1/assets/","/api/v1/users/"})if(path.rfind(prefix,0)==0){auto rest=path.substr(prefix.size());auto slash=rest.find('/');auto id=rest.substr(0,slash),suffix=slash==std::string::npos?std::string{}:rest.substr(slash);
+            if((id=="administrator"||(id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos))&&(suffix.empty()||suffix=="/data"||suffix=="/complete"||suffix=="/cancel"||suffix=="/original"||suffix=="/thumbnail"))return path;
+        }
+        return "[other-route]";
+    }
+    void write(const std::string& detail) noexcept {
+        try{std::lock_guard<std::mutex> guard(mutex);fs::create_directories(folder);auto active=folder/"requests.log";
+            if(fs::exists(active)&&fs::file_size(active)>2*1024*1024){std::error_code error;fs::remove(folder/"requests.4.log",error);for(int i=3;i>=1;--i){auto old=folder/("requests."+std::to_string(i)+".log");if(fs::exists(old))fs::rename(old,folder/("requests."+std::to_string(i+1)+".log"));}fs::rename(active,folder/"requests.1.log");}
+            auto now=millis();std::time_t seconds=static_cast<std::time_t>(now/1000);std::tm tm{};gmtime_s(&tm,&seconds);char stamp[32];std::strftime(stamp,sizeof(stamp),"%Y-%m-%dT%H:%M:%S",&tm);
+            auto message=detail.substr(0,1600);for(auto& ch:message)if(ch=='\r'||ch=='\n'||ch=='\t')ch=' ';
+            std::ofstream out(active,std::ios::app|std::ios::binary);out<<stamp<<'.'<<std::setfill('0')<<std::setw(3)<<(now%1000)<<"Z "<<message<<'\n';
+        }catch(...){/* Diagnostics must not affect backup state. */}
+    }
+    void response(const httplib::Request& request,const httplib::Response& response){
+        if(request.path.rfind("/api/",0)!=0)return;
+        auto trace=request.get_header_value("X-NAS-Trace");if(trace.size()>64||trace.find_first_not_of("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_")!=std::string::npos)trace="invalid";
+        auto method=request.method=="GET"||request.method=="POST"||request.method=="PUT"?request.method:"OTHER";
+        write("HTTP client="+request.remote_addr+" trace="+trace+" method="+method+" route="+route(request)+" status="+std::to_string(response.status));
+    }
+};
 BOOL WINAPI stopConsole(DWORD event) {
     if(event!=CTRL_C_EVENT&&event!=CTRL_BREAK_EVENT&&event!=CTRL_CLOSE_EVENT&&event!=CTRL_SHUTDOWN_EVENT)return FALSE;
     requestServerStop();return TRUE;
@@ -47,14 +78,15 @@ struct LoginLimiter {
     void check(const std::string& ip){std::lock_guard<std::mutex> lock(mutex);auto& item=failures[ip];if(millis()-item.second>60000)item={0,millis()};if(item.first>=8)throw Error(429,"TRY_LATER","尝试过于频繁，请一分钟后再试");}
     void failed(const std::string& ip){std::lock_guard<std::mutex> lock(mutex);if(failures.size()>2048)failures.clear();++failures[ip].first;}
 };
-void routes(httplib::Server& server,Store& store,bool https,bool insecureLan) {
+void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,const std::shared_ptr<RequestLog>& logs) {
     auto limiter=std::make_shared<LoginLimiter>();
     server.new_task_queue=[] {return new httplib::ThreadPool(8,16,64);};
     server.set_payload_max_length(static_cast<size_t>(store.config.chunkBytes));
     server.set_read_timeout(30,0);server.set_write_timeout(30,0);server.set_keep_alive_timeout(2);
-    server.set_exception_handler([](const httplib::Request&,httplib::Response& response,std::exception_ptr exception){
-        try{if(exception)std::rethrow_exception(exception);}catch(const Error& error){reply(response,{{"code",error.code},{"message",error.what()}},error.status);}
-        catch(const std::exception&){reply(response,{{"code","INTERNAL_ERROR"},{"message","操作失败，请检查磁盘空间与目录权限；任务状态已保留"}},500);}
+    server.set_logger([logs](const auto& request,const auto& response){logs->response(request,response);});
+    server.set_exception_handler([logs](const httplib::Request& request,httplib::Response& response,std::exception_ptr exception){
+        try{if(exception)std::rethrow_exception(exception);}catch(const Error& error){logs->write("API error route="+RequestLog::route(request)+" code="+error.code+" status="+std::to_string(error.status));reply(response,{{"code",error.code},{"message",error.what()}},error.status);}
+        catch(const std::exception& error){logs->write("API internal error route="+RequestLog::route(request)+" reason="+error.what());reply(response,{{"code","INTERNAL_ERROR"},{"message","操作失败，请检查磁盘空间与目录权限；任务状态已保留"}},500);}
     });
     server.set_pre_routing_handler([&store,https](const httplib::Request& request,httplib::Response& response){
         response.set_header("X-Content-Type-Options","nosniff");response.set_header("Referrer-Policy","no-referrer");response.set_header("X-Frame-Options","DENY");
@@ -126,13 +158,16 @@ int runServer(Config config,bool insecureLan,const std::function<void()>& ready)
     httplib::SSLServer::PemMemory memory{};memory.cert_pem=cert.c_str();memory.cert_pem_len=cert.size();memory.key_pem=key.c_str();memory.key_pem_len=key.size();
     httplib::SSLServer tls(memory);httplib::Server http;
     if(!tls.is_valid())throw std::runtime_error("TLS initialization failed");
-    routes(http,store,false,insecureLan);routes(tls,store,true,insecureLan);
+    auto logs=std::make_shared<RequestLog>(config.data);routes(http,store,false,insecureLan,logs);routes(tls,store,true,insecureLan,logs);
     if(!http.bind_to_port(insecureLan?"0.0.0.0":"127.0.0.1",config.httpPort))throw std::runtime_error("Cannot bind HTTP management port");
     if(!tls.bind_to_port(config.host,config.httpsPort))throw std::runtime_error("Cannot bind HTTPS port");
     {std::lock_guard<std::mutex> guard(lifecycleMutex);if(stopRequested)return 0;httpServer=&http;tlsServer=&tls;runningStore=&store;}
     if(!ready)SetConsoleCtrlHandler(stopConsole,TRUE);
     std::cout<<"lw.HomeNAS "<<Version<<"\n电脑管理：http://127.0.0.1:"<<config.httpPort<<"/\n";
-    for(const auto& ip:ipv4Addresses())if(ip!="127.0.0.1")std::cout<<"局域网 HTTPS：https://"<<ip<<":"<<config.httpsPort<<"/\n";
+    for(const auto& ip:ipv4Addresses())if(ip!="127.0.0.1"){
+        std::cout<<"局域网 HTTPS：https://"<<ip<<":"<<config.httpsPort<<"/\n";
+        if(insecureLan)std::cout<<"局域网 HTTP：http://"<<ip<<":"<<config.httpPort<<"/\n";
+    }
     std::cout<<"数据目录："<<config.data.u8string()<<"\n证书 SHA256："<<certificateFingerprint(config.data/"server-cert.pem")<<"\n";
     std::cout<<"默认管理员用户名：admin\n";
     if(fs::exists(config.data/"initial-admin-password.txt")){

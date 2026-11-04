@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.2.0-dev",
+  "version": "0.2.1-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "passed",
@@ -106,11 +106,13 @@
   },
   "service_scripts": {
     "powershell_syntax": "passed",
-    "batch_entry_points": 7,
+    "batch_entry_points": 12,
     "unicode_spaced_path_and_quoting_plan": "passed",
     "outside_SCM_rejected_1063": "passed",
     "actual_SCM_installation": false,
-    "system_service_ACL_firewall_changes_performed": false
+    "system_service_ACL_firewall_changes_performed": false,
+    "default_and_http_lan_mode_plans": "passed",
+    "both_non_SCM_modes_rejected_1063": "passed"
   },
   "browser": {
     "widths_checked": [
@@ -122,14 +124,20 @@
     "viewer_hides_upload_and_admin": "passed",
     "member_foreground_upload_SHA256_ready": "passed",
     "mobile_logout": "passed",
-    "materials": "isolated synthetic PNG and test text; prior v0.1 multi-file test retained in history"
+    "materials": "isolated synthetic PNG and test text; prior v0.1 multi-file test retained in history",
+    "android_settings_preview": {
+      "width": 390,
+      "horizontal_overflow": false,
+      "errors": 0,
+      "mock_data": true
+    }
   },
   "executable": {
-    "sha256": "d66286130ca0f8f3db0977c9a6fd3526f17d26852275d09f4f8f161f39d3e9bf",
-    "bytes": 2763264
+    "sha256": "8926c8d15327ca6624a70fc52d6cad7ab9959b229b1e15f63877b5347e407f0a",
+    "bytes": 2786304
   },
   "package": {
-    "version": "0.2.0-dev",
+    "version": "0.2.1-dev",
     "private_runtime_files_excluded": true,
     "checksum_location": "adjacent .zip.sha256; archive hash omitted here to avoid self-reference"
   },
@@ -139,5 +147,25 @@
     "full upload above 4 GiB",
     "physical power-cut recovery",
     "Windows SCM service registration/start/stop under virtual service account"
-  ]
+  ],
+  "http_and_admin_tests": {
+    "count": 13,
+    "checks": [
+      "offline initialization accepts a chosen password without printing it",
+      "chosen password is not saved as an initial password text file",
+      "explicit HTTP LAN mode is reported by the real server",
+      "complete -> READY",
+      "offline password tool refuses a live data directory",
+      "offline tool retains the ordinary password length rule",
+      "mismatched confirmation does not update the administrator",
+      "offline reset succeeds after stopping the server",
+      "offline reset revokes previous administrator sessions",
+      "HTTP original survives administrator reset",
+      "reset preserves other accounts",
+      "server request logs preserve the phone trace identifier",
+      "server logs omit login and reset passwords"
+    ],
+    "scope": "native console HTTP and offline local admin maintenance; no SCM installed"
+  },
+  "android_version": "0.3.1-dev (source, awaiting CI)"
 }

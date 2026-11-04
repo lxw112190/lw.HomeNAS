@@ -67,12 +67,17 @@ final class Settings {
     boolean paused() { return prefs.getBoolean("paused",true); }
     void pause(boolean value) { prefs.edit().putBoolean("paused",value).commit(); }
     Set<String> albums() { return new HashSet<>(prefs.getStringSet("albums",Collections.emptySet())); }
+    void rememberConnection(String endpoint,boolean http) {
+        if(!prefs.edit().putString("draft_endpoint",endpoint).putBoolean("draft_http",http).commit())throw new IllegalStateException("无法保存电脑地址");
+    }
     void message(String value) { prefs.edit().putString("message",value).apply(); }
     JSONObject publicState() throws Exception {
         JSONObject result=new JSONObject().put("endpoint",prefs.getString("endpoint","")).put("allowHttp",prefs.getBoolean("http",false))
             .put("auto",prefs.getBoolean("auto",false)).put("wifiOnly",prefs.getBoolean("wifi",true)).put("charging",prefs.getBoolean("charging",false))
             .put("paused",paused()).put("message",prefs.getString("message","欢迎使用家庭备份"));
         result.put("lastUsername",new JSONObject(prefs.getString("me","{}")).optString("username","admin"));
+        result.put("connectionAddress",prefs.getString("draft_endpoint",prefs.getString("endpoint",Protocol.DEFAULT_CONNECTION)))
+            .put("connectionHttp",prefs.getBoolean("draft_http",prefs.getBoolean("http",!prefs.contains("endpoint"))));
         try { Session s=session();if(s!=null)result.put("user",s.user).put("role",s.role).put("canUpload",s.canUpload).put("scope",s.scope); }
         catch(Exception error) { clear();result.put("message","本机凭据无法解密，请重新登录"); }
         return result;

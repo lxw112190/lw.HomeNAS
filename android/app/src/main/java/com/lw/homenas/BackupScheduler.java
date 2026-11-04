@@ -18,6 +18,7 @@ final class BackupScheduler {
         PeriodicWorkRequest request=new PeriodicWorkRequest.Builder(BackupWorker.class,15,TimeUnit.MINUTES)
             .setConstraints(constraints).setBackoffCriteria(androidx.work.BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build();
         WorkManager.getInstance(context).enqueueUniquePeriodicWork("nas-periodic-backup",ExistingPeriodicWorkPolicy.UPDATE,request);
+        Diagnostics.event("scheduler.configured","period_minutes=15 wifi="+settings.prefs.getBoolean("wifi",true)+" charging="+settings.prefs.getBoolean("charging",false));
     }
     static void cancel(Context context){WorkManager.getInstance(context).cancelUniqueWork("nas-periodic-backup");}
 }

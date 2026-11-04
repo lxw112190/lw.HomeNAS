@@ -23,22 +23,24 @@ final class BackupEngine {
     interface Progress { void update(String message); }
     BackupEngine(Context context){this.context=context.getApplicationContext();settings=new Settings(context);tasks=TaskStore.get(context);}
     void run(RunControl control,Progress progress) throws Exception {
-        if(!RUNNING.tryLock(10,java.util.concurrent.TimeUnit.SECONDS))return;
+        Diagnostics.event("backup.begin",Diagnostics.network(context));
+        if(!RUNNING.tryLock(10,java.util.concurrent.TimeUnit.SECONDS)){Diagnostics.event("backup.busy","another sender owns the queue");return;}
         active=control;
         Settings.Session session=null;
         try {
-            session=settings.session();if(session==null||!session.canUpload||settings.paused())return;
+            session=settings.session();if(session==null||!session.canUpload||settings.paused()){Diagnostics.event("backup.skipped","logged_in="+(session!=null)+" paused="+settings.paused());return;}
             check(session,control);NativeApi api=new NativeApi(session);
             if(!session.serverId.equals(api.get("server",control).getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
             JSONObject overview=api.get("overview",control);long advertised=Long.parseLong(overview.getString("chunk_bytes"));
             int block=(int)Math.min(8*1024*1024L,advertised);if(block<1)throw new IOException("服务器块大小无效");
-            progress.update("正在扫描已选择的相册");MediaCatalog.scan(context,session,control);
+            progress.update("正在扫描已选择的相册");long added=MediaCatalog.scan(context,session,control);Diagnostics.event("scan.done","new_tasks="+added+" selected_albums="+settings.albums().size());
             TaskStore.Task task;
             while((task=tasks.next(session.scope))!=null) {
                 check(session,control);progress.update("正在备份："+task.name);
+                Diagnostics.event("task.start","task="+task.id+" state="+task.state+" size="+task.size+" confirmed="+task.offset+" digest_cached="+!task.sha.isEmpty());
                 try { send(task,session,api,block,control,progress); }
                 catch(InterruptedIOException error){throw error;}
-                catch(SecurityException|java.io.FileNotFoundException error){tasks.state(task.id,"SOURCE_MISSING","文件不存在或读取授权失效，请重新选择/授权");}
+                catch(SecurityException|java.io.FileNotFoundException error){Diagnostics.error("task.source task="+task.id,error);tasks.state(task.id,"SOURCE_MISSING","文件不存在或读取授权失效，请重新选择/授权");}
                 catch(NativeApi.Failure error){
                     if(error.status==401)throw error;
                     if(error.retryable())throw error;
@@ -49,7 +51,7 @@ final class BackupEngine {
         }catch(NativeApi.Failure error){
             if(error.status==401&&session!=null){if(settings.invalidate(session)){BackupScheduler.cancel(context);settings.message("登录已过期或账号被调整，请重新登录；队列保留");}}
             else settings.message(error.getMessage());throw error;
-        }finally{active=null;RUNNING.unlock();}
+        }catch(Exception error){Diagnostics.error("backup.failed",error);throw error;}finally{active=null;RUNNING.unlock();Diagnostics.event("backup.end","");}
     }
     private void check(Settings.Session session,RunControl control) throws Exception {
         control.check();if(settings.paused()||!settings.current(session))throw new InterruptedIOException("已暂停或登录身份已改变");
@@ -68,6 +70,7 @@ final class BackupEngine {
             ||!java.util.Arrays.asList("UPLOADING","VERIFYING","COMMITTING","READY","ERROR","CANCELLED").contains(state))
             throw new IOException("服务器任务摘要、长度或状态不一致，未确认备份成功");
         tasks.confirmed(localId,remote);
+        Diagnostics.event("task.confirmed","task="+localId+" state="+state+" offset="+offset+" size="+size);
     }
     private void send(TaskStore.Task task,Settings.Session session,NativeApi api,int block,RunControl control,Progress progress) throws Exception {
         Uri uri=Uri.parse(task.uri);MediaCatalog.Info before=MediaCatalog.describe(context.getContentResolver(),uri);
@@ -76,6 +79,7 @@ final class BackupEngine {
         }
         String hash=task.sha;long size=task.size;
         if(hash.isEmpty()) {
+            long hashStarted=System.nanoTime();Diagnostics.event("hash.start","task="+task.id+" size="+size);
             tasks.state(task.id,"HASHING","");progress.update("计算文件摘要："+task.name);
             MessageDigest digest=MessageDigest.getInstance("SHA-256");long length=0;byte[] buffer=new byte[256*1024];
             try(InputStream input=context.getContentResolver().openInputStream(uri)) {
@@ -86,6 +90,7 @@ final class BackupEngine {
                 tasks.state(task.id,"ERROR","计算摘要时源文件发生变化，未上传");return;
             }
             size=length;hash=Protocol.hex(digest.digest());tasks.hashed(task.id,size,hash);
+            Diagnostics.event("hash.done","task="+task.id+" bytes="+size+" ms="+((System.nanoTime()-hashStarted)/1000000));
         }
         JSONObject creation=new JSONObject().put("client_task_id",task.client).put("name",task.name).put("size",Long.toString(size)).put("sha256",hash)
             .put("source_key","android:"+Protocol.key(task.uri+":"+task.modified+":"+size)).put("album",task.album).put("modified",Long.toString(Math.max(0,task.modified)));

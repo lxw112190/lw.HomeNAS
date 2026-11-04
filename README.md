@@ -2,7 +2,7 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-电脑服务当前为 **0.2.0-dev 开发预览**，网页前台备份已跑通。新增 **Android 0.3.0-dev源码与CI**：原生队列、相册扫描、分块续传、前台服务和定时任务已编写；本机不安装Android SDK，编译与设备结果待CI/真机验证。入口见[Android说明](android/README.md)。
+电脑服务当前为 **0.2.1-dev 开发预览**，Android源码为 **0.3.1-dev**。新增手机IP/端口分开填写、连接测试和可导出的诊断日志；Windows服务支持显式开放局域网HTTP和自选管理员密码。上一版CI已生成APK并通过3项模拟器测试，后续截图启动失败已修复；本轮新版仍待推送后的CI与真机验证。本机不安装Android SDK。入口见[Android说明](android/README.md)、[本轮改进记录](docs/20261104-内网调试与诊断改进.md)。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
@@ -29,7 +29,7 @@ Windows 10/11 x64，安装 VS2022 的“使用 C++ 的桌面开发”和 Windows
 1. 打开根目录 `lw.HomeNAS.sln`，选择 `Release | x64`，生成解决方案。
 2. 运行根目录 `Run.cmd`，或直接运行 `out/Release/NasServer.exe`。
 3. 电脑打开 `http://127.0.0.1:8787/`。
-4. 初始用户名为 `admin`。首次管理员密码见控制台，也保存在该运行目录的 `data/initial-admin-password.txt`。登录后可修改；修改后初始密码文件被移除。
+4. 用户名为 `admin`。默认首次随机密码见控制台及该运行目录的 `data/initial-admin-password.txt`。测试时可以先关闭前台程序、停止服务，再运行 `deploy/set_admin_password.bat` 输入自己的密码（至少10位，无需大小写/符号组合），然后启动服务；也可在首次启动前设置。自选密码不写入初始密码文件。
 
 依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码包不附带任何预设密码。
 
@@ -48,13 +48,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
 
 首次连接使用自签名证书，需要核对服务器证书摘要并配置可信证书。IP变化后，旧证书中的IP名称可能不匹配；不要通过关闭证书验证解决。现有 Web2Android 的远程网址模式要求证书受 WebView 信任，具体系统/WebView行为要在真机验证。
 
-如果只想先联调网页前台上传，可以显式运行：
+家庭局域网需要HTTP时，可以显式运行：
 
 ```powershell
 .\out\Release\NasServer.exe --allow-insecure-lan
 ```
 
-此参数把8787端口从仅本机改为局域网 HTTP，页面会显示“传输未加密”。它是明确的临时联调选项，不是默认正式备份配置。Android 打包步骤见 [android/README.md](android/README.md)。
+此参数把8787端口从仅本机改为局域网 HTTP，页面会显示“传输未加密”。服务模式新安装用 `deploy/install_http_service.bat`；已安装的服务用 `deploy/configure_http_service.bat` 切换，运行中的服务会停止并重新启动。HTTPS仍保留。手机填写电脑IP即可，端口单独输入，HTTP默认8787。HTTP中密码和文件不加密，仅用于你信任的家庭内网。Android打包步骤见 [android/README.md](android/README.md)。
 
 ## 账号与权限
 
@@ -72,11 +72,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
 
 ## Windows 服务批处理
 
-`deploy/install_service.bat`、`start_service.bat`、`stop_service.bat`、`restart_service.bat`、`status_service.bat`、`uninstall_service.bat`，另有 `start_console.bat`。
+`deploy`提供安装、启动、停止、重启、状态和卸载入口；新增 `install_http_service.bat`、`configure_http_service.bat`、`configure_https_service.bat`、`start_console_http.bat`、`set_admin_password.bat`，详细步骤见[服务说明](deploy/README.md)。
 
 安装与启停管理请右键“以管理员身份运行”；安装后服务自动启动，停止/重启等待真实状态。卸载保留数据、配置和证书。运行身份为独立虚拟服务账号，数据目录授予修改权限，程序目录只授予读取执行。
 
-启动错误可查看 `data/logs/service.log` 及 Windows 事件查看器。脚本及安装计划已做非安装检查；SCM实际安装/启停仍需在目标机执行验证。
+启动错误可查看 `data/logs/service.log` 及Windows事件查看器；请求状态和手机关联ID见 `data/logs/requests.log`（轮转保留约10MiB，不记录请求正文/密码/令牌）。脚本及两种模式安装计划已做非安装检查；SCM实际安装/启停仍需在目标机执行验证。
 
 ## 配置与数据
 

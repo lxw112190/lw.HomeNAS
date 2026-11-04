@@ -10,6 +10,20 @@ import java.util.Locale;
 /** Rules shared by native transport, queue and JVM tests. All lengths remain long. */
 public final class Protocol {
     private Protocol() {}
+    public static final String DEFAULT_CONNECTION="http://192.168.1.100:8787";
+    public static String connectionAddress(String value,String protocol,String port) {
+        try {
+            String raw=value.trim().replace('\uff1a',':').replace('\uff0e','.');
+            if(!protocol.equals("http")&&!protocol.equals("https"))throw new IllegalArgumentException();
+            URI parsed=new URI(raw.contains("://")?raw:protocol+"://"+raw);
+            String scheme=parsed.getScheme()==null?"":parsed.getScheme().toLowerCase(Locale.ROOT);
+            if(!scheme.equals(protocol)||parsed.getHost()==null||parsed.getUserInfo()!=null||parsed.getQuery()!=null||parsed.getFragment()!=null
+                ||!(parsed.getPath().isEmpty()||parsed.getPath().equals("/"))||parsed.getRawAuthority().endsWith(":"))throw new IllegalArgumentException();
+            int selected=parsed.getPort()>=0?parsed.getPort():port.trim().isEmpty()?(scheme.equals("http")?8787:9443):Integer.parseInt(port.trim());
+            if(selected<1||selected>65535)throw new IllegalArgumentException();
+            return endpoint(new URI(scheme,null,parsed.getHost(),selected,"",null,null).toASCIIString(),protocol.equals("http"));
+        }catch(Exception error){throw new IllegalArgumentException("电脑IP填如192.168.1.100，端口单独填写；完整地址的协议须与所选模式一致，不能带账号、路径或参数");}
+    }
     public static String endpoint(String value, boolean allowHttp) {
         try {
             URI uri = new URI(value.trim());

@@ -26,12 +26,14 @@ public class RuntimeSmokeTest {
     @Test public void localPageNativeSnapshotAndSettingsAreUsable() throws Exception {
         try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)) {
             long deadline=System.nanoTime()+TimeUnit.SECONDS.toNanos(30);String version="";
-            while(System.nanoTime()<deadline){version=read(scenario,"document.getElementById('version')?.textContent || ''");if(version.contains("0.3.0-dev"))break;Thread.sleep(200);}
-            assertTrue("Native snapshot did not reach local Web page: "+version,version.contains("0.3.0-dev"));
+            while(System.nanoTime()<deadline){version=read(scenario,"document.getElementById('version')?.textContent || ''");if(version.contains(BuildConfig.VERSION_NAME))break;Thread.sleep(200);}
+            assertTrue("Native snapshot did not reach local Web page: "+version,version.contains(BuildConfig.VERSION_NAME));
             assertTrue(read(scenario,"document.body.innerText").contains("我的家庭备份"));
             read(scenario,"document.getElementById('go-connect').click(); document.getElementById('page-settings').hidden");
             assertEquals("false",read(scenario,"document.getElementById('page-settings').hidden"));
-            assertEquals("false",read(scenario,"document.getElementById('allow-http').checked"));
+            assertEquals("\"http\"",read(scenario,"document.getElementById('protocol').value"));
+            assertEquals("\"192.168.1.100\"",read(scenario,"document.getElementById('host').value"));
+            assertEquals("\"8787\"",read(scenario,"document.getElementById('port').value"));
             assertEquals("false",read(scenario,"document.documentElement.scrollWidth > window.innerWidth"));
         }
     }
@@ -44,7 +46,17 @@ public class RuntimeSmokeTest {
             assertFalse(settings.prefs.getString("token","").equals(token));
             assertFalse(settings.publicState().toString().contains(token));
             assertFalse(settings.prefs.contains("password"));
+            settings.rememberConnection("http://192.0.2.2:8787",true);
+            assertEquals("https://192.0.2.1:9443",settings.session().endpoint);
+            assertEquals(token,settings.session().token);
             settings.clear();assertNull(settings.session());
         }finally{settings.clear();}
+    }
+    @Test public void diagnosticsExportContainsValidZipAndVersionWithoutDatabase() throws Exception {
+        android.content.Context context=androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().getTargetContext();
+        Diagnostics.initialize(context);Diagnostics.event("instrumentation.logs","device export check");java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();Diagnostics.export(context,bytes);
+        boolean found=false;try(java.util.zip.ZipInputStream zip=new java.util.zip.ZipInputStream(new java.io.ByteArrayInputStream(bytes.toByteArray()))){java.util.zip.ZipEntry entry;while((entry=zip.getNextEntry())!=null){assertTrue(entry.getName(),entry.getName().equals("diagnostics.json")||entry.getName().matches("runtime(?:\\.[1-4])?\\.log"));
+            if(entry.getName().equals("diagnostics.json")){java.io.ByteArrayOutputStream text=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;while((n=zip.read(buffer))!=-1)text.write(buffer,0,n);org.json.JSONObject data=new org.json.JSONObject(new String(text.toByteArray(),java.nio.charset.StandardCharsets.UTF_8));assertEquals(BuildConfig.VERSION_NAME,data.getString("version"));found=true;}
+        }}assertTrue(found);
     }
 }

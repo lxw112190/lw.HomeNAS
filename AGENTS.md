@@ -15,3 +15,7 @@
 - Android专用Runtime在android/app，采用Java+可信内置网页，完整APK由GitHub Actions编译；用户当前没有Android开发环境，不自行安装SDK。不得把语法检查称为Android编译或真机通过。
 - 原生桥只接受可信本地页面主框架的固定命令；不返回令牌、不接受任意路径/URL。自签名证书导入保留主机名校验；会话用Keystore加密；APK签名身份存GitHub Secrets或仓库外，不进源码/日志。
 - Android自动任务采用有限批次，手动长任务使用用户明确启动的dataSync前台服务；不通过开机广播或永久长Worker绕过系统限制。每次显示成功必须取得服务端READY，暂停/退出保留队列和原件。
+- 调试采用CI构建→真机测试→导出诊断ZIP反馈；每轮APK递增versionCode，界面/日志记录版本、提交、CI编号与错误/请求关联ID。日志有界轮转，不记请求正文、密码、令牌、媒体文件名或URI，不打包真实日志。
+- 地址草稿与已认证endpoint分开保存；失败测试不能改变Keystore密文AAD或将原队列路由到新服务器。HTTP需电脑显式开放；HTTPS不静默降级。
+- 离线管理员密码工具必须取得相同实例锁、拒绝运行中的资料库，不启动后台恢复/媒体处理线程，不打印或保存自选明文密码。
+- Android仪器测试结束后应用可能已卸载；CI采集截图前重新安装APK并解析实际Launcher，不硬编码applicationId与Activity组合。测试失败仍保留原退出码并在模拟器结束前采集日志。

@@ -82,7 +82,7 @@ void Database::transaction(const std::function<void()>& action) {
     try { action(); exec("COMMIT"); } catch (...) { try { exec("ROLLBACK"); } catch (...) {} throw; }
 }
 
-Store::Store(Config value) : config(std::move(value)), db(config.data/"catalog.db") {
+Store::Store(Config value,bool startBackground) : config(std::move(value)), db(config.data/"catalog.db") {
     fs::create_directories(config.data/"storage/uploads"); fs::create_directories(config.data/"storage/originals"); fs::create_directories(config.data/"cache");
     db.exec(R"SQL(
       CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
@@ -99,7 +99,7 @@ Store::Store(Config value) : config(std::move(value)), db(config.data/"catalog.d
         writeText(config.data/"initial-admin-password.txt",password+"\r\n");
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
-    migrateAccounts();serverId=setting("server_id"); recover(); worker_=std::thread([this]{worker();});
+    migrateAccounts();serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
 }
 Store::~Store() { stopping=true; queueCondition_.notify_all(); if(worker_.joinable()) worker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
