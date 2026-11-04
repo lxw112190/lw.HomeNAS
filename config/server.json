@@ -4,6 +4,7 @@
   "http_port": 8787,
   "https_port": 9443,
   "https_host": "0.0.0.0",
+  "allow_external_hosts": false,
   "data_dir": "../data",
   "web_dir": "../web",
   "chunk_bytes": 8388608,

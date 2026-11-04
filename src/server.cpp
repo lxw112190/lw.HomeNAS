@@ -92,10 +92,10 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
         response.set_header("X-Content-Type-Options","nosniff");response.set_header("Referrer-Policy","no-referrer");response.set_header("X-Frame-Options","DENY");
         response.set_header("Content-Security-Policy","default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; media-src 'self' blob:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'");
         auto origin=request.get_header_value("Origin"),host=request.get_header_value("Host");
-        auto allowed=ipv4Addresses();bool hostOK=false;
+        auto allowed=ipv4Addresses();bool hostOK=store.config.allowExternalHosts;
         for(const auto& ip:allowed)if(host==ip+":"+std::to_string(https?store.config.httpsPort:store.config.httpPort))hostOK=true;
         if(host=="localhost:"+std::to_string(https?store.config.httpsPort:store.config.httpPort))hostOK=true;
-        if(!hostOK){reply(response,{{"code","HOST_REJECTED"},{"message","请使用电脑显示的局域网地址访问"}},400);return httplib::Server::HandlerResponse::Handled;}
+        if(!hostOK){reply(response,{{"code","HOST_REJECTED"},{"message","请使用电脑显示的地址；公网测试可在配置中设置 allow_external_hosts 为 true 后重启"}},400);return httplib::Server::HandlerResponse::Handled;}
         if(!origin.empty()&&origin!=(std::string(https?"https://":"http://")+host)){
             reply(response,{{"code","ORIGIN_REJECTED"},{"message","不接受来自其他网站的请求"}},403);return httplib::Server::HandlerResponse::Handled;
         }
@@ -105,7 +105,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
         return httplib::Server::HandlerResponse::Unhandled;
     });
     server.set_error_handler([](const httplib::Request& request,httplib::Response& response){if(request.path.rfind("/api/",0)==0&&response.body.empty())reply(response,{{"code","HTTP_ERROR"},{"message","请求未能完成"}},response.status);});
-    server.Get("/api/v1/server",[&store,insecureLan,https](const auto&,auto& response){reply(response,{{"name",store.config.name},{"server_id",store.serverId},{"version",Version},{"https",https},{"insecure_lan",!https&&insecureLan},{"automatic_backup",false},{"member_mode","shared_family_accounts"},{"authentication","username_password"}});});
+    server.Get("/api/v1/server",[&store,insecureLan,https](const auto&,auto& response){reply(response,{{"name",store.config.name},{"server_id",store.serverId},{"version",Version},{"https",https},{"insecure_lan",!https&&insecureLan},{"allow_external_hosts",store.config.allowExternalHosts},{"automatic_backup",false},{"member_mode","shared_family_accounts"},{"authentication","username_password"}});});
     auto session=[https](httplib::Response& response,const json& data){
         response.set_header("Set-Cookie","nas_session="+data["token"].template get<std::string>()+"; Path=/; HttpOnly; SameSite=Strict; Max-Age="+(data["admin"].template get<bool>()?"86400":"604800")+(https?"; Secure":""));
     };
@@ -175,6 +175,7 @@ int runServer(Config config,bool insecureLan,const std::function<void()>& ready)
         else std::cout<<"首次管理员密码位于数据目录的 initial-admin-password.txt，不写入服务日志。\n";
     }
     if(insecureLan)std::cout<<"当前已显式开启局域网 HTTP 试用模式，传输未加密，仅用于前台联调。\n";
+    if(config.allowExternalHosts)std::cout<<"公网地址测试已开启：接受公网IP或域名Host，不限本机网卡地址；账号登录仍需用户名和密码。\n";
     std::cout<<"按 Ctrl+C 停止服务；关闭浏览器不影响服务。"<<std::endl;
     std::thread local([&]{http.listen_after_bind();});
     if(ready)ready();

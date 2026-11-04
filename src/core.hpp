@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.2.1-dev";
+constexpr const char* Version = "0.2.2-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -30,6 +30,7 @@ struct Config {
     std::string name, host;
     fs::path data, web;
     int httpPort = 8787, httpsPort = 9443;
+    bool allowExternalHosts = false;
     uint64_t chunkBytes = 8388608, minFree = 268435456, maxFile = 137438953472ULL;
     static Config load(const fs::path& path);
 };

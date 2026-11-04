@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.2.1-dev",
+  "version": "0.2.2-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "passed",
@@ -102,7 +102,8 @@
       "new account sessions survive subsequent restarts"
     ],
     "legacy_version": "0.1.0-dev",
-    "scope": "real v0.1 app creates fixture; v0.2 upgrades isolated data directory"
+    "scope": "real v0.1 app creates fixture; v0.2 upgrades isolated data directory",
+    "last_executed_version": "0.2.1-dev"
   },
   "service_scripts": {
     "powershell_syntax": "passed",
@@ -133,11 +134,11 @@
     }
   },
   "executable": {
-    "sha256": "8926c8d15327ca6624a70fc52d6cad7ab9959b229b1e15f63877b5347e407f0a",
-    "bytes": 2786304
+    "sha256": "a926e7b6f909cb55e50cc1b5f44c33a1636ff538b2738ef17fb93c570a82d8d4",
+    "bytes": 2787840
   },
   "package": {
-    "version": "0.2.1-dev",
+    "version": "0.2.2-dev",
     "private_runtime_files_excluded": true,
     "checksum_location": "adjacent .zip.sha256; archive hash omitted here to avoid self-reference"
   },
@@ -165,7 +166,28 @@
       "server request logs preserve the phone trace identifier",
       "server logs omit login and reset passwords"
     ],
-    "scope": "native console HTTP and offline local admin maintenance; no SCM installed"
+    "scope": "native console HTTP and offline local admin maintenance; no SCM installed",
+    "last_executed_version": "0.2.1-dev"
   },
-  "android_version": "0.3.1-dev (source, awaiting CI)"
+  "android_version": "0.3.1-dev (source, awaiting CI)",
+  "external_hosts_tests": {
+    "count": 13,
+    "checks": [
+      "missing setting retains local Host restriction",
+      "explicit external mode accepts public NAT Host",
+      "public Host can load the actual web page",
+      "external mode accepts domain without maintaining an allowlist",
+      "public Host still requires login for protected APIs",
+      "public web login succeeds without returning token to JavaScript",
+      "public web cookie authenticates the next request",
+      "complete -> READY",
+      "public Host upload and original download preserve bytes",
+      "external mode retains same-origin request behavior",
+      "public web logout invalidates its cookie session",
+      "turning off external mode restores local Host restriction",
+      "non-boolean external setting is rejected clearly"
+    ],
+    "scope": "local server with public/DNS Host headers; no real public deployment changed",
+    "public_server_tested": false
+  }
 }

@@ -2,7 +2,7 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-电脑服务当前为 **0.2.1-dev 开发预览**，Android源码为 **0.3.1-dev**。新增手机IP/端口分开填写、连接测试和可导出的诊断日志；Windows服务支持显式开放局域网HTTP和自选管理员密码。上一版CI已生成APK并通过3项模拟器测试，后续截图启动失败已修复；本轮新版仍待推送后的CI与真机验证。本机不安装Android SDK。入口见[Android说明](android/README.md)、[本轮改进记录](docs/20261104-内网调试与诊断改进.md)。
+电脑服务当前为 **0.2.2-dev 开发预览**，Android源码为 **0.3.1-dev**。新增手机IP/端口分开填写、连接测试和可导出的诊断日志；Windows服务支持显式开放局域网HTTP和自选管理员密码。上一版CI已生成APK并通过3项模拟器测试，后续截图启动失败已修复；本轮新版仍待推送后的CI与真机验证。本机不安装Android SDK。入口见[Android说明](android/README.md)、[本轮改进记录](docs/20261104-内网调试与诊断改进.md)。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
@@ -58,6 +58,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
 
 ## 账号与权限
 
+公网IP/云服务器NAT测试见[公网地址测试说明](docs/20261104-公网地址测试.md)。0.2.2新增 `allow_external_hosts` 开关，无需逐个维护IP或域名白名单。
+
 | 角色 | 浏览、下载共享资料 | 上传与管理自己的任务 | 管理账号、服务信息 |
 | --- | --- | --- | --- |
 | 管理员 admin | 是 | 是，可管理全部任务 | 是 |
@@ -89,6 +91,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
   "http_port": 8787,
   "https_port": 9443,
   "https_host": "0.0.0.0",
+  "allow_external_hosts": false,
   "data_dir": "../data",
   "web_dir": "../web",
   "chunk_bytes": 8388608,
