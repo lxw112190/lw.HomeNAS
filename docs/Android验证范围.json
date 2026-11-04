@@ -114,7 +114,7 @@
   "android_source_versionCode": 9,
   "nativeApi": 3,
   "current_round": {
-    "source_layout_CSP_tests": 15,
+    "source_layout_CSP_tests": 18,
     "Java_grammar_files": 31,
     "Java_compilation": "pending CI",
     "new_deployment_package_built": false,
@@ -142,5 +142,12 @@
     "secrets_configured_by_agent": false,
     "CI_execution": "pending future user configuration/build",
     "next_build": "0.6.2-dev/code9; user must configure Secrets"
+  },
+  "ci_compile_fix_20261105": {
+    "reported_failure": "compileDebugUnitTestJavaWithJavac: Files.readString unavailable in Android API stubs",
+    "change": "readAllBytes + explicit UTF-8 + StringBuilder; rotation assertions retained",
+    "host_checks": 18,
+    "Android_compilation": "pending CI rerun",
+    "APK_published_from_failed_build": false
   }
 }

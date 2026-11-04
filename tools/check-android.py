@@ -65,6 +65,13 @@ def check_local_pages(assets):
     assert not bound - set(layout.ids), 'Missing Android event targets: ' + ', '.join(sorted(bound - set(layout.ids)))
 
 
+def check_android_file_api(source):
+    # Unit tests compile against Android's API stubs too. A JDK 17 runner does
+    # not make java.nio.file.Files.readString/writeString available there.
+    assert not re.search(r'\bFiles\s*\.\s*(?:readString|writeString)\s*\(', source), 'Android API unavailable: Files.readString/writeString; use UTF-8 bytes'
+    assert not re.search(r'import\s+static\s+java\.nio\.file\.Files\.(?:readString|writeString|\*)\s*;', source), 'Android API unavailable: Files.readString/writeString static import'
+
+
 def check_source():
     manifest = ET.parse(APP / 'src/main/AndroidManifest.xml').getroot()
     application = manifest.find('application')
@@ -81,6 +88,7 @@ def check_source():
     assert len(sources) >= 15
     for path in sources:
         text = path.read_text(encoding='utf-8')
+        check_android_file_api(text)
         assert not re.search(r'(?:sk-[a-z0-9]{24,}|BEGIN PRIVATE KEY)', text)
         assert 'handler.proceed()' not in text
         assert 'addJavascriptInterface(' not in text

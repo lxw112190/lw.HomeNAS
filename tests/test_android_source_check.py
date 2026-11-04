@@ -28,6 +28,20 @@ class AndroidSourceCheckTest(unittest.TestCase):
     def test_shipped_local_fragment_layout_passes(self):
         checker.check_local_pages(self.assets)
 
+    def test_android_files_string_shortcuts_are_rejected(self):
+        for source in ['Files.readString(path)', 'java.nio.file.Files.writeString(path, text)',
+                       'Files . readString (path)']:
+            with self.subTest(source=source), self.assertRaisesRegex(AssertionError, 'Android API unavailable'):
+                checker.check_android_file_api(source)
+
+    def test_static_import_cannot_bypass_android_file_api_check(self):
+        for method in ['readString', 'writeString', '*']:
+            with self.subTest(method=method), self.assertRaisesRegex(AssertionError, 'static import'):
+                checker.check_android_file_api('import static java.nio.file.Files.' + method + ';')
+
+    def test_explicit_utf8_file_bytes_remain_supported(self):
+        checker.check_android_file_api('new String(java.nio.file.Files.readAllBytes(path), StandardCharsets.UTF_8)')
+
     def test_remote_connection_permission_is_rejected(self):
         self.edit_index("connect-src 'self'", "connect-src 'self' https:")
         with self.assertRaisesRegex(AssertionError, 'connect-src'):

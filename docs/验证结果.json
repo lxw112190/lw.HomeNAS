@@ -262,7 +262,7 @@
     "bootstrap_checks": 4,
     "migration_checks": 13,
     "media_integration_checks": 13,
-    "host_android_checks": 15,
+    "host_android_checks": 18,
     "java_grammar_files": 31,
     "native_android_tests": "0.6.2/code9 pending CI",
     "new_deployment_package_built": false,

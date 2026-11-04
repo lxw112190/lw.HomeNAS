@@ -28,7 +28,8 @@ public class DiagnosticsTest {
         for(int i=0;i<4500;i++)Diagnostics.event("rotation.test","index="+i+" "+"x".repeat(3072));
         File[] logs=new File(context.getFilesDir(),"logs").listFiles();assertNotNull(logs);assertTrue(logs.length<=5);boolean rotated=false;
         for(File log:logs){assertTrue(log.length()<=Diagnostics.LIMIT);if(log.getName().equals("runtime.1.log"))rotated=true;}assertTrue(rotated);
-        String combined="";for(File log:logs)combined+=java.nio.file.Files.readString(log.toPath());assertTrue(combined.contains("index=4499 "));assertFalse(combined.contains("index=0 "));
+        StringBuilder combined=new StringBuilder();for(File log:logs)combined.append(new String(java.nio.file.Files.readAllBytes(log.toPath()),StandardCharsets.UTF_8));
+        assertTrue(combined.indexOf("index=4499 ")>=0);assertEquals(-1,combined.indexOf("index=0 "));
         assertEquals(5,Diagnostics.view(context).getJSONObject("summary").getJSONObject("log_policy").getInt("retained_files"));
         ByteArrayOutputStream bytes=new ByteArrayOutputStream();Diagnostics.export(context,bytes);
         try(ZipInputStream zip=new ZipInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {

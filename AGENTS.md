@@ -13,6 +13,7 @@
 - 账号版本采用admin/member/viewer三角色，服务端限制所有写接口；当前资料库共享，不承诺文件隔离。schema2升级需保留原件/确认偏移并撤销旧配对凭据。不能保留配对入口作为绕过账号的后门。
 - Windows服务走原生SCM入口，脚本卸载不删数据、不静默覆盖同名服务；只制作脚本时不在开发机自行安装服务。日志不得打印密码或令牌。
 - Android专用Runtime在android/app，采用Java+可信内置网页，完整APK由GitHub Actions编译；用户当前没有Android开发环境，不自行安装SDK。不得把语法检查称为Android编译或真机通过。
+- Android单元测试也使用Android API桩编译；CI用JDK17不代表所有桌面JDK方法可用。读取UTF-8文件用Files.readAllBytes加显式字符集，避免Files.readString/writeString；同步运行tools/check-android.py与test_android_*check.py。
 - 原生桥只接受可信本地页面主框架的固定命令；不返回令牌、不接受任意路径/URL。自签名证书导入保留主机名校验；会话用Keystore加密；APK签名身份存GitHub Secrets或仓库外，不进源码/日志。
 - Android自动任务采用有限批次，手动长任务使用用户明确启动的dataSync前台服务；不通过开机广播或永久长Worker绕过系统限制。每次显示成功必须取得服务端READY，暂停/退出保留队列和原件。
 - 调试采用CI构建→真机测试→导出诊断ZIP反馈；每轮APK递增versionCode，界面/日志记录版本、提交、CI编号与错误/请求关联ID。日志有界轮转，不记请求正文、密码、令牌、媒体文件名或URI，不打包真实日志。
