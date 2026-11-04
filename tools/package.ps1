@@ -24,6 +24,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/build.gradle') -Dest
 Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/src') -Destination (Join-Path $androidStage 'app') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $stage 'tools') | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/build-ui-bundle.py') -Destination (Join-Path $stage 'tools')
+Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/android_ui_policy.py') -Destination (Join-Path $stage 'tools')
 New-Item -ItemType Directory -Path (Join-Path $stage 'licenses') | Out-Null
 foreach ($pair in @(@('third_party/httplib/LICENSE','httplib-LICENSE'), @('third_party/json/LICENSE.MIT','json-LICENSE.MIT'), @('third_party/mbedtls/LICENSE','mbedtls-LICENSE'))) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $pair[0]) -Destination (Join-Path $stage ('licenses/'+$pair[1]))
@@ -41,10 +42,16 @@ HTTP传输未加密。默认服务仍是局域网HTTPS，HTTP仅本机；详见d
 公网IP测试：config/server.json中设置allow_external_hosts为true，http_port按需设为8080，再启动HTTP入口。
 网页设置页支持APK/签名资源发布及诊断报告；防火墙脚本见deploy/open_firewall.bat与remove_firewall.bat。
 Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不在此Windows包内。
-手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；本轮Android尚待CI/真机验证。
+手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；Android真机功能仍需验证。
 管理员可创建普通/只读账号。服务脚本支持安装、启停、查询与卸载，卸载保留数据。
 '@
-if($ClientReleaseDirectory){ $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。','本包附带CI APK：先停止NAS，运行deploy/import_android.bat导入，再启动即可网页下载；同时导入签名资源r2，手机检查更新、下载资源并重新打开。') }
+if($ClientReleaseDirectory){
+    $apkMetadata=Get-Content -LiteralPath (Join-Path $ClientReleaseDirectory 'apk.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。',('本包附带CI APK '+$apkMetadata.versionName+' (versionCode '+$apkMetadata.versionCode+')：先停止NAS，运行deploy/import_android.bat导入，再启动即可网页下载。'))
+    if(Test-Path -LiteralPath (Join-Path $ClientReleaseDirectory 'ui.json')){$quickStart+="`r`n附带签名页面资源，由导入脚本一起发布；手机检查更新、下载资源更新后重新打开，可使用最新界面。"}
+    $quickStart+="`r`n安装/升级前请阅读docs中的对应CI发布说明；不同签名的Debug APK不能覆盖安装，勿盲目卸载旧版。"
+}
+
 [IO.File]::WriteAllText((Join-Path $stage '开始使用.txt'), $quickStart, [Text.UTF8Encoding]::new($true))
 $archive = $stage + '.zip'
 Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal

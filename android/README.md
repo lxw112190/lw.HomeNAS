@@ -1,10 +1,10 @@
-> 当前源码已升级0.4.0-dev（versionCode 5）。资源更新、APK更新、日志上传见[维护说明](../docs/20261104-客户端更新与日志反馈.md)，本轮编译和真机验证待CI。下文保留原客户端基础功能说明。
+> 安卓页面使用简约资源r4，已修复r3许可证TXT导致解包失败的问题，现有CI3/CI5无需重装。[界面预览与步骤](../docs/20261104-安卓简约界面r3.md)。
 
 # Android 家庭备份客户端
 
-源码版本0.5.0-dev（versionCode 6，待CI），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
+源码版本0.5.0-dev（versionCode 6），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
 
-**当前状态：** 发布包仍使用已核验的CI3 0.4.0-dev / versionCode 5，签名资源r2兼容该APK，带独立登录页、密码查看、底部导航及分页界面。0.5.0源码新增完整原生队列分页、批量入队和摘要进度，需CI编译及真机验收；本地仅完成Java语法/XML/JS检查及浏览器模拟布局，不等同Android运行测试。[本轮说明](../docs/20261104-大批量备份与页面拆分.md)。
+**当前状态：** 默认APK仍是已核验的CI5 0.5.0-dev / versionCode 6原件，原生队列分页、批量入队及摘要进度均由它提供。此次新外观通过签名资源r4更新，现有CI3/CI5无需重装APK；全新安装CI5后也请更新资源r4。APK签名、内容摘要及资源公钥已在接收时核验，测试报告未随Artifact提供，本机没有安装或运行APK。原CI5与CI3的APK签名不同，直接安装升级仍受原有签名限制。[简约界面更新](../docs/20261104-安卓简约界面r3.md) · [APK发布说明](../docs/20261104-CI5安卓安装包发布.md)。
 
 ## 不装Android环境，使用CI生成APK
 
@@ -82,3 +82,5 @@ CI只在push或手动运行时使用这些Secrets；未配置时只生成测试A
 `app/src/main/assets/www/index.html` 是安卓页面外壳；`boot.js` 加载独立的 `views/login.html`、`backup.html`、`library.html`、`settings.html`、`dialogs.html`，再执行 `app.js`。Web页面独立位于根目录 `web/views/`，两端不复用同一份HTML。未登录时只进入登录或连接设置；登录后显示备份、资料库、连接与设置三个底部入口。原生桥和服务端仍负责权限校验。
 
 修改页面资源后应提高资源revision重新签名；修改Java原生能力需增加versionCode，通过CI构建APK。保持资源签名身份，私钥不得进Git或部署包。
+
+资源解包失败时见[r4修复说明](../docs/20261104-资源解包失败与r4修复.md)。构建签名包前会执行与已分发APK一致的路径/扩展名及大小/数量检查。

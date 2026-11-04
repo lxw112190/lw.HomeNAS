@@ -1,37 +1,10 @@
-<section id="page-login">
- <div class="panel login-card">
-  <div class="eyebrow">
-   WELCOME HOME
-  </div>
-  <h2>
-   登录我的家庭备份
-  </h2>
-  <p>
-   使用家庭服务器上的用户名和密码。
-  </p>
-  <code id="login-server">
-  </code>
+<section id="page-login" class="login-page">
+  <div class="login-brand"><span class="app-icon"><svg class="icon" aria-hidden="true"><use href="#icon-server"></use></svg></span><h2>我的家庭备份</h2></div>
+  <button id="login-server-button" class="server-picker" type="button" aria-label="设置服务器地址"><span>家庭服务器</span><span id="login-server">未设置</span><svg class="icon" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
   <form id="login">
-   <div class="form-grid">
-    <label>
-     用户名
-     <input autocomplete="username" id="username" maxlength="32" required="" value="admin"/>
-    </label>
-    <label>
-     密码
-     <input autocomplete="current-password" id="password" maxlength="256" required="" type="password"/>
-    </label>
-   </div>
-   <button class="primary" type="submit">
-    登录家庭备份
-   </button>
-   <p class="subtle">
-    不保存密码，会话由 Android Keystore 加密保存。
-   </p>
+    <label class="field-row"><span>账号</span><input id="username" autocomplete="username" autocapitalize="none" enterkeyhint="next" value="admin" maxlength="32" placeholder="用户名" required></label>
+    <label class="field-row"><span>密码</span><input id="password" enterkeyhint="go" type="password" autocomplete="current-password" maxlength="256" placeholder="请输入密码" required></label>
+    <button class="primary login-submit" type="submit">登录</button>
   </form>
-  <button id="login-settings" type="button">
-   设置服务器地址 →
-  </button>
- </div>
+  <div class="login-links"><button id="login-settings" class="text-button" type="button">连接设置</button><span>·</span><button class="text-button" type="button" data-help>帮助</button></div>
 </section>
-

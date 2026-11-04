@@ -57,4 +57,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action I
 
 新增open_firewall.bat、remove_firewall.bat、status_firewall.bat，按EXE配置的HTTP/HTTPS端口及程序路径管理Windows入站TCP规则。Open/Remove需管理员权限，仅操作本工具对应的规则；云安全组需另行配置。详见[维护说明](../docs/20261104-客户端更新与日志反馈.md)。
 
-本轮0.2.5包中的 `deploy/import_android.bat` 会同时导入默认CI3 APK和签名资源r2。导入前停止NAS；脚本不修改账号/原件/上传进度，已有更高资源revision会保留。同revision但不同摘要会拒绝覆盖。导入后，网页首页和登录页均可下载默认APK；手机在设置检查更新并下载资源，重新打开后进入新登录页。完整原生队列分页需等待0.5.0 APK经CI编译。[详细说明](../docs/20261104-大批量备份与页面拆分.md)。
+本轮0.2.5含APK部署包中的 `deploy/import_android.bat` 会同时导入默认CI5 0.5.0-dev / versionCode 6及签名资源r2。导入前停止NAS；脚本不修改账号/原件/上传进度，已有更高资源revision会保留。同revision但不同摘要会拒绝覆盖。导入后，网页首页和登录页可下载新APK；APK已内置独立登录页、底部导航及原生队列分页，不必先下载资源。CI5与CI3的Debug签名不同，请阅读[CI5升级说明](../docs/20261104-CI5安卓安装包发布.md)。
+
+简约界面r3部署包：随包仍是CI5原始APK，签名资源更新为r3。导入后，手机旧界面点击“检查更新 → 下载资源更新”，重新打开即可看到新界面，无需重装；原config和data继续保留。详见[更新与预览](../docs/20261104-安卓简约界面r3.md)。
+
+r4热修复：最新含APK包将资源更新为r4，解决许可证TXT被现有APK拒绝的问题。仍沿用CI5原始APK；网页发布或离线导入后，手机重新下载资源并从最近任务关闭再打开即可。[修复与验证](../docs/20261104-资源解包失败与r4修复.md)。

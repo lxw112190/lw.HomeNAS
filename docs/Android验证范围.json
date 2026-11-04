@@ -34,10 +34,10 @@
       "390px no overflow"
     ]
   },
-  "ci_executed": false,
-  "apk_generated": false,
-  "jvm_tests": "pending CI for 0.5.0",
-  "android_15_instrumentation_tests": "new login navigation and 501-row queue pagination tests added; pending CI",
+  "ci_executed": "APK artifact received; test reports not provided",
+  "apk_generated": true,
+  "jvm_tests": "not independently reviewed; report not included in CI5 artifact",
+  "android_15_instrumentation_tests": "not independently reviewed; report not included in CI5 artifact",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -58,25 +58,49 @@
     "native diagnostic upload"
   ],
   "received_artifact": {
-    "name": "lw.HomeNAS-Android-3.zip",
-    "version": "0.4.0-dev",
-    "versionCode": 5,
+    "name": "lw.HomeNAS-Android-5.zip",
+    "version": "0.5.0-dev",
+    "versionCode": 6,
     "variant": "debug",
     "APK_v2_signature": "independently verified",
     "content_digest": "independently verified",
     "CI_test_reports_received": false,
-    "physical_phone_tests": "not performed"
+    "physical_phone_tests": "not performed",
+    "embedded_pages_match_source_at_receipt_ignoring_crlf": true
   },
   "default_apk": {
-    "version": "0.4.0-dev",
-    "versionCode": 5,
-    "source": "CI3 previously verified artifact",
-    "unchanged": true
+    "version": "0.5.0-dev",
+    "versionCode": 6,
+    "source": "CI5 user-provided artifact",
+    "replaces": "CI3 default APK",
+    "same_signing_identity_as_CI3": false
   },
   "signed_ui": {
-    "revision": 2,
+    "revision": 4,
     "minNative": 1,
     "signature": "verified with embedded public key",
-    "runtime_phone_test": "pending"
+    "runtime_phone_test": "pending",
+    "browser_preview": "simulated native bridge; not device test",
+    "CI5_APK_bytes": "unchanged; built-in UI requires r4 resource update for new style",
+    "consumer_extractor": "r3 rejected / r4 accepted by unchanged Java extraction loop on existing desktop JDK"
+  },
+  "current_ui_checks": {
+    "CI_host_unit_tests": 14,
+    "js_syntax": "passed",
+    "layout_CSP": "passed",
+    "event_target_ids": "present and unique",
+    "resource_publish_download_checks": 4,
+    "modern_pagination_rows": [
+      50,
+      8
+    ],
+    "legacy_fallback": "passed in simulated bridge",
+    "viewer_capability_hiding": "passed in simulated bridge",
+    "mobile_preview_width": 390,
+    "settings_narrow_preview_width": 360,
+    "horizontal_overflow": false,
+    "console_errors": 0,
+    "resource_entry_policy": "matches distributed Java path regex; paths/types/count/size/duplicates/entry files checked",
+    "license_full_text_preserved": true
   }
 }

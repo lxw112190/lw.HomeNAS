@@ -3,9 +3,13 @@ from pathlib import Path
 from html.parser import HTMLParser
 import json
 import re
+import sys
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tools'))
+from android_ui_policy import validate_ui_entries
+
 APP = ROOT / 'android/app'
 ANDROID = '{http://schemas.android.com/apk/res/android}'
 
@@ -26,6 +30,8 @@ class PageLayout(HTMLParser):
 
 
 def check_local_pages(assets):
+    validate_ui_entries((path.relative_to(assets).as_posix(), path.stat().st_size)
+                        for path in assets.rglob('*') if path.is_file())
     for name in ('index.html', 'boot.js', 'app.js', 'style.css'):
         assert (assets / name).is_file(), f'Missing Android asset: {name}'
     layout = PageLayout((assets / 'index.html').read_text(encoding='utf-8'))
