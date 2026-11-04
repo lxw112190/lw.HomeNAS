@@ -9,9 +9,9 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_emulator_check.py', '.github/workflows/android.yml']
+    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
   pull_request:
-    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_emulator_check.py', '.github/workflows/android.yml']
+    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
 
 permissions:
   contents: read
@@ -38,8 +38,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Validate Android source layout
         run: python3 tools/check-android.py
-      - name: Check emulator evidence flow
-        run: python3 -m unittest discover -s tests -p test_android_emulator_check.py
+      - name: Check Android source and emulator evidence rules
+        run: python3 -m unittest discover -s tests -p 'test_android_*check.py'
       - name: Lint, JVM tests and debug APK
         run: gradle -p android --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
       - name: Record resolved runtime dependencies
