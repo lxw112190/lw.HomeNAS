@@ -1,5 +1,7 @@
 # Windows 服务批处理
 
+下一次新部署包默认 `allow_external_hosts: true`、`bootstrap_admin_password: "admin123"`；全新数据目录首次账号为 **admin / admin123**，登录后修改。此设置只在首次初始化生效，已有账号不会重置。源码默认配置仍使用随机初始密码和外部 Host 关闭。收到新 CI APK 后再生成完整包，见[本轮说明](../docs/20261104-时间线与按天选图.md)。
+
 参考 [lw.OpenCVDNN.PPOCR/server/deploy](https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/tree/main/server/deploy) 的入口组织，提供：
 
 | 文件 | 用途 |

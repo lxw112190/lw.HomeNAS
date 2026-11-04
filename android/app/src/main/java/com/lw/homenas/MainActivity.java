@@ -48,6 +48,8 @@ public final class MainActivity extends Activity {
     private ClientMaintenance maintenance;
     private java.io.File loadedUi;
     private Settings settings;
+    private PreviewStreams previews;
+    private MediaPicker mediaPicker;
     private JSONObject pendingDownload;
     private Settings.Session downloadSession;
     private volatile boolean visible;
@@ -56,7 +58,7 @@ public final class MainActivity extends Activity {
     private synchronized NativeApi api(Settings.Session session) throws Exception {
         if(cachedApi==null||cachedRevision!=session.revision){cachedApi=new NativeApi(session);cachedRevision=session.revision;}return cachedApi;
     }
-    private synchronized void resetApi(){cachedApi=null;cachedRevision=-1;}
+    private synchronized void resetApi(){cachedApi=null;cachedRevision=-1;if(previews!=null)previews.closeAll();if(mediaPicker!=null)mediaPicker.clear();}
     private void checkAuthentication(Settings.Session session,Exception error) {
         if(error instanceof NativeApi.Failure&&((NativeApi.Failure)error).status==401&&settings.invalidate(session)){
             BackupEngine.stopActive();BackupScheduler.cancel(this);settings.message("登录已过期或权限被调整，请重新登录；本机队列保留");resetApi();assets.clear();
@@ -67,7 +69,7 @@ public final class MainActivity extends Activity {
     }
     @SuppressLint("SetJavaScriptEnabled")
     @Override protected void onCreate(Bundle state) {
-        super.onCreate(state);maintenance=new ClientMaintenance(this);loadedUi=maintenance.beginLaunch();settings=new Settings(this);Diagnostics.initialize(this);Diagnostics.event("activity.create","restored="+(state!=null));
+        super.onCreate(state);maintenance=new ClientMaintenance(this);loadedUi=maintenance.beginLaunch();settings=new Settings(this);previews=new PreviewStreams(settings);mediaPicker=new MediaPicker(this,settings);Diagnostics.initialize(this);Diagnostics.event("activity.create","restored="+(state!=null));
         if(!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             Diagnostics.event("webview.unsupported","WEB_MESSAGE_LISTENER unavailable");TextView error=new TextView(this);error.setPadding(30,60,30,30);error.setText("请先更新 Android System WebView 或 Chrome，再打开家庭备份。");setContentView(error);return;
         }
@@ -86,6 +88,12 @@ public final class MainActivity extends Activity {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view,WebResourceRequest request) {
                 Uri uri=request.getUrl();
                 if(!ORIGIN.equals(uri.getScheme()+"://"+uri.getAuthority()))return blocked();
+                if(uri.getPath()!=null&&uri.getPath().matches("/media/[a-f0-9]{48}")){
+                    try{Settings.Session session=settings.session();if(session==null)return blocked();String id=uri.getLastPathSegment();return previews.open(request,session,api(session),assets.get(id));}catch(Exception error){Diagnostics.error("preview.open",error);return blocked();}
+                }
+                if(uri.getPath()!=null&&uri.getPath().matches("/local-thumb/[a-f0-9]{32}\\.jpg")){
+                    try{Settings.Session session=settings.session();if(session==null||request.isForMainFrame())return blocked();String handle=uri.getLastPathSegment().substring(0,32);byte[] bytes=mediaPicker.thumbnail(session,handle);if(!settings.current(session))return blocked();WebResourceResponse result=new WebResourceResponse("image/jpeg",null,new ByteArrayInputStream(bytes));result.setResponseHeaders(Collections.singletonMap("Cache-Control","no-store"));return result;}catch(Exception error){return blocked();}
+                }
                 if(uri.getPath()!=null&&uri.getPath().matches("/thumb/[a-f0-9]{48}\\.jpg")) {
                     try{Settings.Session session=settings.session();if(session==null)return blocked();
                         String id=uri.getLastPathSegment().substring(0,48);byte[] data=api(session).thumbnail(id,new RunControl(15000));
@@ -100,7 +108,7 @@ public final class MainActivity extends Activity {
         WebViewCompat.addWebMessageListener(web,"HomeNasNative",Collections.singleton(ORIGIN),(view,message,sourceOrigin,isMainFrame,reply)->{
             if(!isMainFrame||!ORIGIN.equals(sourceOrigin.getScheme()+"://"+sourceOrigin.getAuthority())||!local(Uri.parse(view.getUrl()==null?"":view.getUrl())))return;
             if(message.getType()!=androidx.webkit.WebMessageCompat.TYPE_STRING)return;
-            String raw=message.getData();if(raw==null||raw.length()>32768)return;
+            String raw=message.getData();if(raw==null||raw.length()>262144)return;
             try {
                 JSONObject input=new JSONObject(raw);String id=input.getString("id");if(!id.matches("[a-zA-Z0-9_-]{1,64}"))return;
                 io.execute(()->{
@@ -137,7 +145,7 @@ public final class MainActivity extends Activity {
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",2).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",3).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
@@ -163,6 +171,10 @@ public final class MainActivity extends Activity {
                 });return new JSONObject();
             }
             case "queuePage": {Settings.Session session=requireSession(false);String before=data.optString("before",""),filter=data.optString("filter","active");TaskStore.get(this).summary(session.scope,before,filter);synchronized(this){queueBefore=before;queueFilter=filter;return snapshot();}}
+            case "previewClose": previews.closeAll();return new JSONObject();
+            case "mediaDays": {Settings.Session session=requireSession(true);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
+            case "mediaItems": {Settings.Session session=requireSession(true);return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000));}
+            case "mediaEnqueue": {Settings.Session session=requireSession(true);JSONObject result=mediaPicker.enqueue(session,data,api(session),new RunControl(90000));settings.message("已加入 "+result.getInt("added")+" 项，跳过已完成或已入队 "+result.getInt("skipped")+" 项");return result;}
             case "snapshot": return snapshot();
             case "diagnostics": return Diagnostics.view(this);
             case "clientLog": {
@@ -217,9 +229,9 @@ public final class MainActivity extends Activity {
             case "overview": {Settings.Session session=requireSession(false);return authenticatedGet(session,"overview");}
             case "assets": {
                 Settings.Session session=requireSession(false);String cursor=data.optString("before","");if(cursor.length()>100)throw new IllegalArgumentException("分页游标无效");
-                String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8");
+                String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8")+"&order="+java.net.URLEncoder.encode(data.optString("order","created"),"UTF-8");
                 String path="assets?"+query;
-                JSONObject result=authenticatedGet(session,path);if(!settings.current(session))throw new SecurityException("登录身份已改变");
+                JSONObject result=authenticatedGet(session,path);if(data.optString("order").equals("timeline")&&!result.optString("order").equals("timeline"))throw new java.io.IOException("按文件时间需升级电脑服务至0.3；可先选择入库时间");if(!settings.current(session))throw new SecurityException("登录身份已改变");
                 if(data.optBoolean("pageMode")||assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}return result;
             }
             case "download": {
@@ -305,5 +317,5 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null)web.onResume();}
     @Override protected void onPause(){visible=false;Diagnostics.event("activity.pause","");if(web!=null)web.onPause();super.onPause();}
     @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null&&web.canGoBack())web.goBack();else super.onBackPressed();}
-    @Override protected void onDestroy(){if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
 }

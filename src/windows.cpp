@@ -166,7 +166,7 @@ void File::flush() { if (!FlushFileBuffers(handle_)) throw Error(507, "DISK_FLUS
 
 Config Config::load(const fs::path& path) {
     auto j = json::parse(readText(path));
-    const std::set<std::string> allowed = {"schema_version", "name", "http_port", "https_port", "https_host", "allow_external_hosts", "data_dir", "web_dir", "chunk_bytes", "minimum_free_bytes", "maximum_file_bytes"};
+    const std::set<std::string> allowed = {"schema_version", "name", "http_port", "https_port", "https_host", "allow_external_hosts", "bootstrap_admin_password", "data_dir", "web_dir", "chunk_bytes", "minimum_free_bytes", "maximum_file_bytes"};
     if (!j.is_object()) throw std::runtime_error("Configuration must be a JSON object");
     for (auto it = j.begin(); it != j.end(); ++it) if (!allowed.count(it.key())) throw std::runtime_error("Unknown configuration field: " + it.key());
     if (number(j, "schema_version") != 1) throw std::runtime_error("Unsupported configuration schema");
@@ -177,6 +177,10 @@ Config Config::load(const fs::path& path) {
     if(j.contains("allow_external_hosts")) {
         if(!j["allow_external_hosts"].is_boolean())throw std::runtime_error("allow_external_hosts must be true or false");
         c.allowExternalHosts=j["allow_external_hosts"].get<bool>();
+    }
+    if(j.contains("bootstrap_admin_password")) {
+        c.bootstrapAdminPassword=text(j,"bootstrap_admin_password",256);
+        if(passwordCharacters(c.bootstrapAdminPassword)<6||c.bootstrapAdminPassword.find_first_of(std::string("\0\r\n",3))!=std::string::npos)throw std::runtime_error("bootstrap_admin_password must have at least 6 characters and no line breaks");
     }
     c.chunkBytes = number(j, "chunk_bytes"); c.minFree = number(j, "minimum_free_bytes"); c.maxFile = number(j, "maximum_file_bytes");
     if (c.chunkBytes < 65536 || c.chunkBytes > 16 * 1024 * 1024 || !c.maxFile || c.maxFile > (1ULL << 48) || c.minFree > (1ULL << 48)) throw std::runtime_error("Invalid size limits");

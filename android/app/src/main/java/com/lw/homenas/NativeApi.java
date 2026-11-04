@@ -65,7 +65,7 @@ final class NativeApi {
         return (X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(pem.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
     }
     private Request.Builder request(String path) throws IOException {
-        if(!path.matches("(client/latest|diagnostics|server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
+        if(!path.matches("(sources/status|client/latest|diagnostics|server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
         Request.Builder request=new Request.Builder().url(endpoint+"/api/v1/"+path);
         if(!token.isEmpty())request.header("Authorization","Bearer "+token);
         return request;
@@ -111,6 +111,11 @@ final class NativeApi {
         if(!Protocol.assetId(id))throw new IOException("图片ID不合法");
         try(Response response=execute(request("assets/"+id+"/thumbnail").build(),control)){return readLimited(response.body().byteStream(),4*1024*1024);}
         finally{control.detach();}
+    }
+    Response preview(String id,String range,RunControl control) throws Exception {
+        if(!Protocol.assetId(id)||(!range.isEmpty()&&!range.matches("bytes=(?:[0-9]{1,19}-[0-9]{0,19}|-[0-9]{1,19})")))throw new IOException("预览请求无效");
+        Request.Builder builder=request("assets/"+id+"/original");if(!range.isEmpty())builder.header("Range",range);
+        return execute(builder.build(),control,true);
     }
     Response original(String id,RunControl control) throws Exception {
         if(!Protocol.assetId(id))throw new IOException("文件ID不合法");

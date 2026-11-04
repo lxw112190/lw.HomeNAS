@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.2.5-dev";
+constexpr const char* Version = "0.3.0-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -27,7 +27,7 @@ struct Error : std::runtime_error {
         : std::runtime_error(std::move(message)), status(status), code(std::move(code)) {}
 };
 struct Config {
-    std::string name, host;
+    std::string name, host, bootstrapAdminPassword;
     fs::path data, web;
     int httpPort = 8787, httpsPort = 9443;
     bool allowExternalHosts = false;
@@ -104,7 +104,8 @@ public:
                     const std::function<bool(const std::function<bool(const char*, size_t)>&)>& reader);
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
-    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60);
+    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created");
+    json sourceStatus(const json& input, const Identity& who);
     json asset(const std::string& id);
     json tasks(const Identity& who);
     json taskPage(const Identity& who, const std::string& before, const std::string& filter);

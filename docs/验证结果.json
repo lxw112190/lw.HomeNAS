@@ -1,9 +1,9 @@
 {
   "date": "2026-11-04",
-  "version": "0.2.5-dev",
+  "version": "0.3.0-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
-  "cmake_release_build": "passed",
+  "cmake_release_build": "historical pass; current 0.3.0 build validated via VS2022 solution",
   "dependency_lock_files_verified": 284,
   "package_tests": {
     "checks": [
@@ -82,7 +82,8 @@
       "committed originals survive second abrupt restart"
     ],
     "count": 73,
-    "scope": "Windows x64 username/password roles and HTTP/TLS backup recovery; no physical Android verification"
+    "scope": "Windows x64 username/password roles and HTTP/TLS backup recovery; no physical Android verification",
+    "last_executed_version": "0.2.5-dev; historical package"
   },
   "legacy_upgrade_tests": {
     "count": 13,
@@ -243,14 +244,32 @@
   },
   "current_round": {
     "smoke_checks": 84,
+    "timeline_checks": 9,
+    "bootstrap_password_checks": 4,
     "pagination_checks": 9,
     "pagination_assets": 10001,
     "pagination_tasks": 10001,
     "http_admin_checks": 13,
-    "maintenance_checks": 16,
-    "hash_checks": 8,
-    "browser_actual_uploads": 120,
-    "split_page_new_upload_bytes": 114688,
-    "native_android_tests": "pending CI"
+    "legacy_upgrade_checks": 13,
+    "host_android_check_tests": 15,
+    "java_grammar_files": 25,
+    "browser_real_uploads": 7,
+    "browser_real_images": 6,
+    "browser_real_h264_videos": 1,
+    "android_browser_preview": "mock bridge only; not native MediaStore or proxy execution",
+    "native_android_tests": "0.6.0 pending CI",
+    "new_deployment_package_built": false,
+    "service_firewall_checks": "plans/parser only; no installation or firewall changes",
+    "maintenance_checks": 16
+  },
+  "current_round_evidence": {
+    "smoke": "端到端-18d6f4d9f4",
+    "timeline": "端到端-164c7e3b39",
+    "bootstrap": "端到端-c541b870ae",
+    "pagination": "端到端-d20cd0e082",
+    "http_admin": "端到端-9f0a2838c2",
+    "legacy_upgrade": "端到端-050b391f72",
+    "location": "ignored test-results; private test runtime files are not shipped",
+    "maintenance": "端到端-3fff0d2449"
   }
 }

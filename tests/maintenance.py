@@ -2,7 +2,7 @@
 from smoke import Harness,ROOT
 import requests,json,hashlib,io,zipfile,base64,argparse
 from pathlib import Path
-parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,default=ROOT/'out/Release/NasServer.exe');h=Harness(parser.parse_args().exe)
+parser=argparse.ArgumentParser();parser.add_argument('--exe',type=Path,default=ROOT/'out/Release/NasServer.exe');parser.add_argument('--ui-directory',type=Path,default=ROOT/'deliveries/ui');args=parser.parse_args();h=Harness(args.exe)
 try:
  h.start();password=(h.home/'数据/initial-admin-password.txt').read_text(encoding='utf-8').strip();h.post('login',{'username':'admin','password':password})
  catalog=requests.get(h.url+'client/latest').json();h.check(catalog=={'apk':None,'ui':None},'unpublished download state is explicit and public')
@@ -12,7 +12,7 @@ try:
  h.post('admin/client/apk/publish',{**blob,'versionCode':6,'versionName':'test-only','notes':'fixture'})
  latest=requests.get(h.url+'client/latest').json()['apk'];h.check(latest['versionCode']==6,'published APK metadata is publicly readable')
  h.check(requests.get(h.url+'client/packages/'+blob['sha256']+'.apk').content==fake,'web APK download is byte-identical before login')
- envelope=json.loads((ROOT/'deliveries/ui/release.json').read_text());revision=json.loads(base64.b64decode(envelope['payload']))['revision'];ui=(ROOT/f'deliveries/ui/ui-r{revision}.zip').read_bytes()
+ envelope=json.loads((args.ui_directory/'release.json').read_text(encoding='utf-8'));revision=json.loads(base64.b64decode(envelope['payload']))['revision'];ui=(args.ui_directory/f'ui-r{revision}.zip').read_bytes()
  h.check(h.admin.post(h.url+'admin/client/ui/blob',data=ui).status_code==200,'signed UI archive upload succeeds')
  h.post('admin/client/ui/publish',envelope);h.check(requests.get(h.url+'client/latest').json()['ui']==envelope,'resource signature envelope is preserved unchanged')
  archive=io.BytesIO()

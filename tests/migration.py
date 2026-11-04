@@ -14,6 +14,11 @@ def run(legacy, current):
     if not version.startswith('0.1.'):
         raise RuntimeError('A real 0.1 executable is required for this migration test')
     h=Harness(legacy)
+    # The v0.1 executable rejects config fields introduced after its release.
+    config=json.loads(h.config.read_text(encoding='utf-8'))
+    config.pop('allow_external_hosts',None)
+    config.pop('bootstrap_admin_password',None)
+    h.config.write_text(json.dumps(config,ensure_ascii=False),encoding='utf-8')
     h.start()
     try:
         initial=(h.home/'数据/initial-admin-password.txt').read_text().strip()

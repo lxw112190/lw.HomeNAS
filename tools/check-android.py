@@ -19,6 +19,7 @@ class PageLayout(HTMLParser):
         super().__init__()
         self.policies = []
         self.views = []
+        self.ids = []
         self.feed(text)
 
     def handle_starttag(self, tag, attributes):
@@ -27,6 +28,8 @@ class PageLayout(HTMLParser):
             self.policies.append(attributes.get('content', ''))
         if 'data-view' in attributes:
             self.views.append(attributes['data-view'])
+        if 'id' in attributes:
+            self.ids.append(attributes['id'])
 
 
 def check_local_pages(assets):
@@ -45,7 +48,7 @@ def check_local_pages(assets):
     # fetch() reads local HTML fragments through WebViewAssetLoader, never a remote server.
     for name, sources in {
         'default-src': ["'none'"], 'connect-src': ["'self'"],
-        'script-src': ["'self'"], 'style-src': ["'self'"], 'img-src': ["'self'"],
+        'media-src': ["'self'"], 'script-src': ["'self'"], 'style-src': ["'self'"], 'img-src': ["'self'"],
         'frame-src': ["'none'"], 'object-src': ["'none'"],
         'base-uri': ["'none'"], 'form-action': ["'none'"],
     }.items():
@@ -55,6 +58,11 @@ def check_local_pages(assets):
     for name in layout.views:
         assert re.fullmatch(r'[a-z][a-z0-9-]*', name or ''), 'Invalid Android fragment name'
         assert (assets / 'views' / (name + '.html')).is_file(), f'Missing Android fragment: {name}'
+        fragment = PageLayout((assets / 'views' / (name + '.html')).read_text(encoding='utf-8'))
+        layout.ids.extend(fragment.ids)
+    assert len(layout.ids) == len(set(layout.ids)), 'Duplicate Android control ID'
+    bound = set(re.findall(r"\$\('([A-Za-z0-9_-]+)'\)", (assets / 'app.js').read_text(encoding='utf-8')))
+    assert not bound - set(layout.ids), 'Missing Android event targets: ' + ', '.join(sorted(bound - set(layout.ids)))
 
 
 def check_source():

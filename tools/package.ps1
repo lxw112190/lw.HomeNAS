@@ -12,6 +12,12 @@ New-Item -ItemType Directory -Path $stage | Out-Null
 Copy-Item -LiteralPath $Executable -Destination (Join-Path $stage 'NasServer.exe')
 if($ClientReleaseDirectory){ Copy-Item -LiteralPath $ClientReleaseDirectory -Destination (Join-Path $stage 'client-release') -Recurse }
 foreach ($folder in @('web','config','deploy')) { Copy-Item -LiteralPath (Join-Path $projectRoot $folder) -Destination $stage -Recurse }
+# User-requested deployment defaults; source/runtime configs and existing accounts are untouched.
+$deploymentConfigFile=Join-Path $stage 'config/server.json'
+$deploymentConfig=Get-Content -LiteralPath $deploymentConfigFile -Raw -Encoding UTF8 | ConvertFrom-Json
+$deploymentConfig.allow_external_hosts=$true
+$deploymentConfig | Add-Member -NotePropertyName bootstrap_admin_password -NotePropertyValue 'admin123' -Force
+[IO.File]::WriteAllText($deploymentConfigFile,($deploymentConfig | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
 foreach ($file in @('README.md','LICENSE','THIRD-PARTY-NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stage }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $stage -Recurse
 # Copy source explicitly: never ship local Gradle caches, build outputs or signing/config files.
@@ -34,12 +40,12 @@ $launch = "@echo off`r`n`"%~dp0NasServer.exe`"`r`npause`r`n"
 $quickStart = @'
 lw.HomeNAS 家庭备份开发预览
 运行 启动服务.cmd，保持窗口运行，然后浏览器打开 http://127.0.0.1:8787/ 。
-用户名 admin，默认首次随机密码见控制台与 data/initial-admin-password.txt。
+全新部署默认用户名 admin、初始密码 admin123；登录后在“存储与设置”修改密码。已有data中的账号密码不会重置。
 测试时可先关闭前台程序/停止服务，运行 deploy/set_admin_password.bat 自选至少6个字符的密码，再启动。
 家庭内网HTTP前台入口：deploy/start_console_http.bat。
 服务首次安装HTTP：deploy/install_http_service.bat；已有服务切换：deploy/configure_http_service.bat。
 HTTP传输未加密。默认服务仍是局域网HTTPS，HTTP仅本机；详见deploy/README.md。
-公网IP测试：config/server.json中设置allow_external_hosts为true，http_port按需设为8080，再启动HTTP入口。
+本包allow_external_hosts默认为true；http_port按需设为8080，再启动HTTP入口。
 网页设置页支持APK/签名资源发布及诊断报告；防火墙脚本见deploy/open_firewall.bat与remove_firewall.bat。
 Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不在此Windows包内。
 手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；Android真机功能仍需验证。

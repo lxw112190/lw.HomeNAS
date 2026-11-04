@@ -63,6 +63,12 @@ class AndroidSourceCheckTest(unittest.TestCase):
         native = (ROOT / 'android/app/src/main/java/com/lw/homenas/ClientMaintenance.java').read_text(encoding='utf-8')
         self.assertIn('path.matches(' + json.dumps(RESOURCE_PATH_PATTERN) + ')', native)
 
+    def test_missing_bound_control_is_rejected(self):
+        fragment = self.assets / 'views/library.html'
+        fragment.write_text(fragment.read_text(encoding='utf-8').replace('id="library-order"', 'id="unused-order"'), encoding='utf-8')
+        with self.assertRaisesRegex(AssertionError, 'Missing Android event targets: library-order'):
+            checker.check_local_pages(self.assets)
+
     def test_license_text_cannot_be_shipped_as_unsupported_txt(self):
         (self.assets / 'licenses/old-NOTICE.txt').write_text('fixture notice', encoding='utf-8')
         with self.assertRaisesRegex(ValueError, r'APK rejects.*old-NOTICE.txt'):

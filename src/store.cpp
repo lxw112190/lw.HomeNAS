@@ -2,6 +2,7 @@
 #include "sqlite3.h"
 #include <algorithm>
 #include <ctime>
+#include <set>
 #include <mbedtls/sha256.h>
 
 namespace nas {
@@ -95,12 +96,12 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
       CREATE TABLE IF NOT EXISTS sources(device_id TEXT NOT NULL,source_key TEXT NOT NULL,asset_id TEXT NOT NULL REFERENCES assets(id),name TEXT NOT NULL,album TEXT NOT NULL,modified INTEGER NOT NULL,PRIMARY KEY(device_id,source_key,asset_id));
     )SQL");
     if (setting("server_id").empty()) {
-        auto password = randomHex(8), salt=randomHex(16); auto now=std::to_string(millis());
+        auto password = config.bootstrapAdminPassword.empty()?randomHex(8):config.bootstrapAdminPassword, salt=randomHex(16); auto now=std::to_string(millis());
         writeText(config.data/"initial-admin-password.txt",password+"\r\n");
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
     migrateAccounts();
-    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
+    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
 }
 Store::~Store() { stopping=true; queueCondition_.notify_all(); if(worker_.joinable()) worker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
@@ -341,21 +342,35 @@ void Store::recover() {
 json Store::asset(const std::string& id) {
     auto rows=db.query("SELECT * FROM assets WHERE id=? AND state='READY'",{id});if(rows.empty())throw Error(404,"ASSET_NOT_FOUND","文件不存在或原件需要恢复检查");return rows[0];
 }
-json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit) {
+json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit,const std::string& order) {
     if(limit<1||limit>100)throw Error(400,"INVALID_LIMIT","每页数量需1至100");
-    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview FROM assets INDEXED BY "+std::string((type=="image"||type=="video"||type=="file")?"asset_category_timeline":"asset_ready_timeline")+" WHERE state='READY'";
+    if(order!="created"&&order!="timeline")throw Error(400,"INVALID_ORDER","排序方式无效");
+    const bool timeline=order=="timeline",filtered=type=="image"||type=="video"||type=="file";
+    const std::string clock=timeline?"(CASE WHEN modified>0 THEN modified ELSE created END)":"created";
+    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview,(CASE WHEN modified>0 THEN modified ELSE created END) AS timeline_time FROM assets INDEXED BY "+std::string(timeline?(filtered?"asset_category_file_time":"asset_file_time"):(filtered?"asset_category_timeline":"asset_ready_timeline"))+" WHERE state='READY'";
     if(!before.empty()){
         auto colon=before.find(':');if(colon==std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");auto time=before.substr(0,colon),id=before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
-        sql+=" AND (created,id)<(?,?)";params.insert(params.end(),{time,id});
+        if(number(json{{"cursor_time",time}},"cursor_time")>static_cast<uint64_t>(INT64_MAX))throw Error(400,"INVALID_CURSOR","分页时间超出范围");
+        sql+=" AND ("+clock+",id)<(CAST(? AS INTEGER),?)";params.insert(params.end(),{time,id});
     }
     if(type=="image"||type=="video"||type=="file"){sql+=" AND category=?";params.push_back(type);}
     if(!search.empty()){sql+=" AND name LIKE ?";params.push_back("%"+search+"%");}
-    sql+=" ORDER BY created DESC,id DESC LIMIT "+std::to_string(limit+1);auto rows=db.query(sql,params);std::string next;
+    sql+=" ORDER BY "+clock+" DESC,id DESC LIMIT "+std::to_string(limit+1);auto rows=db.query(sql,params);std::string next;
     if(rows.size()>static_cast<size_t>(limit)){rows.erase(rows.end()-1);}
     else limit=0;
-    if(limit>0){auto last=rows.back();next=last["created"].get<std::string>()+":"+last["id"].get<std::string>();}
-    return {{"items",rows},{"next",next}};
+    if(limit>0){auto last=rows.back();next=last[timeline?"timeline_time":"created"].get<std::string>()+":"+last["id"].get<std::string>();}
+    return {{"items",rows},{"next",next},{"order",order}};
+}
+json Store::sourceStatus(const json& input,const Identity& who) {
+    if(!input.contains("task_ids")||!input["task_ids"].is_array()||input["task_ids"].empty()||input["task_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次核对1至100项");
+    Params params{who.userId};std::string slots;std::set<std::string> unique;
+    for(const auto& value:input["task_ids"]){if(!value.is_string())throw Error(400,"INVALID_ID","任务标识无效");auto id=value.get<std::string>();if(id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos||!unique.insert(id).second)throw Error(400,"INVALID_ID","任务标识无效或重复");if(!slots.empty())slots+=",";slots+="?";params.push_back(id);}
+    auto rows=db.query("SELECT u.id,u.state,u.size,u.modified,u.sha256,u.asset_id,a.path,a.state AS asset_state,a.size AS original_size FROM uploads u LEFT JOIN assets a ON a.id=u.asset_id WHERE u.user_id=? AND u.id IN ("+slots+")",params);
+    json items=json::array();for(auto row:rows){std::string state=row["state"];
+        if(state=="READY"){std::error_code error;bool present=row["asset_state"]=="READY"&&!row["path"].is_null();if(present){auto file=config.data/fs::u8path(row["path"].get<std::string>());present=fs::is_regular_file(file,error)&&!error&&fs::file_size(file,error)==number(row,"size")&&!error;}if(!present)state="MISSING";}
+        items.push_back({{"id",row["id"]},{"state",state},{"size",row["size"]},{"modified",row["modified"]},{"sha256",row["sha256"]},{"asset_id",row["asset_id"]}});
+    }return {{"items",items}};
 }
 json Store::tasks(const Identity& who) {
     auto sql=std::string("SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,updated FROM uploads ");

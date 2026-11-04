@@ -18,7 +18,7 @@ final class TaskStore extends SQLiteOpenHelper {
         db.execSQL("CREATE TABLE tasks(id INTEGER PRIMARY KEY,scope TEXT NOT NULL,source TEXT NOT NULL,uri TEXT NOT NULL,name TEXT NOT NULL,album TEXT NOT NULL,size INTEGER NOT NULL,modified INTEGER NOT NULL,client TEXT NOT NULL,sha TEXT NOT NULL DEFAULT '',remote TEXT NOT NULL DEFAULT '',offset INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'QUEUED',error TEXT NOT NULL DEFAULT '',UNIQUE(scope,source))");
         db.execSQL("CREATE INDEX task_scope_state ON tasks(scope,state,id)");
     }
-    @Override public void onOpen(SQLiteDatabase db){super.onOpen(db);db.execSQL("CREATE INDEX IF NOT EXISTS task_scope_timeline ON tasks(scope,id DESC)");}
+    @Override public void onOpen(SQLiteDatabase db){super.onOpen(db);db.execSQL("CREATE INDEX IF NOT EXISTS task_scope_timeline ON tasks(scope,id DESC)");db.execSQL("CREATE INDEX IF NOT EXISTS task_media_match ON tasks(scope,size,modified,id DESC)");}
     public void onUpgrade(SQLiteDatabase db,int old,int next) { throw new IllegalStateException("Unsupported queue schema"); }
     static final class Task {
         final long id,size,modified,offset;
@@ -44,6 +44,10 @@ final class TaskStore extends SQLiteOpenHelper {
             while(c.moveToNext()) {ContentValues v=new ContentValues();v.put("client",UUID.randomUUID().toString());v.put("state","QUEUED");v.put("error","");v.put("remote","");v.put("sha","");v.put("offset",0);db.update("tasks",v,"id=?",new String[]{c.getString(0)});}
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
+    }
+    boolean requeue(long id,String uri) {
+        ContentValues value=new ContentValues();value.put("uri",uri);value.put("client",UUID.randomUUID().toString());value.put("remote","");value.put("sha","");value.put("offset",0);value.put("state","QUEUED");value.put("error","");
+        return getWritableDatabase().update("tasks",value,"id=? AND state IN ('READY','ERROR','SOURCE_MISSING')",new String[]{Long.toString(id)})>0;
     }
     JSONObject summary(String scope) throws Exception {return summary(scope,"","active");}
     JSONObject summary(String scope,String before,String filter) throws Exception {

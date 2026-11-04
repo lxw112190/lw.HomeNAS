@@ -23,7 +23,7 @@ struct RequestLog {
     explicit RequestLog(const fs::path& data):folder(data/"logs"){}
     static std::string route(const httplib::Request& request){
         const auto& path=request.path;
-        static const std::set<std::string> known={"/api/v1/server","/api/v1/login","/api/v1/logout","/api/v1/me","/api/v1/overview","/api/v1/users","/api/v1/password","/api/v1/uploads","/api/v1/tasks","/api/v1/assets","/api/v1/certificate"};
+        static const std::set<std::string> known={"/api/v1/server","/api/v1/login","/api/v1/logout","/api/v1/me","/api/v1/overview","/api/v1/users","/api/v1/password","/api/v1/uploads","/api/v1/tasks","/api/v1/assets","/api/v1/sources/status","/api/v1/certificate"};
         if(known.count(path))return path;
         for(const std::string prefix:{"/api/v1/uploads/","/api/v1/assets/","/api/v1/users/"})if(path.rfind(prefix,0)==0){auto rest=path.substr(prefix.size());auto slash=rest.find('/');auto id=rest.substr(0,slash),suffix=slash==std::string::npos?std::string{}:rest.substr(slash);
             if((id=="administrator"||(id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos))&&(suffix.empty()||suffix=="/data"||suffix=="/complete"||suffix=="/cancel"||suffix=="/original"||suffix=="/thumbnail"))return path;
@@ -122,6 +122,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/users",[&store](const auto& request,auto& response){reply(response,store.createUser(body(request),store.authenticate(token(request))),201);});
     server.Post("/api/v1/users/([a-f0-9]{48}|administrator)",[&store](const auto& request,auto& response){reply(response,store.updateUser(request.matches[1],body(request),store.authenticate(token(request))));});
     server.Post("/api/v1/password",[&store](const auto& request,auto& response){store.changePassword(body(request),store.authenticate(token(request)));reply(response,{{"ok",true}});});
+    server.Post("/api/v1/sources/status",[&store](const auto& request,auto& response){reply(response,store.sourceStatus(body(request),store.authenticate(token(request))));});
     server.Post("/api/v1/uploads",[&store](const auto& request,auto& response){reply(response,store.createUpload(body(request),store.authenticate(token(request))),201);});
     server.Get("/api/v1/uploads/([a-f0-9]{48})",[&store](const auto& request,auto& response){reply(response,store.upload(request.matches[1],store.authenticate(token(request))));});
     server.Put("/api/v1/uploads/([a-f0-9]{48})/data",[&store](const httplib::Request& request,httplib::Response& response,const httplib::ContentReader& reader){
@@ -134,7 +135,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/uploads/([a-f0-9]{48})/cancel",[&store](const auto& request,auto& response){body(request);reply(response,store.cancel(request.matches[1],store.authenticate(token(request))));});
     server.Get("/api/v1/tasks",[&store](const auto& request,auto& response){reply(response,store.tasks(store.authenticate(token(request))));});
     server.Get("/api/v1/tasks/page",[&store](const auto& request,auto& response){reply(response,store.taskPage(store.authenticate(token(request)),request.get_param_value("before"),request.get_param_value("filter")));});
-    server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");reply(response,store.assets(request.get_param_value("before"),request.get_param_value("type"),search,request.has_param("limit")?static_cast<int>(std::min<uint64_t>(number(json{{"limit",request.get_param_value("limit")}},"limit"),101)):60));});
+    server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");reply(response,store.assets(request.get_param_value("before"),request.get_param_value("type"),search,request.has_param("limit")?static_cast<int>(std::min<uint64_t>(number(json{{"limit",request.get_param_value("limit")}},"limit"),101)):60,request.has_param("order")?request.get_param_value("order"):"created"));});
     server.Get("/api/v1/assets/([a-f0-9]{48})/original",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);auto type=row["mime"].template get<std::string>();serveFile(request,response,store.originalPath(row),type,row["name"],request.get_param_value("download")=="1"||type=="application/octet-stream");});
     server.Get("/api/v1/assets/([a-f0-9]{48})/thumbnail",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);if(row["preview"]!="READY")throw Error(404,"PREVIEW_UNAVAILABLE","缩略图尚未生成或该格式暂不支持预览");serveFile(request,response,store.config.data/"cache"/(row["id"].template get<std::string>()+".jpg"),"image/jpeg","",false);});
     server.Get("/api/v1/certificate",[&store](const auto& request,auto& response){admin(store.authenticate(token(request)));serveFile(request,response,store.config.data/"server-cert.pem","application/x-pem-file","lw.HomeNAS.crt",true);});

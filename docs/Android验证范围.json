@@ -1,12 +1,12 @@
 {
   "date": "2026-11-04",
-  "android_source_version": "0.5.0-dev",
-  "server_compatibility": "0.2.5-dev; UI r2 minNative1 compatible with shipped CI3 0.4.0/code5",
+  "android_source_version": "0.6.0-dev",
+  "server_compatibility": "0.3.0-dev for timeline/daily picker; older native APK retains limited fallback",
   "host_has_android_sdk": false,
   "local_checks": {
     "java_grammar": {
       "result": "passed",
-      "files": 22
+      "files": 25
     },
     "xml_manifest_resources": "passed",
     "javascript_syntax": "passed",
@@ -34,10 +34,10 @@
       "390px no overflow"
     ]
   },
-  "ci_executed": "APK artifact received; test reports not provided",
-  "apk_generated": true,
-  "jvm_tests": "not independently reviewed; report not included in CI5 artifact",
-  "android_15_instrumentation_tests": "not independently reviewed; report not included in CI5 artifact",
+  "ci_executed": "new 0.6.0 source pending CI; received CI5 evidence is historical",
+  "apk_generated": false,
+  "jvm_tests": "0.6.0 pending CI",
+  "android_15_instrumentation_tests": "0.6.0 pending CI",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -55,7 +55,10 @@
   "new_features_not_device_verified": [
     "signed UI staging/activation/rollback",
     "APK signing verification and system install",
-    "native diagnostic upload"
+    "native diagnostic upload",
+    "MediaStore daily picker with partial access",
+    "media/document URI mapping and server backup confirmation",
+    "WebView native Range streaming preview"
   ],
   "received_artifact": {
     "name": "lw.HomeNAS-Android-5.zip",
@@ -85,7 +88,7 @@
     "consumer_extractor": "r3 rejected / r4 accepted by unchanged Java extraction loop on existing desktop JDK"
   },
   "current_ui_checks": {
-    "CI_host_unit_tests": 14,
+    "CI_host_unit_tests": 15,
     "js_syntax": "passed",
     "layout_CSP": "passed",
     "event_target_ids": "present and unique",
@@ -102,5 +105,20 @@
     "console_errors": 0,
     "resource_entry_policy": "matches distributed Java path regex; paths/types/count/size/duplicates/entry files checked",
     "license_full_text_preserved": true
+  },
+  "android_source_versionCode": 7,
+  "nativeApi": 3,
+  "current_round": {
+    "source_checks": "passed; not Android compilation",
+    "mock_bridge_browser": "timeline, metadata, 30x30 save button, video 320x240/2s, day selection and READY disabled",
+    "mock_bridge_console_errors": 0,
+    "native_instrumentation_added": [
+      "daily selection and remote READY confirmation",
+      "single Range preview and logout cancellation"
+    ],
+    "native_instrumentation_executed": false,
+    "new_signed_ui_built": false,
+    "new_apk_received": false,
+    "new_deployment_package_built": false
   }
 }

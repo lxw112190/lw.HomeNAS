@@ -24,7 +24,7 @@ final class ClientMaintenance {
     synchronized void ready(){prefs.edit().putBoolean("unconfirmed",false).commit();String active=prefs.getString("active",""),previous=prefs.getString("previous",""),staged=prefs.getString("staged","");File[] folders=root().listFiles();if(folders!=null)for(File f:folders)if(!f.getName().equals(active)&&!f.getName().equals(previous)&&!f.getName().equals(staged))deleteTree(f);}
     String version(){String value=prefs.getString("active","");return value.isEmpty()?"builtin":value;}
     private NativeApi api() throws Exception {Settings.Session s=new Settings(context).session();if(s==null)throw new IOException("请先登录服务器");return new NativeApi(s);}
-    JSONObject check() throws Exception {JSONObject catalog=api().get("client/latest",new RunControl(20000));prefs.edit().putString("catalog",catalog.toString()).apply();return catalog.put("resourceVersion",version()).put("nativeApi",2);}
+    JSONObject check() throws Exception {JSONObject catalog=api().get("client/latest",new RunControl(20000));prefs.edit().putString("catalog",catalog.toString()).apply();return catalog.put("resourceVersion",version()).put("nativeApi",3);}
     private File download(String hash,String ext,long expected) throws Exception {
         if(!hash.matches("[a-f0-9]{64}")||expected<=0||expected>128L*1024*1024)throw new IOException("更新包信息无效");
         File dir=new File(context.getCacheDir(),"updates");dir.mkdirs();File file=new File(dir,hash+ext);boolean complete=false;
@@ -41,7 +41,7 @@ final class ClientMaintenance {
         Signature verifier=Signature.getInstance("SHA256withRSA");verifier.initVerify(KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(android.util.Base64.decode(ResourceTrust.KEY,0))));verifier.update(payload);
         if(!verifier.verify(android.util.Base64.decode(envelope.getString("signature"),0)))throw new IOException("资源发布签名不匹配");
         JSONObject manifest=new JSONObject(new String(payload,java.nio.charset.StandardCharsets.UTF_8));long revision=manifest.getLong("revision");
-        if(manifest.getInt("minNative")>2||revision<=0)throw new IOException("资源需要更新的APK");String name="r"+revision;
+        if(manifest.getInt("minNative")>3||revision<=0)throw new IOException("资源需要更新的APK");String name="r"+revision;
         if(name.equals(version()))return "当前已使用此资源版本";
         File archive=download(manifest.getString("sha256"),".zip",manifest.getLong("size"));File temporary=new File(root(),"tmp-"+java.util.UUID.randomUUID());temporary.mkdirs();boolean retained=false;
         try(ZipInputStream zip=new ZipInputStream(new FileInputStream(archive))){

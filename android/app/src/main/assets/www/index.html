@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; connect-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>lw.HomeNAS · 家庭备份</title>
   <link rel="stylesheet" href="./style.css">
   <script defer="" src="./boot.js"></script>
@@ -21,6 +21,7 @@
     <div data-view="backup"></div>
     <div data-view="library"></div>
     <div data-view="settings"></div>
+    <div data-view="picker"></div>
   </main>
   <nav id="bottom-nav" aria-label="功能" hidden>
     <button data-page="backup" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-backup"></use></svg><span>备份</span></button>
