@@ -14,18 +14,26 @@ final class PreviewStreams {
     synchronized void closeAll(){for(OwnedStream stream:new ArrayList<>(open))try{stream.close();}catch(IOException ignored){}}
     WebResourceResponse open(WebResourceRequest request,Settings.Session session,NativeApi api,JSONObject asset) throws Exception {
         if(asset==null||!settings.current(session)||request.isForMainFrame())throw new IOException("请重新打开文件预览");
-        String type=asset.optString("mime");
-        if(!type.matches("image/(jpeg|png|webp|gif|bmp)|video/(mp4|webm|quicktime|x-matroska|x-msvideo)"))throw new IOException("该格式请保存后打开");
+        String type=previewType(asset);
         String range="";for(Map.Entry<String,String> header:request.getRequestHeaders().entrySet())if(header.getKey().equalsIgnoreCase("Range"))range=header.getValue();
         RunControl control=new RunControl(15*60*1000L);okhttp3.Response response=null;
         try {
             response=api.preview(asset.getString("id"),range,control);if(!settings.current(session))throw new IOException("登录已改变");
             Map<String,String> headers=new HashMap<>();headers.put("Cache-Control","no-store");
             for(String key:new String[]{"Content-Length","Content-Range","Accept-Ranges"})if(response.header(key)!=null)headers.put(key,response.header(key));
+            Diagnostics.event("preview.stream","type="+type+" range="+!range.isEmpty()+" status="+response.code());
             OwnedStream stream=new OwnedStream(response,control,session);
             synchronized(this){if(open.size()>=4){stream.close();throw new IOException("请先关闭其他预览");}open.add(stream);}
             return new WebResourceResponse(type,null,response.code(),response.code()==206?"Partial Content":"OK",headers,stream);
         }catch(Exception error){if(response!=null)response.close();control.cancel();throw error;}
+    }
+    static String previewType(JSONObject asset) throws IOException {
+        String type=asset.optString("mime");
+        // Existing servers stored MKV/AVI as octet-stream despite category=video.
+        if(type.equals("application/octet-stream")&&asset.optString("category").equals("video")){
+            String name=asset.optString("name").toLowerCase(Locale.ROOT);if(name.endsWith(".mkv"))type="video/x-matroska";else if(name.endsWith(".avi"))type="video/x-msvideo";
+        }
+        if(!type.matches("image/(jpeg|png|webp|gif|bmp)|video/(mp4|webm|quicktime|x-matroska|x-msvideo|3gpp|mpeg|mp2t)"))throw new IOException("该格式请保存后打开");return type;
     }
     private final class OwnedStream extends FilterInputStream {
         final okhttp3.Response response;final RunControl control;final Settings.Session session;boolean closed;

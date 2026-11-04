@@ -31,6 +31,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/src') -Destination (
 New-Item -ItemType Directory -Path (Join-Path $stage 'tools') | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/build-ui-bundle.py') -Destination (Join-Path $stage 'tools')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/android_ui_policy.py') -Destination (Join-Path $stage 'tools')
+if(Test-Path -LiteralPath (Join-Path $projectRoot 'tools/ffmpeg/ffmpeg.exe')){Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/ffmpeg') -Destination (Join-Path $stage 'tools') -Recurse}
 New-Item -ItemType Directory -Path (Join-Path $stage 'licenses') | Out-Null
 foreach ($pair in @(@('third_party/httplib/LICENSE','httplib-LICENSE'), @('third_party/json/LICENSE.MIT','json-LICENSE.MIT'), @('third_party/mbedtls/LICENSE','mbedtls-LICENSE'))) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $pair[0]) -Destination (Join-Path $stage ('licenses/'+$pair[1]))

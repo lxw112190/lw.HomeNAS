@@ -7,6 +7,7 @@
   "allow_external_hosts": false,
   "data_dir": "../data",
   "web_dir": "../web",
+  "ffmpeg_path": "../tools/ffmpeg/ffmpeg.exe",
   "chunk_bytes": 8388608,
   "minimum_free_bytes": 268435456,
   "maximum_file_bytes": 137438953472

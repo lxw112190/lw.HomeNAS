@@ -1,4 +1,4 @@
-# API v1（0.3 时间线与账号权限预览）
+# API v1（0.3.1 时间线与媒体详情预览）
 
 同源网页使用 HttpOnly 会话 Cookie；原生客户端可使用 `Authorization: Bearer <会话令牌>`。统一采用用户名与密码登录，普通网页登录不在JSON中返回令牌；原生客户端在登录JSON中设置 `client:"native"` 才取得令牌。当前为共享家庭资料库，文件不按用户隔离，上传任务按账号归属。
 
@@ -25,6 +25,7 @@
 | POST /api/v1/sources/status | `{task_ids:[上传任务id]}`，1至100个不重复48位小写十六进制ID；只核对当前账号自己的任务 |
 | GET /api/v1/assets | `{items,next}`，limit默认60，范围1至100，Web使用48 |
 | GET /api/v1/assets/{id}/original | 原件/单段Range，`?download=1`强制下载 |
+| GET /api/v1/assets/{id}/metadata | 登录后读取文件信息及有限的图片尺寸/EXIF；解码不可用时 image.available=false，字段缺失不推断 |
 | GET /api/v1/assets/{id}/thumbnail | JPEG缩略图；不可用时404 |
 | GET /api/v1/certificate | 管理员下载公开服务器证书 |
 
@@ -58,3 +59,5 @@ JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`�
 0.3 新增 `assets?order=timeline|created`，缺省为 created 以保持旧客户端兼容。timeline 按 modified>0 时的文件修改时间，否则 created 倒序；同时间按 id 倒序，返回 order 和各项 timeline_time（十进制毫秒字符串）。游标必须配合相同排序、筛选和搜索使用，切换条件需丢弃旧游标。
 
 `sources/status` 返回 `{items:[{id,state,size,modified,sha256,asset_id}]}`。仅返回当前账号上传任务，即使管理员也不返回别人的匹配项；不存在或不属于自己的 ID 被省略。READY 任务对应原件缺失/大小不符时返回 MISSING，不暴露路径或手机 URI。此接口核对现有本机历史任务，不按任意文件名推断已备份，也不取代最终完整 SHA256 校验。
+
+0.3.1 视频封面与图片复用 thumbnail API，preview=READY 后返回 JPEG。封面失败不改变原件 READY；新增 MKV/AVI/3GP/MPEG/TS 类型，并修复旧视频的 octet-stream MIME。metadata 返回 size/created/modified 的十进制字符串，图片像素与方向为数值，EXIF 常见字段位于 image.exif，不含磁盘路径。

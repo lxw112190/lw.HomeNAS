@@ -21,3 +21,5 @@ __pycache__/
 /android/.idea/
 
 /local-signing/
+/tools/ffmpeg/*.exe
+/tools/ffmpeg/*.dll

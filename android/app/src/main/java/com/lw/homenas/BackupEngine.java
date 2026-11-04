@@ -30,7 +30,7 @@ final class BackupEngine {
         Settings.Session session=null;
         try {
             session=settings.session();if(session==null||!session.canUpload||settings.paused()){Diagnostics.event("backup.skipped","logged_in="+(session!=null)+" paused="+settings.paused());return;}
-            check(session,control);NativeApi api=new NativeApi(session);
+            TransferProgress.begin(session.scope);check(session,control);NativeApi api=new NativeApi(session);
             if(!session.serverId.equals(api.get("server",control).getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
             JSONObject overview=api.get("overview",control);long advertised=Long.parseLong(overview.getString("chunk_bytes"));
             int block=(int)Math.min(8*1024*1024L,advertised);if(block<1)throw new IOException("服务器块大小无效");
@@ -53,7 +53,7 @@ final class BackupEngine {
         }catch(NativeApi.Failure error){
             if(error.status==401&&session!=null){if(settings.invalidate(session)){BackupScheduler.cancel(context);settings.message("登录已过期或账号被调整，请重新登录；队列保留");}}
             else settings.message(error.getMessage());throw error;
-        }catch(Exception error){Diagnostics.error("backup.failed",error);throw error;}finally{active=null;RUNNING.unlock();Diagnostics.event("backup.end","");}
+        }catch(InterruptedIOException error){Diagnostics.event("backup.paused","confirmed progress retained");throw error;}catch(Exception error){Diagnostics.error("backup.failed",error);throw error;}finally{TransferProgress.end();active=null;RUNNING.unlock();Diagnostics.event("backup.end","");}
     }
     private void check(Settings.Session session,RunControl control) throws Exception {
         control.check();if(settings.paused()||!settings.current(session))throw new InterruptedIOException("已暂停或登录身份已改变");
@@ -72,10 +72,10 @@ final class BackupEngine {
             ||Long.parseLong(remote.getString("size"))!=size||(state.equals("READY")&&(offset!=size||!Protocol.assetId(remote.optString("asset_id"))))
             ||!java.util.Arrays.asList("UPLOADING","VERIFYING","COMMITTING","READY","ERROR","CANCELLED").contains(state))
             throw new IOException("服务器任务摘要、长度或状态不一致，未确认备份成功");
-        tasks.confirmed(localId,remote);
-        Diagnostics.event("task.confirmed","task="+localId+" state="+state+" offset="+offset+" size="+size);
+        if(tasks.confirmed(localId,remote))Diagnostics.event("task.confirmed","task="+localId+" state="+state+" offset="+offset+" size="+size);
     }
     private void send(TaskStore.Task task,Settings.Session session,NativeApi api,int block,RunControl control,Progress progress) throws Exception {
+        TransferProgress.phase(task,"PREPARING",task.offset,task.size);
         Uri uri=Uri.parse(task.uri);MediaCatalog.Info before=MediaCatalog.describe(context.getContentResolver(),uri);
         if((task.size>=0&&before.size>=0&&task.size!=before.size)||(task.modified>0&&before.modified>0&&task.modified!=before.modified)) {
             tasks.state(task.id,"ERROR","源文件已改变，请重新扫描或选择文件");return;
@@ -83,12 +83,12 @@ final class BackupEngine {
         String hash=task.sha;long size=task.size;
         if(hash.isEmpty()) {
             long hashStarted=System.nanoTime();Diagnostics.event("hash.start","task="+task.id+" size="+size);
-            tasks.state(task.id,"HASHING","");progress.update("计算文件摘要："+task.name);
+            tasks.state(task.id,"HASHING","");TransferProgress.phase(task,"HASHING",0,before.size);progress.update("计算文件摘要："+task.name);
             MessageDigest digest=MessageDigest.getInstance("SHA-256");long length=0,lastHashProgress=0;byte[] buffer=new byte[256*1024];
             try(InputStream input=context.getContentResolver().openInputStream(uri)) {
                 if(input==null)throw new java.io.FileNotFoundException();int n;
                 while((n=input.read(buffer))!=-1){check(session,control);digest.update(buffer,0,n);length=Math.addExact(length,n);
-                    long now=android.os.SystemClock.elapsedRealtime();if(now-lastHashProgress>=1000){lastHashProgress=now;progress.update("校验文件："+task.name+" · "+(before.size>0?Math.min(100,Math.round(100.0*length/before.size))+"%":"已读取 "+(length/(1024*1024))+" MiB"));}}
+                    long now=android.os.SystemClock.elapsedRealtime();if(now-lastHashProgress>=1000){lastHashProgress=now;TransferProgress.hashed(length,before.size);progress.update("校验文件："+task.name+" · "+(before.size>0?Math.min(100,Math.round(100.0*length/before.size))+"%":"已读取 "+(length/(1024*1024))+" MiB"));}}
             }
             if((before.size>=0&&before.size!=length)||changed(before,MediaCatalog.describe(context.getContentResolver(),uri))) {
                 tasks.state(task.id,"ERROR","计算摘要时源文件发生变化，未上传");return;
@@ -102,23 +102,24 @@ final class BackupEngine {
         if(remote.getString("state").equals("READY"))return;
         String id=remote.getString("id");long offset=Protocol.offset(remote.getString("offset"),size);
         if(remote.getString("state").equals("UPLOADING")) {
+            TransferProgress.phase(task,"UPLOADING",offset,size);
             byte[] bytes=new byte[block];
             try(InputStream input=openAt(uri,offset)) {
                 while(offset<size) {
                     check(session,control);int wanted=(int)Math.min(bytes.length,size-offset),count=0;
                     while(count<wanted){int n=input.read(bytes,count,wanted-count);if(n<0){tasks.state(task.id,"ERROR","源文件提前结束，请重新扫描或选择文件");return;}count+=n;check(session,control);}
                     // If acknowledgement is lost, leave the old local offset and query the server next run.
-                    remote=api.chunk(id,offset,bytes,count,control);long confirmed=Protocol.offset(remote.getString("offset"),size);
+                    long sentAt=System.nanoTime();remote=api.chunk(id,offset,bytes,count,control);long confirmed=Protocol.offset(remote.getString("offset"),size);
                     if(confirmed!=offset+count)throw new IOException("服务器确认长度与发送块不一致");
-                    confirm(task.id,remote,hash,size);offset=confirmed;
+                    confirm(task.id,remote,hash,size);offset=confirmed;TransferProgress.acknowledged(offset,size,count,System.nanoTime()-sentAt);
                     progress.update("正在上传："+task.name+" · "+(size==0?100:Math.round(100.0*offset/size))+"%");
                 }
             }
             if(changed(before,MediaCatalog.describe(context.getContentResolver(),uri))){tasks.state(task.id,"ERROR","上传期间源文件改变，未提交");return;}
             remote=api.post("uploads/"+id+"/complete",new JSONObject(),control);confirm(task.id,remote,hash,size);
         }
-        while(remote.optString("state").equals("VERIFYING")||remote.optString("state").equals("COMMITTING")) {
-            check(session,control);progress.update("电脑完整校验中："+task.name);Thread.sleep(600);
+        int verifyDelay=600;while(remote.optString("state").equals("VERIFYING")||remote.optString("state").equals("COMMITTING")) {
+            TransferProgress.phase(task,remote.optString("state"),size,size);check(session,control);progress.update("电脑完整校验中："+task.name);Thread.sleep(verifyDelay);verifyDelay=Math.min(2000,verifyDelay+300);
             remote=api.get("uploads/"+id,control);confirm(task.id,remote,hash,size);
         }
         if(!remote.optString("state").equals("READY"))tasks.state(task.id,"ERROR","电脑未确认入库："+remote.optString("error",remote.optString("state")));

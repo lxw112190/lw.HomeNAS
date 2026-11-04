@@ -40,7 +40,31 @@ jobs:
         run: python3 tools/check-android.py
       - name: Check Android source and emulator evidence rules
         run: python3 -m unittest discover -s tests -p 'test_android_*check.py'
+      - name: Restore persistent Debug signing identity
+        if: github.event_name != 'pull_request'
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            if [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+              echo 'Signing key configured but password/alias Secrets are incomplete.'; exit 1
+            fi
+            umask 077
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/homenas-ci-debug.jks"
+            echo "ANDROID_CI_DEBUG_KEYSTORE_PATH=$RUNNER_TEMP/homenas-ci-debug.jks" >> "$GITHUB_ENV"
+            echo 'Debug APK uses the persistent signing identity from Secrets.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No persistent signing key configured. Debug APK uses a temporary key and may not overwrite previous installs. See android/README.md.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Lint, JVM tests and debug APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle -p android --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
       - name: Record resolved runtime dependencies
         run: gradle -p android --no-daemon :app:dependencies --configuration debugRuntimeClasspath > android/app/build/reports/runtime-dependencies.txt
@@ -69,6 +93,10 @@ jobs:
           find android/app/build/outputs/apk -name '*.apk' -type f -print0 | xargs -0 sha256sum > android/app/build/outputs/apk/SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug-signing.txt
           echo 'Download APKs from the lw.HomeNAS-Android artifact. See android/README.md for connection and signing instructions.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Remove restored Debug signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/homenas-ci-debug.jks"
       - uses: actions/upload-artifact@v4
         with:
           name: lw.HomeNAS-Android-${{ github.run_number }}

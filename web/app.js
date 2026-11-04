@@ -54,10 +54,11 @@ async function refreshOverview(){
 }
 function mediaCard(item){
   const card=node('button','media-card');card.type='button';const thumb=node('div','media-thumb');
-  if(item.category==='image'&&item.preview==='READY'){
+  if(['image','video'].includes(item.category)&&item.preview==='READY'){
     const image=document.createElement('img');image.loading='lazy';image.decoding='async';image.alt=item.name;image.src=`./api/v1/assets/${item.id}/thumbnail`;
     image.addEventListener('error',()=>thumb.replaceChildren(node('span','', '▧')),{once:true});thumb.append(image);
   }else thumb.append(node('span','',item.category==='video'?'▷':item.category==='image'?'▧':'▤'));
+  if(item.category==='video')thumb.append(node('small','video-badge','▶ 视频'));
   card.append(thumb,node('span','media-name',item.name),node('span','media-meta',`${bytes(item.size)} · ${date(item.modified||item.created)}`));card.addEventListener('click',()=>preview(item));return card;
 }
 function renderTimeline(area,items,order){
@@ -77,18 +78,28 @@ async function loadLibrary(next=false,previous=false){
  const area=$('library');area.replaceChildren();renderTimeline(area,data.items,$('library-order').value);if(!data.items.length)empty(area,'没有找到对应文件。');$('load-more').classList.remove('hidden');$('library-status').textContent=`第 ${target+1} 页 · ${data.items.length} 项`;
  }catch(e){if(generation===libraryGeneration)$('library-status').textContent='加载失败：'+e.message;throw e;}finally{if(generation===libraryGeneration){$('load-more').disabled=!state.cursor;$('library-prev').disabled=!libraryIndex;}}
 }
+let previewGeneration=0,previewController=null;
+function detailedDate(value){return Number(value)>0?new Date(Number(value)).toLocaleString('zh-CN'):'未提供';}
+function previewDetails(item,image=null,runtime=''){
+ const details=$('preview-details');details.replaceChildren();
+ const rows=[['文件名',item.name],['大小',bytes(item.size)],['格式',item.mime],['尺寸',image?.width?`${image.width} × ${image.height}`:runtime||'未提供'],['文件修改时间',detailedDate(item.modified)],['入库时间',detailedDate(item.created)],['SHA256',item.sha256]];
+ if(item.category==='image'||item.mime?.startsWith('image/')){const e=image?.exif||{};rows.push(['拍摄时间',e.taken_at],['相机',[e.camera_make,e.camera_model].filter(Boolean).join(' ')],['镜头',e.lens_model],['ISO',e.iso],['曝光时间',e.exposure_seconds?`${Number(e.exposure_seconds.toPrecision(5))} 秒`:null],['光圈',e.f_number?`f/${Number(e.f_number.toPrecision(4))}`:null],['焦距',e.focal_length_mm?`${Number(e.focal_length_mm.toPrecision(5))} mm`:null]);}
+ for(const [label,value] of rows)details.append(node('dt','',label),node('dd','',value===undefined||value===null||value===''?'未提供':String(value)));
+}
 function preview(item){
+  const generation=++previewGeneration;previewController?.abort();previewController=new AbortController();let imageDetails=null,runtimeSize='';previewDetails(item);$('preview-metadata-state').textContent=item.mime.startsWith('image/')?'正在读取原图元数据…':'';
+  if(item.mime.startsWith('image/'))api(`assets/${item.id}/metadata`,{signal:previewController.signal}).then(data=>{if(generation!==previewGeneration)return;imageDetails=data.image;previewDetails(item,imageDetails,runtimeSize);$('preview-metadata-state').textContent=Object.keys(imageDetails?.exif||{}).length?'拍摄参数来自原图 EXIF，缺失字段不推测。':'原图未提供可读取的 EXIF 拍摄信息。';}).catch(e=>{if(generation===previewGeneration&&e.name!=='AbortError')$('preview-metadata-state').textContent='暂时无法读取拍摄信息；文件信息仍可查看。';});
   const area=$('preview-content');area.replaceChildren();$('preview-title').textContent=item.name;$('preview-info').textContent=metadataText(item);
   const url=`./api/v1/assets/${item.id}/original`;$('download-original').href=`${url}?download=1`;
   let media;
   if(item.mime.startsWith('image/')){media=document.createElement('img');media.alt=item.name;media.src=url;}
   else if(item.mime.startsWith('video/')){media=document.createElement('video');media.controls=true;media.preload='metadata';media.playsInline=true;media.src=url;}
   else if(item.mime.startsWith('audio/')){media=document.createElement('audio');media.controls=true;media.preload='metadata';media.src=url;}
-  if(media){const info=()=>{$('preview-info').textContent=metadataText(item)+(media.naturalWidth?` · ${media.naturalWidth}×${media.naturalHeight}`:media.videoWidth?` · ${media.videoWidth}×${media.videoHeight}`:'')+(Number.isFinite(media.duration)?` · ${Math.round(media.duration)} 秒`:'');};media.addEventListener('load',info);media.addEventListener('loadedmetadata',info);media.addEventListener('error',()=>{area.replaceChildren(node('p','', '当前浏览器无法预览此格式，可下载原文件。'));},{once:true});area.append(media);}
+  if(media){const info=()=>{if(generation!==previewGeneration)return;runtimeSize=media.naturalWidth?`${media.naturalWidth} × ${media.naturalHeight}`:media.videoWidth?`${media.videoWidth} × ${media.videoHeight}`:'';previewDetails(item,imageDetails,runtimeSize);$('preview-info').textContent=metadataText(item)+(media.naturalWidth?` · ${media.naturalWidth}×${media.naturalHeight}`:media.videoWidth?` · ${media.videoWidth}×${media.videoHeight}`:'')+(Number.isFinite(media.duration)?` · ${Math.round(media.duration)} 秒`:'');};media.addEventListener('load',info);media.addEventListener('loadedmetadata',info);media.addEventListener('error',()=>{area.replaceChildren(node('p','', '当前浏览器无法预览此格式，可下载原文件。'));},{once:true});area.append(media);}
   else area.append(node('p','', '此文件已保存，可下载原文件查看。'));
   $('preview').showModal();
 }
-function closePreview(){for(const m of $('preview-content').querySelectorAll('audio,video')){m.pause();m.removeAttribute('src');m.load();}$('preview').close();$('preview-content').replaceChildren();}
+function closePreview(){++previewGeneration;previewController?.abort();previewController=null;for(const m of $('preview-content').querySelectorAll('audio,video')){m.pause();m.removeAttribute('src');m.load();}$('preview').close();$('preview-content').replaceChildren();}
 function taskElement(task,local){
   const row=node('div','task'),left=node('div'),right=node('div','task-state');left.append(node('strong','',local?task.file.name:task.name));
   left.append(node('small','',local?`${bytes(task.offset)} / ${bytes(task.file.size)}${task.message?' · '+task.message:''}`:`${bytes(task.offset)} / ${bytes(task.size)} · ${date(task.updated)}${task.error?' · '+task.error:''}`));

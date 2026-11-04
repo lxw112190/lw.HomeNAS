@@ -53,6 +53,8 @@ public final class MainActivity extends Activity {
     private JSONObject pendingDownload;
     private Settings.Session downloadSession;
     private volatile boolean visible;
+    private final java.util.concurrent.atomic.AtomicLong mediaRevision=new java.util.concurrent.atomic.AtomicLong();
+    private boolean requestingMedia;
     private NativeApi cachedApi;
     private long cachedRevision=-1;
     private synchronized NativeApi api(Settings.Session session) throws Exception {
@@ -145,8 +147,9 @@ public final class MainActivity extends Activity {
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",3).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",3).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
+        result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true);
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
         return result;
@@ -172,6 +175,7 @@ public final class MainActivity extends Activity {
             }
             case "queuePage": {Settings.Session session=requireSession(false);String before=data.optString("before",""),filter=data.optString("filter","active");TaskStore.get(this).summary(session.scope,before,filter);synchronized(this){queueBefore=before;queueFilter=filter;return snapshot();}}
             case "previewClose": previews.closeAll();return new JSONObject();
+            case "playbackError": {requireSession(false);JSONObject item=assets.get(data.optString("id"));if(item==null)throw new IllegalArgumentException("请重新打开预览");Diagnostics.event("preview.playback_error","code="+Math.max(0,Math.min(4,data.optInt("code")))+" network="+Math.max(0,Math.min(3,data.optInt("network")))+" ready="+Math.max(0,Math.min(4,data.optInt("ready")))+" mime="+item.optString("mime").replaceAll("[^A-Za-z0-9/+-]","")+" sdk="+Build.VERSION.SDK_INT);return new JSONObject();}
             case "mediaDays": {Settings.Session session=requireSession(true);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
             case "mediaItems": {Settings.Session session=requireSession(true);return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000));}
             case "mediaEnqueue": {Settings.Session session=requireSession(true);JSONObject result=mediaPicker.enqueue(session,data,api(session),new RunControl(90000));settings.message("已加入 "+result.getInt("added")+" 项，跳过已完成或已入队 "+result.getInt("skipped")+" 项");return result;}
@@ -213,6 +217,7 @@ public final class MainActivity extends Activity {
             case "clearCertificate": settings.prefs.edit().remove("pending_cert").commit();return snapshot();
             case "chooseFiles": requireSession(true);ui(()->pick(FILES));return new JSONObject().put("message","请在系统文件选择器中选择文件");
             case "permission": requireSession(true);ui(this::requestMedia);return new JSONObject();
+            case "mediaSettings": requireSession(true);ui(this::openMediaSettings);return new JSONObject();
             case "metadataPermission": requireSession(true);ui(()->requestPermissions(new String[]{Manifest.permission.ACCESS_MEDIA_LOCATION},METADATA_PERMISSION));return new JSONObject();
             case "albums": requireSession(true);return new JSONObject().put("items",MediaCatalog.albums(this,new RunControl(90000))).put("access",MediaCatalog.access(this));
             case "preferences": {
@@ -251,10 +256,17 @@ public final class MainActivity extends Activity {
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);startActivityForResult(intent,request);
     }
     private void requestMedia() {
-        if(Build.VERSION.SDK_INT>=34)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED},MEDIA_PERMISSION);
-        else if(Build.VERSION.SDK_INT>=33)requestPermissions(new String[]{Manifest.permission.READ_MEDIA_IMAGES,Manifest.permission.READ_MEDIA_VIDEO},MEDIA_PERMISSION);
-        else requestPermissions(new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},MEDIA_PERMISSION);
+        if(requestingMedia)return;
+        boolean rationale=false;String[] permissions=MediaPermissions.requestList(Build.VERSION.SDK_INT);
+        for(String permission:permissions)rationale|=shouldShowRequestPermissionRationale(permission);
+        boolean asked=getSharedPreferences("media-permissions",0).getBoolean("asked",false);
+        if(MediaPermissions.useSettings(MediaPermissions.fullImages(this),MediaPermissions.fullVideos(this),MediaPermissions.selected(this),asked,rationale)){openMediaSettings();return;}
+        requestingMedia=true;getSharedPreferences("media-permissions",0).edit().putBoolean("asked",true).apply();
+        Diagnostics.event("media.permission_request","sdk="+Build.VERSION.SDK_INT+" selected="+MediaPermissions.selected(this));
+        requestPermissions(permissions,MEDIA_PERMISSION);
     }
+    private void openMediaSettings(){Diagnostics.event("media.permission_settings","opened");startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.parse("package:"+getPackageName())));}
+    private void mediaChanged(){mediaRevision.incrementAndGet();if(web!=null)web.evaluateJavascript("window.dispatchEvent(new Event('homenas-media-changed'));",null);}
     private void startManual() {
         if(Build.VERSION.SDK_INT>=33&&!MediaCatalog.granted(this,Manifest.permission.POST_NOTIFICATIONS)){requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS},NOTIFICATION_PERMISSION);return;}
         ContextCompat.startForegroundService(this,new Intent(this,BackupService.class));
@@ -262,7 +274,7 @@ public final class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int request,String[] permissions,int[] grants) {
         super.onRequestPermissionsResult(request,permissions,grants);
         StringBuilder states=new StringBuilder("request=").append(request);for(int i=0;i<permissions.length;i++)states.append(' ').append(permissions[i]).append('=').append(i<grants.length?grants[i]:-1);Diagnostics.event("permission.result",states.toString());
-        if(request==MEDIA_PERMISSION||request==METADATA_PERMISSION)settings.message(MediaCatalog.access(this));
+        if(request==MEDIA_PERMISSION||request==METADATA_PERMISSION){requestingMedia=false;settings.message(MediaCatalog.access(this));mediaChanged();}
         if(request==NOTIFICATION_PERMISSION)try{ContextCompat.startForegroundService(this,new Intent(this,BackupService.class));}catch(RuntimeException error){settings.message(safeError(error));}
     }
     @Override protected void onActivityResult(int request,int result,Intent intent) {
@@ -314,7 +326,7 @@ public final class MainActivity extends Activity {
         }catch(Exception error){checkAuthentication(session,error);settings.message("下载未完成（所选位置可能保留部分文件）："+safeError(error)+" ["+Diagnostics.error("download",error)+"]");}
         finally{control.detach();}
     }
-    @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null)web.onResume();}
+    @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null){web.onResume();mediaChanged();}}
     @Override protected void onPause(){visible=false;Diagnostics.event("activity.pause","");if(web!=null)web.onPause();super.onPause();}
     @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null&&web.canGoBack())web.goBack();else super.onBackPressed();}
     @Override protected void onDestroy(){if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}

@@ -42,10 +42,7 @@ final class MediaCatalog {
             ||(Build.VERSION.SDK_INT>=34&&granted(context,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED));
     }
     static String access(Context context) {
-        String metadata=granted(context,Manifest.permission.ACCESS_MEDIA_LOCATION)?"已授权读取照片原始位置元数据。":"未授权原始位置元数据，系统可能脱敏；可点击保留原始元数据授权。";
-        if(Build.VERSION.SDK_INT>=34&&granted(context,Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-            &&!(granted(context,Manifest.permission.READ_MEDIA_IMAGES)&&granted(context,Manifest.permission.READ_MEDIA_VIDEO)))return "仅能访问系统中选定的照片/视频；可再次授权调整范围。"+metadata;
-        return canRead(context,false)||canRead(context,true)?"按系统授权范围扫描；不会访问未授权文件。"+metadata :"尚未授予相册权限，仍可通过“选择文件”备份";
+        try{return MediaPermissions.state(context).getString("label");}catch(Exception ignored){return "请检查系统照片与视频权限";}
     }
     interface Row {void accept(String key,String album,Uri uri,String name,long size,long modified) throws Exception;}
     private static void visit(Context context,RunControl control,Row row) throws Exception {

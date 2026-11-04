@@ -1,12 +1,12 @@
 {
   "date": "2026-11-04",
-  "android_source_version": "0.6.0-dev",
-  "server_compatibility": "0.3.0-dev for timeline/daily picker; older native APK retains limited fallback",
+  "android_source_version": "0.6.2-dev",
+  "server_compatibility": "0.3.1-dev for metadata, video covers and MIME fix; shipped CI7 remains historical",
   "host_has_android_sdk": false,
   "local_checks": {
     "java_grammar": {
       "result": "passed",
-      "files": 25
+      "files": 31
     },
     "xml_manifest_resources": "passed",
     "javascript_syntax": "passed",
@@ -34,10 +34,10 @@
       "390px no overflow"
     ]
   },
-  "ci_executed": "new 0.6.0 source pending CI; received CI5 evidence is historical",
+  "ci_executed": "0.6.2/code9 pending CI; received CI7 APK is historical evidence",
   "apk_generated": false,
-  "jvm_tests": "0.6.0 pending CI",
-  "android_15_instrumentation_tests": "0.6.0 pending CI",
+  "jvm_tests": "0.6.2 pending CI",
+  "android_15_instrumentation_tests": "0.6.2 pending CI",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -61,31 +61,36 @@
     "WebView native Range streaming preview"
   ],
   "received_artifact": {
-    "name": "lw.HomeNAS-Android-5.zip",
-    "version": "0.5.0-dev",
-    "versionCode": 6,
+    "name": "lw.HomeNAS-Android-7.zip",
+    "package": "com.lxw.homenas",
+    "versionName": "0.6.0-dev",
+    "versionCode": 7,
     "variant": "debug",
-    "APK_v2_signature": "independently verified",
-    "content_digest": "independently verified",
-    "CI_test_reports_received": false,
-    "physical_phone_tests": "not performed",
-    "embedded_pages_match_source_at_receipt_ignoring_crlf": true
+    "bytes": 8824699,
+    "sha256": "9289f6b14b209a7dcd29ba7501f3e7f5969ea5f673b0e8235bf13f131f32f2d7",
+    "certificate_sha256": "187f763c407fa8e969dc5ffb752c1c62e0ed778d39edebaca329e76c0b7a7b6a",
+    "apk_v2_signature": "verified",
+    "apk_content_digest": "verified",
+    "embedded_resource_key": "matches source",
+    "embedded_page_files": 14,
+    "embedded_pages_match_source_ignoring_crlf": true,
+    "physical_install_test": false,
+    "can_replace_CI5_without_uninstall": false,
+    "ci_test_reports_in_artifact": false,
+    "can_replace_CI3_without_uninstall": false
   },
   "default_apk": {
-    "version": "0.5.0-dev",
-    "versionCode": 6,
-    "source": "CI5 user-provided artifact",
-    "replaces": "CI3 default APK",
-    "same_signing_identity_as_CI3": false
+    "version": "0.6.0-dev",
+    "versionCode": 7,
+    "source": "user provided CI7 artifact",
+    "same_signing_identity_as_CI5": false
   },
   "signed_ui": {
-    "revision": 4,
+    "revision": 5,
     "minNative": 1,
-    "signature": "verified with embedded public key",
+    "signature": "verified with APK embedded public key",
     "runtime_phone_test": "pending",
-    "browser_preview": "simulated native bridge; not device test",
-    "CI5_APK_bytes": "unchanged; built-in UI requires r4 resource update for new style",
-    "consumer_extractor": "r3 rejected / r4 accepted by unchanged Java extraction loop on existing desktop JDK"
+    "browser_preview": "previous simulated bridge; current bundled assets match source"
   },
   "current_ui_checks": {
     "CI_host_unit_tests": 15,
@@ -106,19 +111,36 @@
     "resource_entry_policy": "matches distributed Java path regex; paths/types/count/size/duplicates/entry files checked",
     "license_full_text_preserved": true
   },
-  "android_source_versionCode": 7,
+  "android_source_versionCode": 9,
   "nativeApi": 3,
   "current_round": {
-    "source_checks": "passed; not Android compilation",
-    "mock_bridge_browser": "timeline, metadata, 30x30 save button, video 320x240/2s, day selection and READY disabled",
-    "mock_bridge_console_errors": 0,
-    "native_instrumentation_added": [
-      "daily selection and remote READY confirmation",
-      "single Range preview and logout cancellation"
-    ],
-    "native_instrumentation_executed": false,
-    "new_signed_ui_built": false,
-    "new_apk_received": false,
-    "new_deployment_package_built": false
+    "source_layout_CSP_tests": 15,
+    "Java_grammar_files": 31,
+    "Java_compilation": "pending CI",
+    "new_deployment_package_built": false,
+    "new_APK_built": false,
+    "browser_bridge_is_simulated": true,
+    "mobile_viewport": 390,
+    "horizontal_overflow": false,
+    "console_errors": 0,
+    "input_focus_color": "rgb(174, 184, 178)",
+    "input_focus_shadow": "none",
+    "choice_panel_bottom_equals_viewport": true,
+    "real_media_store_test": "pending CI/device",
+    "actual_upload_speed_benchmark": "not performed",
+    "new_ci_regressions": [
+      "permission policy",
+      "SQL query order with 80 days and OEM-like provider",
+      "transfer rate excludes resumed bytes",
+      "MKV/AVI legacy MIME compatibility",
+      "rotation beyond full retention",
+      "unchanged confirmation does not rewrite queue"
+    ]
+  },
+  "persistent_debug_signing": {
+    "source_support_added": true,
+    "secrets_configured_by_agent": false,
+    "CI_execution": "pending future user configuration/build",
+    "next_build": "0.6.2-dev/code9; user must configure Secrets"
   }
 }

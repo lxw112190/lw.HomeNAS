@@ -34,8 +34,9 @@ final class TaskStore extends SQLiteOpenHelper {
     }
     void state(long id,String state,String message) { ContentValues v=new ContentValues();v.put("state",state);v.put("error",message);getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)});Diagnostics.event("task.state","task="+id+" state="+state); }
     void hashed(long id,long size,String sha) { ContentValues v=new ContentValues();v.put("size",size);v.put("sha",sha);v.put("state","UPLOADING");getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)}); }
-    void confirmed(long id,JSONObject remote) throws Exception {
-        ContentValues v=new ContentValues();v.put("remote",remote.getString("id"));v.put("offset",remote.getString("offset"));v.put("state",remote.getString("state"));v.put("error",remote.optString("error",""));getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)});
+    boolean confirmed(long id,JSONObject remote) throws Exception {
+        String ident=remote.getString("id"),offset=remote.getString("offset"),state=remote.getString("state"),error=remote.optString("error","");
+        ContentValues v=new ContentValues();v.put("remote",ident);v.put("offset",offset);v.put("state",state);v.put("error",error);return getWritableDatabase().update("tasks",v,"id=? AND (remote<>? OR offset<>? OR state<>? OR error<>?)",new String[]{Long.toString(id),ident,offset,state,error})>0;
     }
     void retry(String scope) {
         // Explicit user retry uses a new idempotency key; an ERROR server task is terminal.

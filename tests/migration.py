@@ -18,6 +18,7 @@ def run(legacy, current):
     config=json.loads(h.config.read_text(encoding='utf-8'))
     config.pop('allow_external_hosts',None)
     config.pop('bootstrap_admin_password',None)
+    config.pop('ffmpeg_path',None)
     h.config.write_text(json.dumps(config,ensure_ascii=False),encoding='utf-8')
     h.start()
     try:

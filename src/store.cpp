@@ -8,6 +8,7 @@
 namespace nas {
 void generateThumbnail(const fs::path& input, const fs::path& output);
 namespace {
+bool videoToolAvailable(const Config& config){std::error_code ec;return !config.ffmpeg.empty()&&fs::is_regular_file(config.ffmpeg,ec);}
 void sqlCheck(int code, sqlite3* db) { if (code != SQLITE_OK && code != SQLITE_DONE && code != SQLITE_ROW) throw std::runtime_error(std::string("SQLite: ") + sqlite3_errmsg(db)); }
 struct Statement {
     sqlite3_stmt* value = nullptr;
@@ -27,7 +28,7 @@ std::string extension(const std::string& name) {
 }
 std::string mime(const std::string& name) {
     static const std::map<std::string, std::string> known = {{".jpg","image/jpeg"},{".jpeg","image/jpeg"},{".png","image/png"},{".gif","image/gif"},{".webp","image/webp"},
-        {".mp4","video/mp4"},{".webm","video/webm"},{".mov","video/quicktime"},{".m4v","video/mp4"},{".mp3","audio/mpeg"},{".wav","audio/wav"},{".ogg","audio/ogg"}};
+        {".mp4","video/mp4"},{".webm","video/webm"},{".mov","video/quicktime"},{".m4v","video/mp4"},{".mkv","video/x-matroska"},{".avi","video/x-msvideo"},{".3gp","video/3gpp"},{".mpeg","video/mpeg"},{".mpg","video/mpeg"},{".ts","video/mp2t"},{".mts","video/mp2t"},{".m2ts","video/mp2t"},{".mp3","audio/mpeg"},{".wav","audio/wav"},{".ogg","audio/ogg"}};
     auto it = known.find(extension(name)); return it == known.end() ? "application/octet-stream" : it->second;
 }
 std::string category(const std::string& name) {
@@ -101,9 +102,10 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
     migrateAccounts();
-    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});}
+    db.exec("CREATE INDEX IF NOT EXISTS asset_pending_video ON assets(created,id) WHERE state='READY' AND category='video' AND preview='PENDING';");
+    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});}
 }
-Store::~Store() { stopping=true; queueCondition_.notify_all(); if(worker_.joinable()) worker_.join(); }
+Store::~Store() { stopping=true; queueCondition_.notify_all();videoCondition_.notify_all(); if(worker_.joinable()) worker_.join();if(videoWorker_.joinable())videoWorker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
 void Store::setting(const std::string& key,const std::string& value) { db.exec("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",{key,value}); }
 void Store::migrateAccounts() {
@@ -315,7 +317,19 @@ void Store::makePreview(const json& row) {
     if(row["category"]=="image") {
         try{generateThumbnail(originalPath(row),config.data/"cache"/(row["id"].get<std::string>()+".jpg"));db.exec("UPDATE assets SET preview='READY' WHERE id=?",{row["id"]});}
         catch(...){db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});}
-    } else db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});
+    } else if(row["category"]!="video"||!videoToolAvailable(config))db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});
+}
+void Store::videoWorker() {
+    while(!stopping){
+        try {
+            auto rows=db.query("SELECT * FROM assets WHERE state='READY' AND category='video' AND preview='PENDING' ORDER BY created,id LIMIT 1");
+            if(!rows.empty()){
+                auto row=rows[0];try{generateVideoThumbnail(config.ffmpeg,originalPath(row),config.data/"cache"/(row["id"].get<std::string>()+".jpg"),stopping);db.exec("UPDATE assets SET preview='READY' WHERE id=?",{row["id"]});}
+                catch(...){if(stopping)return;db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});}continue;
+            }
+        }catch(...){if(stopping)return;}
+        std::unique_lock<std::mutex> lock(queueMutex_);videoCondition_.wait_for(lock,std::chrono::milliseconds(500));
+    }
 }
 void Store::worker() {
     for(;;){
@@ -325,6 +339,8 @@ void Store::worker() {
     }
 }
 void Store::recover() {
+    for(auto& row:db.query("SELECT id,name FROM assets WHERE state='READY' AND category='video' AND mime='application/octet-stream'")){auto type=mime(row["name"]);if(type!="application/octet-stream")db.exec("UPDATE assets SET mime=? WHERE id=?",{type,row["id"]});}
+    if(videoToolAvailable(config))db.exec("UPDATE assets SET preview='PENDING' WHERE state='READY' AND category='video' AND preview='UNAVAILABLE'");
     for(auto& task:db.query("SELECT id FROM uploads WHERE state='CANCELLED'")){std::error_code ec;fs::remove(part(task["id"]),ec);}
     for(auto& task:db.query("SELECT * FROM uploads WHERE state IN ('UPLOADING','VERIFYING','COMMITTING')")) {
         auto id=task["id"].get<std::string>();

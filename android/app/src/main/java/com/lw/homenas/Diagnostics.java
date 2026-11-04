@@ -51,6 +51,7 @@ final class Diagnostics {
             if(next.equals(directory))return;
             application=app;directory=next;
             if(!directory.isDirectory()&&!directory.mkdirs())return;
+            File[] old=directory.listFiles();if(old!=null)for(File file:old)if(file.getName().matches("runtime\\.[0-9]{1,5}\\.log")){String number=file.getName().split("\\.")[1];if(Integer.parseInt(number)>RETAIN)file.delete();}
         }
         event("app.start","version="+BuildConfig.VERSION_NAME+" code="+BuildConfig.VERSION_CODE+" commit="+BuildConfig.BUILD_REF+" ci="+BuildConfig.CI_RUN);
         try{event("device",device().toString());}catch(Exception error){error("device.snapshot",error);}
@@ -120,7 +121,8 @@ final class Diagnostics {
             .put("wifi_only",settings.prefs.getBoolean("wifi",true)).put("charging",settings.prefs.getBoolean("charging",false)).put("selected_album_count",settings.albums().size())
             .put("usable_app_bytes",context.getFilesDir().getUsableSpace()).put("certificate_configured",!settings.prefs.getString("pem","").isEmpty());
         JSONObject permissions=new JSONObject();for(String permission:new String[]{android.Manifest.permission.READ_MEDIA_IMAGES,android.Manifest.permission.READ_MEDIA_VIDEO,android.Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,android.Manifest.permission.READ_EXTERNAL_STORAGE,android.Manifest.permission.ACCESS_MEDIA_LOCATION,android.Manifest.permission.POST_NOTIFICATIONS})permissions.put(permission,MediaCatalog.granted(context,permission));
-        data.put("permissions",permissions);
+        data.put("permissions",permissions).put("log_policy",new JSONObject().put("bytes_per_file",LIMIT).put("retained_files",RETAIN+1).put("maximum_log_bytes",LIMIT*(RETAIN+1)));
+        try{JSONObject decoders=new JSONObject();for(android.media.MediaCodecInfo codec:new android.media.MediaCodecList(android.media.MediaCodecList.REGULAR_CODECS).getCodecInfos()){if(codec.isEncoder())continue;for(String type:codec.getSupportedTypes())if(java.util.Arrays.asList("video/avc","video/hevc","video/x-vnd.on2.vp9","video/av01").contains(type)){org.json.JSONArray list=decoders.optJSONArray(type);if(list==null){list=new org.json.JSONArray();decoders.put(type,list);}if(list.length()<8)list.put(new JSONObject().put("name",codec.getName()).put("hardware",codec.isHardwareAccelerated()).put("software",codec.isSoftwareOnly()));}}data.put("video_decoders",decoders);}catch(Exception error){data.put("video_decoders_error",error.getClass().getSimpleName());}
         try{JSONObject me=new JSONObject(settings.prefs.getString("me","{}"));String scope=settings.prefs.getString("server_id","")+":"+me.optString("user_id");data.put("role",me.optString("role")).put("queue_counts",TaskStore.get(context).counts(scope));}
         catch(Exception error){data.put("queue_summary_error",error.getClass().getSimpleName());}
         try{android.os.PowerManager power=(android.os.PowerManager)context.getSystemService(Context.POWER_SERVICE);android.os.BatteryManager battery=(android.os.BatteryManager)context.getSystemService(Context.BATTERY_SERVICE);android.app.ActivityManager activity=(android.app.ActivityManager)context.getSystemService(Context.ACTIVITY_SERVICE);
@@ -132,7 +134,8 @@ final class Diagnostics {
         synchronized(LOCK){File file=new File(directory,"runtime.log");if(file.isFile())try(RandomAccessFile input=new RandomAccessFile(file,"r")) {
             long start=Math.max(0,input.length()-32768);input.seek(start);if(start>0)input.readLine();byte[] bytes=new byte[(int)(input.length()-input.getFilePointer())];input.readFully(bytes);tail=new String(bytes,StandardCharsets.UTF_8);
         }}
-        return new JSONObject().put("session",SESSION).put("tail",tail).put("summary",summary(context)).put("limit_mb",10);
+        long used=0;synchronized(LOCK){for(int i=0;i<=RETAIN;i++){File f=new File(directory,i==0?"runtime.log":"runtime."+i+".log");if(f.isFile())used+=f.length();}}
+        return new JSONObject().put("session",SESSION).put("tail",tail).put("summary",summary(context)).put("limit_mb",10).put("used_bytes",Long.toString(used)).put("rotation","每份 2 MiB，最多 5 份；较早日志自动覆盖");
     }
     static void export(Context context,OutputStream destination) throws Exception {
         initialize(context);event("logs.export","snapshot requested");

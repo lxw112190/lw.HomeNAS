@@ -166,7 +166,7 @@ void File::flush() { if (!FlushFileBuffers(handle_)) throw Error(507, "DISK_FLUS
 
 Config Config::load(const fs::path& path) {
     auto j = json::parse(readText(path));
-    const std::set<std::string> allowed = {"schema_version", "name", "http_port", "https_port", "https_host", "allow_external_hosts", "bootstrap_admin_password", "data_dir", "web_dir", "chunk_bytes", "minimum_free_bytes", "maximum_file_bytes"};
+    const std::set<std::string> allowed = {"schema_version", "name", "http_port", "https_port", "https_host", "allow_external_hosts", "bootstrap_admin_password", "data_dir", "web_dir", "ffmpeg_path", "chunk_bytes", "minimum_free_bytes", "maximum_file_bytes"};
     if (!j.is_object()) throw std::runtime_error("Configuration must be a JSON object");
     for (auto it = j.begin(); it != j.end(); ++it) if (!allowed.count(it.key())) throw std::runtime_error("Unknown configuration field: " + it.key());
     if (number(j, "schema_version") != 1) throw std::runtime_error("Unsupported configuration schema");
@@ -186,6 +186,8 @@ Config Config::load(const fs::path& path) {
     if (c.chunkBytes < 65536 || c.chunkBytes > 16 * 1024 * 1024 || !c.maxFile || c.maxFile > (1ULL << 48) || c.minFree > (1ULL << 48)) throw std::runtime_error("Invalid size limits");
     c.data = fs::absolute(path.parent_path() / fs::u8path(text(j, "data_dir", 2048))).lexically_normal();
     c.web = fs::absolute(path.parent_path() / fs::u8path(text(j, "web_dir", 2048))).lexically_normal();
+    auto ffmpeg=j.contains("ffmpeg_path")?text(j,"ffmpeg_path",2048,true):"../tools/ffmpeg/ffmpeg.exe";
+    if(!ffmpeg.empty())c.ffmpeg=fs::absolute(path.parent_path()/fs::u8path(ffmpeg)).lexically_normal();
     if (!fs::is_regular_file(c.web / "index.html")) throw std::runtime_error("Web resources missing");
     return c;
 }

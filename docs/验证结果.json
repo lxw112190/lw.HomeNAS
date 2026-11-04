@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.3.0-dev",
+  "version": "0.3.1-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "historical pass; current 0.3.0 build validated via VS2022 solution",
@@ -8,10 +8,18 @@
   "package_tests": {
     "checks": [
       "bundled web resource: index.html",
+      "bundled web resource: boot.js",
       "bundled web resource: app.js",
       "bundled web resource: style.css",
       "bundled web resource: sha256.js",
       "bundled web resource: hash-worker.js",
+      "bundled web resource: views/login.html",
+      "bundled web resource: views/home.html",
+      "bundled web resource: views/library.html",
+      "bundled web resource: views/transfers.html",
+      "bundled web resource: views/users.html",
+      "bundled web resource: views/settings.html",
+      "bundled web resource: views/dialogs.html",
       "anonymous media access rejected",
       "administrator login",
       "HTTPS with certificate and hostname verification",
@@ -20,6 +28,9 @@
       "data files not statically served",
       "last administrator cannot be disabled or demoted",
       "user creation does not return password material",
+      "five-character password rejected",
+      "six-character password accepted",
+      "password character length applies to Unicode",
       "username/password member login is case-insensitive",
       "browser login keeps token in HttpOnly cookie",
       "member session cookie is HttpOnly",
@@ -81,9 +92,9 @@
       "account list does not disclose password hashes",
       "committed originals survive second abrupt restart"
     ],
-    "count": 73,
+    "count": 84,
     "scope": "Windows x64 username/password roles and HTTP/TLS backup recovery; no physical Android verification",
-    "last_executed_version": "0.2.5-dev; historical package"
+    "last_executed_version": "0.3.0-dev"
   },
   "legacy_upgrade_tests": {
     "count": 13,
@@ -245,31 +256,37 @@
   "current_round": {
     "smoke_checks": 84,
     "timeline_checks": 9,
-    "bootstrap_password_checks": 4,
     "pagination_checks": 9,
     "pagination_assets": 10001,
     "pagination_tasks": 10001,
-    "http_admin_checks": 13,
-    "legacy_upgrade_checks": 13,
-    "host_android_check_tests": 15,
-    "java_grammar_files": 25,
-    "browser_real_uploads": 7,
-    "browser_real_images": 6,
-    "browser_real_h264_videos": 1,
-    "android_browser_preview": "mock bridge only; not native MediaStore or proxy execution",
-    "native_android_tests": "0.6.0 pending CI",
+    "bootstrap_checks": 4,
+    "migration_checks": 13,
+    "media_integration_checks": 13,
+    "host_android_checks": 15,
+    "java_grammar_files": 31,
+    "native_android_tests": "0.6.2/code9 pending CI",
     "new_deployment_package_built": false,
-    "service_firewall_checks": "plans/parser only; no installation or firewall changes",
-    "maintenance_checks": 16
+    "browser_tests": "real isolated NAS for EXIF/video cover/H264; simulated native bridge for Android UI",
+    "user_service_or_firewall_modified": false
   },
   "current_round_evidence": {
-    "smoke": "端到端-18d6f4d9f4",
-    "timeline": "端到端-164c7e3b39",
-    "bootstrap": "端到端-c541b870ae",
-    "pagination": "端到端-d20cd0e082",
-    "http_admin": "端到端-9f0a2838c2",
-    "legacy_upgrade": "端到端-050b391f72",
-    "location": "ignored test-results; private test runtime files are not shipped",
-    "maintenance": "端到端-3fff0d2449"
+    "smoke": "端到端-27fc8bd681",
+    "timeline": "端到端-db65b9a97d",
+    "pagination": "端到端-03dc866dde",
+    "bootstrap": "端到端-2d057cfc16",
+    "migration": "端到端-44256db591",
+    "media_integration": "端到端-6652ca2d20",
+    "browser": "Screenshots in docs/images; no private user media used"
+  },
+  "CI7_package_validation": {
+    "apk": "0.6.0-dev/code7",
+    "resource_revision": 5,
+    "allow_external_hosts": true,
+    "fresh_admin_password": "public bootstrap admin123; existing passwords preserved",
+    "import_download_default_password_checks": 10,
+    "packaged_native_smoke_checks": 84,
+    "APK_signature": "v2 and content digest verified",
+    "private_keys_or_user_data_in_package": false,
+    "Android_runtime_tested": false
   }
 }

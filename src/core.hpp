@@ -18,7 +18,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.3.0-dev";
+constexpr const char* Version = "0.3.1-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -28,7 +28,7 @@ struct Error : std::runtime_error {
 };
 struct Config {
     std::string name, host, bootstrapAdminPassword;
-    fs::path data, web;
+    fs::path data, web, ffmpeg;
     int httpPort = 8787, httpsPort = 9443;
     bool allowExternalHosts = false;
     uint64_t chunkBytes = 8388608, minFree = 268435456, maxFile = 137438953472ULL;
@@ -47,6 +47,8 @@ std::string readText(const fs::path& path, size_t maximum = 65536);
 void writeText(const fs::path& path, const std::string& data);
 void consoleText(const std::string& utf8, bool error = false);
 fs::path executableDirectory();
+json imageMetadata(const fs::path& input);
+void generateVideoThumbnail(const fs::path& executable,const fs::path& input,const fs::path& output,const std::atomic<bool>& stopping);
 std::vector<std::string> ipv4Addresses();
 void ensureCertificate(const fs::path& data);
 std::string certificateFingerprint(const fs::path& path);
@@ -114,9 +116,9 @@ public:
     std::atomic<bool> stopping{false};
     std::atomic<unsigned> activeUploads{0};
 private:
-    std::thread worker_;
+    std::thread worker_, videoWorker_;
     std::mutex queueMutex_, sessionsMutex_;
-    std::condition_variable queueCondition_;
+    std::condition_variable queueCondition_,videoCondition_;
     std::queue<std::string> queue_;
     std::map<std::string, std::weak_ptr<std::mutex>> sessions_;
     std::shared_ptr<std::mutex> sessionMutex(const std::string& id);
@@ -128,6 +130,7 @@ private:
     void makePreview(const json& asset);
     void finishCommit(const json& task, const json& asset);
     void worker();
+    void videoWorker();
     fs::path part(const std::string& id) const;
     json taskRow(const std::string& id);
     std::string credential(const std::string& id, uint64_t expires);

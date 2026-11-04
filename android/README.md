@@ -1,10 +1,16 @@
-> 本轮源码升级 0.6.0-dev / versionCode 7 / nativeApi 3：时间线、图片/视频预览、按天选择及已备份核对。[功能与验证范围](../docs/20261104-时间线与按天选图.md)。需要 CI 编译新 APK；旧 CI5/r4 仍是已分发版本。
+> 当前开发源码 **0.6.2-dev/code9**，包含相册授权/日期查询、备份速度、样式与诊断修复，等待 CI。[本轮说明](../docs/20261104-相册权限与媒体预览优化.md)。
+
+> 固定 Debug 签名支持属于下一次 CI 源码 **0.6.2-dev / code9**；本次部署包的实际 APK 保持已核验 **CI7 0.6.0-dev / code7**。
+
+> 最新默认 APK 为已核验 CI7 0.6.0-dev / code7，配套页面资源 r5。[部署及换签说明](../docs/20261104-CI7安卓安装包发布.md)。下文 CI5/r4 为历史分发记录。
+
+> 本轮源码升级 0.6.0-dev / versionCode 7 / nativeApi 3：时间线、图片/视频预览、按天选择及已备份核对。[功能与验证范围](../docs/20261104-时间线与按天选图.md)。CI7 APK 已收到并核验；设备功能仍待真机验证。
 
 > 安卓页面使用简约资源r4，已修复r3许可证TXT导致解包失败的问题，现有CI3/CI5无需重装。[界面预览与步骤](../docs/20261104-安卓简约界面r3.md)。
 
 # Android 家庭备份客户端
 
-源码版本0.6.0-dev（versionCode 7），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
+源码版本0.6.2-dev（versionCode 9），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
 
 **已分发版本记录：** 默认APK仍是已核验的CI5 0.5.0-dev / versionCode 6原件，原生队列分页、批量入队及摘要进度均由它提供。此次新外观通过签名资源r4更新，现有CI3/CI5无需重装APK；全新安装CI5后也请更新资源r4。APK签名、内容摘要及资源公钥已在接收时核验，测试报告未随Artifact提供，本机没有安装或运行APK。原CI5与CI3的APK签名不同，直接安装升级仍受原有签名限制。[简约界面更新](../docs/20261104-安卓简约界面r3.md) · [APK发布说明](../docs/20261104-CI5安卓安装包发布.md)。
 
@@ -19,6 +25,19 @@
 工作流：[../.github/workflows/android.yml](../.github/workflows/android.yml)。JDK17、Gradle8.11.1、AGP8.9.2、SDK35全部在CI准备；本地没有Gradle wrapper、Android Studio或SDK也可以使用该流程。[AGP兼容说明](https://developer.android.com/build/releases/agp-8-9-0-release-notes)。
 
 ### 签名与覆盖升级
+
+已增加 **固定 Debug 签名**：push/手动 CI 检测到下表四个 Secrets 时，Debug 与 Release 使用同一个持久 JKS；不再每次生成不同 Debug 身份。未配置则继续临时签名并在 CI Summary 提示，PR/模拟器使用隔离开发签名。签名配置填写不全或密钥错误会使构建失败，不静默换钥。
+
+没有 Android 开发环境时，一次性完成：
+
+1. 先在仓库 Secrets 设置 `ANDROID_KEYSTORE_PASSWORD` 与 `ANDROID_KEY_PASSWORD`（均至少 16 字符，妥善保存）。
+2. 手动运行 **Prepare Android signing key**，下载其加密 JKS 并在电脑离线备份。
+3. 将 JKS 的 Base64 保存到 `ANDROID_KEYSTORE_BASE64`；`ANDROID_KEY_ALIAS` 设为 `homenas`。
+4. 删除生成密钥的 Artifact，以后保持这四个 Secrets 不变；重新运行 Android APK 工作流。
+5. 后续每次发布递增 `versionCode`，并保留同一包名。比较各次 Artifact 的 `debug-signing.txt` 证书 SHA256，应保持一致。
+
+不要把 JKS、Base64 或密码提交 Git。第一次从旧的临时签名切换到固定签名仍可能无法覆盖，先处理好待备份队列。CI7 APK 不含原临时私钥，不能从 APK 反推私钥。本轮固定签名支持已修改源码，实际启用需用户配置 Secrets 并由后续 CI 验证。
+
 
 默认Debug APK适合先试功能。不同CI运行可能生成不同的临时Debug签名，不能保证互相覆盖安装；卸载会清掉手机本地队列和授权，不会删除电脑原件。
 

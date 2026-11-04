@@ -8,13 +8,23 @@ android {
         applicationId 'com.lxw.homenas'
         minSdk 29
         targetSdk 35
-        versionCode 7
-        versionName '0.6.0-dev'
+        versionCode 9
+        versionName '0.6.2-dev'
         buildConfigField 'String', 'BUILD_REF', '"' + (System.getenv('GITHUB_SHA') ?: 'local').take(12).replaceAll('[^A-Za-z0-9_.-]', '') + '"'
         buildConfigField 'String', 'CI_RUN', '"' + (System.getenv('GITHUB_RUN_NUMBER') ?: 'local').replaceAll('[^A-Za-z0-9_.-]', '') + '"'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
     signingConfigs {
+        debug {
+            // CI reuses the owner's persistent signing identity when configured.
+            // Local/emulator builds keep AGP's ordinary development key.
+            if (System.getenv('ANDROID_CI_DEBUG_KEYSTORE_PATH')) {
+                storeFile file(System.getenv('ANDROID_CI_DEBUG_KEYSTORE_PATH'))
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
         release {
             if (System.getenv('ANDROID_KEYSTORE_PATH')) {
                 storeFile file(System.getenv('ANDROID_KEYSTORE_PATH'))

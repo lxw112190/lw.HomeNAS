@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(lw_HomeNAS VERSION 0.3.0 LANGUAGES C CXX)
+project(lw_HomeNAS VERSION 0.3.1 LANGUAGES C CXX)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "The first release targets Windows 10/11 x64")
 endif()

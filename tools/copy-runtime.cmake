@@ -1,5 +1,8 @@
 file(COPY "${SOURCE}/web" DESTINATION "${APP}")
 file(COPY "${SOURCE}/deploy" DESTINATION "${APP}")
+if(EXISTS "${SOURCE}/tools/ffmpeg/ffmpeg.exe")
+  file(COPY "${SOURCE}/tools/ffmpeg" DESTINATION "${APP}/tools")
+endif()
 file(MAKE_DIRECTORY "${APP}/config")
 if(NOT EXISTS "${APP}/config/server.json")
   file(COPY "${SOURCE}/config/server.json" DESTINATION "${APP}/config")

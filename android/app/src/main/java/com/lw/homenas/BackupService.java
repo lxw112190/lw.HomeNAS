@@ -34,10 +34,11 @@ public final class BackupService extends Service {
         wakeLock=((PowerManager)getSystemService(POWER_SERVICE)).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,getPackageName()+":manual-backup");wakeLock.acquire(5*60*60*1000L);
         worker=new Thread(()->{
             Settings settings=new Settings(this);
-            try{new BackupEngine(this).run(control,message->{settings.message(message);
+            long[] lastNotice={0};try{new BackupEngine(this).run(control,message->{long now=android.os.SystemClock.elapsedRealtime();if(now-lastNotice[0]<750&&!message.startsWith("本轮"))return;lastNotice[0]=now;settings.message(message);
                 if(android.os.Build.VERSION.SDK_INT<33||checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)==android.content.pm.PackageManager.PERMISSION_GRANTED)
                     ((NotificationManager)getSystemService(NOTIFICATION_SERVICE)).notify(42,notification(message));
             });}
+            catch(java.io.InterruptedIOException error){settings.message("已暂停，进度已保留，可点击继续备份");}
             catch(Exception error){settings.message("备份已暂停："+MainActivity.safeError(error)+" ["+Diagnostics.error("service.worker",error)+"]");}
             finally{stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
         },"nas-manual-backup");worker.start();return START_NOT_STICKY;

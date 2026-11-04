@@ -54,22 +54,25 @@ final class MediaPicker {
         long start=dates().parse(day).getTime();if(start<0)throw new IllegalArgumentException("日期无效");Calendar calendar=Calendar.getInstance();calendar.setTimeInMillis(start);calendar.add(Calendar.DATE,1);return new long[]{start/1000,calendar.getTimeInMillis()/1000};
     }
     private Cursor query(boolean video,String selection,String[] args,int limit,String[] projection) {
-        Bundle options=new Bundle();options.putString(ContentResolver.QUERY_ARG_SQL_SELECTION,"is_pending=0"+(selection.isEmpty()?"":" AND ("+selection+")"));options.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,args);options.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS,new String[]{"date_modified","_id"});options.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION,ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);if(limit>0)options.putInt(ContentResolver.QUERY_ARG_LIMIT,limit);
+        // SQL selection must carry an explicit SQL sort, including on OEM providers
+        // which do not synthesize SQL order from structured SORT_COLUMNS arguments.
+        Bundle options=new Bundle();options.putString(ContentResolver.QUERY_ARG_SQL_SELECTION,"is_pending=0"+(selection.isEmpty()?"":" AND ("+selection+")"));options.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS,args);options.putString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER,"date_modified DESC, _id DESC");if(limit>0)options.putInt(ContentResolver.QUERY_ARG_LIMIT,limit);
         return context.getContentResolver().query(video?MediaStore.Video.Media.EXTERNAL_CONTENT_URI:MediaStore.Images.Media.EXTERNAL_CONTENT_URI,projection,options,null);
     }
     synchronized JSONObject days(Settings.Session session,String before,boolean reset,RunControl control) throws Exception {
         if(reset||!scope.equals(session.scope))index(session,control);
         TreeMap<String,Integer> counts=new TreeMap<>(Collections.reverseOrder());
-        for(boolean video:new boolean[]{false,true}){if(!MediaCatalog.canRead(context,video))continue;String previous="";int seen=0;
+        for(boolean video:new boolean[]{false,true}){if(!MediaCatalog.canRead(context,video))continue;String previous="";int seen=0;long previousTime=Long.MAX_VALUE;
             try(Cursor c=query(video,before.isEmpty()?"":"date_modified<?",before.isEmpty()?new String[]{}:new String[]{Long.toString(bounds(before)[0])},0,new String[]{"_id","date_modified"})){
-                if(c==null)continue;while(c.moveToNext()){control.check();String date=day(c.getLong(1)*1000L);if(!date.equals(previous)){if(++seen>31)break;previous=date;}counts.put(date,counts.getOrDefault(date,0)+1);}
+                if(c==null)continue;while(c.moveToNext()){control.check();long time=c.getLong(1);if(time>previousTime){Diagnostics.event("media.query_order","unexpected ascending time; sdk="+android.os.Build.VERSION.SDK_INT);throw new IOException("手机媒体库未按日期返回，请导出诊断日志；可先用系统选择文件");}previousTime=time;String date=day(time*1000L);if(!date.equals(previous)){if(++seen>31)break;previous=date;}counts.put(date,counts.getOrDefault(date,0)+1);}
             }
         }
         // Unknown dates belong at the end rather than above actual YYYY-MM-DD values.
         Integer unknown=counts.remove("unknown");JSONArray items=new JSONArray();String next="";
         for(Map.Entry<String,Integer> entry:counts.entrySet()){if(items.length()==30){next=items.getJSONObject(29).getString("day");break;}items.put(new JSONObject().put("day",entry.getKey()).put("count",entry.getValue()));}
         if(next.isEmpty()&&unknown!=null){if(items.length()==30)next=items.getJSONObject(29).getString("day");else items.put(new JSONObject().put("day","unknown").put("count",unknown));}
-        return new JSONObject().put("items",items).put("next",next).put("access",MediaCatalog.access(context));
+        Diagnostics.event("media.days","groups="+items.length()+" more="+!next.isEmpty()+" access="+MediaCatalog.access(context)+(items.length()>0?" newest="+items.getJSONObject(0).getString("day"):""));
+        return new JSONObject().put("items",items).put("next",next).put("access",MediaCatalog.access(context)).put("mediaAccess",MediaPermissions.state(context));
     }
     private List<Item> records(String date,String before,int limit,RunControl control) throws Exception {
         long[] range=bounds(date);List<Item> result=new ArrayList<>();long cursorTime=Long.MAX_VALUE,cursorId=Long.MAX_VALUE;String cursorKind="";

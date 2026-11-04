@@ -2,7 +2,9 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-电脑服务源码当前为 **0.3.0-dev**，Android 源码为 **0.6.0-dev / versionCode 7 / nativeApi 3**。新增两端时间线、安卓图片/视频预览、按天选图及服务器核对备份状态，详见[本轮功能与验证](docs/20261104-时间线与按天选图.md)。本机不安装 Android SDK，新 APK 等待用户提交到 CI 编译；收到 APK 后再制作部署包。已分发的旧包仍为 CI5 0.5.0-dev / code6 与简约资源 r4，不代表新原生功能已发布。
+当前开发源码：电脑 **0.3.1-dev**，Android **0.6.2-dev / versionCode 9**。新增相册授权/日期查询修复、备份速度与阶段反馈、底部选项面板、视频封面、图片 EXIF 及播放/轮转诊断，详见[本轮功能与验证](docs/20261104-相册权限与媒体预览优化.md)。Android 需提交到 CI 编译与真机验证。
+
+已分发部署包仍为电脑 0.3.0-dev + CI7 APK 0.6.0-dev/code7 + 签名资源 r5，见[CI7 发布说明](docs/20261104-CI7安卓安装包发布.md)。本轮不使用旧 APK 冒充新版本；固定 Debug 签名支持保留，需用户配置 Secrets。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
@@ -10,7 +12,7 @@
 
 新增APK网页下载/发布、签名资源更新、诊断日志上传与防火墙批处理，详见[客户端维护使用说明](docs/20261104-客户端更新与日志反馈.md)。新版APK需先通过CI编译安装，才能使用原生维护功能。
 
-已收到Android CI5的0.5.0-dev Debug APK，含APK部署包可用导入脚本发布网页下载。该APK的Debug签名与CI3不同，不能直接覆盖旧版；请先阅读[升级与数据说明](docs/20261104-CI5安卓安装包发布.md)。
+已收到 CI7 APK，含 APK 部署包可用导入脚本发布网页下载。CI7 Debug 签名与 CI5 不同，不能直接覆盖旧版；请先阅读[升级与数据说明](docs/20261104-CI7安卓安装包发布.md)。
 
 ## 已实现
 
@@ -38,7 +40,7 @@ Windows 10/11 x64，安装 VS2022 的“使用 C++ 的桌面开发”和 Windows
 3. 电脑打开 `http://127.0.0.1:8787/`。
 4. 用户名为 `admin`。默认首次随机密码见控制台及该运行目录的 `data/initial-admin-password.txt`。测试时可以先关闭前台程序、停止服务，再运行 `deploy/set_admin_password.bat` 输入自己的密码（至少6位，无需大小写/符号组合），然后启动服务；也可在首次启动前设置。自选密码不写入初始密码文件。
 
-依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码默认配置使用首次随机密码。下一次部署包按用户要求默认 admin / admin123，登录后修改；已有账号不会重置。
+依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码默认配置使用首次随机密码。部署包按用户要求默认 admin / admin123，登录后修改；已有账号不会重置。
 
 也可使用 CMake 3.24+：
 
@@ -101,6 +103,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
   "allow_external_hosts": false,
   "data_dir": "../data",
   "web_dir": "../web",
+  "ffmpeg_path": "../tools/ffmpeg/ffmpeg.exe",
   "chunk_bytes": 8388608,
   "minimum_free_bytes": 268435456,
   "maximum_file_bytes": 137438953472

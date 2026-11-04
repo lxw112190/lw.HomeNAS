@@ -35,11 +35,13 @@ function page(name){
 function openConnection(){page('settings');$('connection-settings').open=true;}
 
 function render(s){
+  const mediaChanged=current?.scope===s.scope&&current?.mediaRevision!==undefined&&s.mediaRevision!==current.mediaRevision;
   if(current?.scope!==s.scope){queueHistory=[''];queuePosition=0;queueNext='';$('queue-filter').value='active';}
   if(s.user&&s.queueCursor!==undefined&&(s.queueCursor!==(queueHistory[queuePosition]||'')||s.queueFilter!==$('queue-filter').value))return;
   if(current?.scope!==s.scope){closeMedia();selectedDays.clear();selectedItems.clear();pickerDays.clear();$('picker-days').replaceChildren();pickerSelection();$('library').replaceChildren();$('albums').replaceChildren();albumLoaded=false;cursor='';$('more').hidden=true;}
   const first=current===null,wasSignedIn=!!current?.user;current=s;if(wasSignedIn!==!!s.user)document.querySelectorAll('.settings-group').forEach(n=>n.open=false);page(first||wasSignedIn!==!!s.user?(s.user?'backup':'login'):activePage);$('login-server').textContent=s.connectionAddress||s.endpoint||$('resolved-endpoint').textContent;$('back-login').hidden=!!s.user;const modern=Number(s.nativeApi||1)>=2;for(const id of ['queue-filter','library-type','library-search','library-search-button'])$(id).hidden=!modern;$('version').textContent=s.version||'';$('connection').textContent=({admin:'管理员',member:'普通用户',viewer:'只读用户'}[s.role]||'');$('profile-name').textContent=s.user||'我的账号';$('library-search-form').hidden=!modern;const capabilities=Number(s.nativeApi||1);$('choose-media').hidden=!s.canUpload||capabilities<3;$('choose').classList.toggle('primary',capabilities<3);$('choose').textContent=capabilities<3?'添加照片 / 文件':'选择其他文件';$('library-order').querySelector('[value=timeline]').disabled=capabilities<3;if(capabilities<3)$('library-order').value='created';
-  showMessage(s.message||'');$('access').textContent=s.access||'';$('album-hint').textContent=s.access||'';
+  if(!(s.transfer?.running&&/^(正在备份|正在上传|计算文件摘要|校验文件|电脑完整校验)/.test(s.message||'')))showMessage(s.message||'');$('access').textContent=s.access||'';$('album-hint').textContent=s.access||'';pickerAccess();
+  if(mediaChanged){albumLoaded=false;$('albums').replaceChildren();if(activePage==='picker'){pickerRefreshPending=true;if(!pickerBusy)queueMicrotask(()=>loadPicker());}else if(activePage==='settings'&&$('album-settings').open)queueMicrotask(()=>$('load-albums').click());}
   $('logout').hidden=!s.user;document.querySelectorAll('.upload-only').forEach(n=>n.hidden=!s.canUpload);document.querySelectorAll('.session-only').forEach(n=>n.hidden=!s.user);
   if(first){fillAddress(s.connectionAddress||s.endpoint||'http://192.168.1.100:8787');$('username').value=s.user||s.lastUsername||'admin';$('auto').checked=!!s.auto;$('wifi').checked=s.wifiOnly!==false;$('charging').checked=!!s.charging;}
   $('log-session').textContent=`版本 ${s.version||''} · 构建 ${s.build||'local'} · 日志会话 ${s.logSession||'--'}`;
@@ -51,14 +53,8 @@ function render(s){
   const visibleItems=modern?(q.items||[]):(q.items||[]).slice(queuePosition*50,queuePosition*50+50);
   queueNext=modern?(q.next||''):((queuePosition+1)*50<(q.items||[]).length?String(queuePosition+1):'');
   $('queue-next').disabled=!queueNext;$('queue-prev').disabled=!queuePosition;$('queue-page').textContent=`第 ${queuePosition+1} 页${modern?'':' · 最近100项'}`;
-  $('tasks').replaceChildren();
-  for(const task of visibleItems){
-    const row=element('div','','task-row'),left=element('div','','task-detail'),mark=element('span','','task-icon');mark.append(icon(/\.(mp4|mov|mkv)$/i.test(task.name)?'video':'file'));
-    const name=element('strong',task.name);name.title=task.name;left.append(name,element('small',`${bytes(task.offset)} / ${bytes(task.size)}${task.error?' · '+task.error:''}`));
-    const right=element('span',labels[task.state]||task.state,'task-state'+(['ERROR','SOURCE_MISSING'].includes(task.state)?' failed':''));
-    const progress=document.createElement('progress');progress.max=100;progress.value=task.state==='READY'?100:Math.min(100,100*Number(task.offset)/Math.max(1,Number(task.size)));progress.setAttribute('aria-label',task.name+'备份进度');left.append(progress);row.append(mark,left,right);$('tasks').append(row);
-  }
-  if(!visibleItems.length)$('tasks').append(element('p',s.canUpload?'暂无传输任务':'可在资料库浏览共享文件','empty'));
+  renderTaskRows(visibleItems,s.canUpload);renderTransfer(s);syncChoices();
+
 
 }
 async function refresh(){if(polling)return;polling=true;try{render(await nativeCall('snapshot'));}catch(e){showError(e.message);}finally{polling=false;}}
@@ -74,10 +70,10 @@ $('host').addEventListener('change',pastedAddress);$('host').addEventListener('i
 $('test-connection').onclick=async()=>{try{const r=await run($('test-connection'),'testConnection',connectionData());if(r.endpoint)fillAddress(r.endpoint);}catch{}};
 $('login').onsubmit=async event=>{event.preventDefault();const b=$('login').querySelector('[type=submit]');try{await run(b,'login',{...connectionData(),username:$('username').value,password:$('password').value});$('auto').checked=false;page('backup');}catch{}finally{$('password').value='';}};
 $('login').addEventListener('invalid',event=>{showError(['host','port'].includes(event.target.id)?'请填写电脑IP和1至65535之间的端口，默认HTTP为8787。':'请填写用户名和密码。');clientLog('error','FormValidation');},true);
-$('view-logs').onclick=async()=>{try{const r=await run($('view-logs'),'diagnostics');$('logs-tail').textContent=r.tail||'尚无日志';$('logs-info').textContent=`会话 ${r.session} · 导出ZIP包含轮转日志及诊断摘要`;$('logs-dialog').showModal();}catch{}};
+$('view-logs').onclick=async()=>{try{const r=await run($('view-logs'),'diagnostics');$('logs-tail').textContent=r.tail||'尚无日志';$('logs-info').textContent=`${r.rotation||'每份2 MiB，最多5份'} · 当前 ${bytes(r.used_bytes||0)} · 会话 ${r.session}`;$('logs-dialog').showModal();}catch{}};
 $('close-logs').onclick=()=>$('logs-dialog').close();bind('export-logs','exportDiagnostics');bind('dialog-export','exportDiagnostics');
 $('logout').addEventListener('click',()=>{$('auto').checked=false;});
-$('load-albums').onclick=async()=>{try{const r=await run($('load-albums'),'albums');$('albums').replaceChildren();for(const a of r.items){const label=element('label','','check'),check=document.createElement('input');check.type='checkbox';check.value=a.key;check.checked=!!a.selected;label.append(check,element('span',a.name),element('small',`${a.count}项`));$('albums').append(label);}albumLoaded=true;if(!r.items.length)$('albums').append(element('p','暂无可访问相册，请先授权或调整选择范围。','empty'));}catch{}};
+$('load-albums').onclick=async()=>{try{if(current?.mediaAccess&&!current.mediaAccess.any){await run($('load-albums'),'permission');return;}const r=await run($('load-albums'),'albums');$('albums').replaceChildren();for(const a of r.items){const label=element('label','','check'),check=document.createElement('input');check.type='checkbox';check.value=a.key;check.checked=!!a.selected;label.append(check,element('span',a.name),element('small',`${a.count}项`));$('albums').append(label);}albumLoaded=true;if(!r.items.length)$('albums').append(element('p','暂无可访问相册，请先授权或调整选择范围。','empty'));}catch{}};
 $('preferences').onsubmit=async event=>{event.preventDefault();if(!albumLoaded){showError('请先刷新相册并确认要备份的相册，再保存设置。');return;}const b=$('preferences').querySelector('[type=submit]');try{await run(b,'preferences',{albums:Array.from($('albums').querySelectorAll('input:checked'),n=>n.value),auto:$('auto').checked,wifiOnly:$('wifi').checked,charging:$('charging').checked});}catch{}};
 let libraryHistory=[''],libraryPosition=0,libraryLoading=false;
 function fileDate(value){const time=Number(value);return time>0?new Date(time).toLocaleString('zh-CN'): '未记录';}
@@ -90,13 +86,13 @@ function previewMedia(item){
  const modern=Number(current?.nativeApi||1)>=3;let media;
  if(item.category==='image'){media=document.createElement('img');media.alt=item.name;media.src=modern?`/media/${item.id}`:`/thumb/${item.id}.jpg`;media.onload=()=>$('media-runtime').textContent=(modern?'尺寸':'缩略图尺寸')+` ${media.naturalWidth} × ${media.naturalHeight}`;}
  else if(item.category==='video'&&modern){media=document.createElement('video');media.controls=true;media.preload='metadata';media.playsInline=true;media.src=`/media/${item.id}`;media.onloadedmetadata=()=>$('media-runtime').textContent=`${media.videoWidth} × ${media.videoHeight}`+(Number.isFinite(media.duration)?` · ${Math.round(media.duration)} 秒`:'');}
- if(media){media.onerror=()=>$('media-runtime').textContent='当前格式无法预览，可保存原件后打开';$('media-content').append(media);}else $('media-content').append(element('p',item.category==='video'?'视频预览需新版APK；可先保存原件':'可保存原件后打开','caption'));
+ if(media){media.onerror=()=>{const code=media.error?.code||0;const reason={1:'播放已取消',2:'预览读取失败，请检查电脑连接',3:'设备无法解码该视频编码',4:'设备未识别该视频格式或编码'}[code]||'当前文件无法预览';$('media-runtime').textContent=reason+'；可保存原件后用系统播放器打开。错误码 '+code;if(item.category==='video'&&current?.playbackDiagnostics)nativeCall('playbackError',{id:item.id,code,network:media.networkState,ready:media.readyState}).catch(()=>{});};$('media-content').append(media);}else $('media-content').append(element('p',item.category==='video'?'视频预览需新版APK；可先保存原件':'可保存原件后打开','caption'));
  $('media-dialog').showModal();
 }
 $('media-close').onclick=closeMedia;$('media-dialog').addEventListener('cancel',event=>{event.preventDefault();closeMedia();});$('media-save').onclick=()=>{if(previewItem)run($('media-save'),'download',{id:previewItem.id}).catch(()=>{});};
 function libraryCard(item){
  const card=element('div','','media'),open=element('button','','media-preview');open.type='button';open.setAttribute('aria-label','预览'+item.name);open.onclick=()=>previewMedia(item);
- if(item.category==='image'&&item.preview==='READY'){const img=document.createElement('img');img.src=`/thumb/${item.id}.jpg`;img.alt=item.name;img.loading='lazy';img.onerror=()=>img.replaceWith(placeholder('image'));open.append(img);}else open.append(placeholder(item.category));
+ if(['image','video'].includes(item.category)&&item.preview==='READY'){const img=document.createElement('img');img.src=`/thumb/${item.id}.jpg`;img.alt=item.name;img.loading='lazy';img.onerror=()=>img.replaceWith(placeholder('image'));open.append(img);}else open.append(placeholder(item.category));if(item.category==='video')open.append(element('span','▶ 视频','video-badge'));
  const name=element('strong',item.name);name.title=item.name;card.append(open,name,element('p',`${bytes(item.size)} · ${item.mime||item.category}`));
  const footer=element('div','','media-footer'),save=element('button','','save-small');save.type='button';save.setAttribute('aria-label','保存'+item.name+'到手机');save.append(icon('update'));save.onclick=()=>run(save,'download',{id:item.id}).catch(()=>{});footer.append(element('span',fileDay(item.modified||item.created)),save);card.append(footer);return card;
 }
@@ -112,7 +108,7 @@ async function loadLibrary(append,previous=false){
  finally{libraryLoading=false;for(const id of ['library-type','library-search-button','library-search','library-order'])$(id).disabled=false;$('more').disabled=!cursor;$('library-prev').disabled=!libraryPosition;}
 }
 $('load-library').onclick=()=>loadLibrary(false);$('more').onclick=()=>loadLibrary(true);
-refresh();setInterval(()=>{if(!document.hidden)refresh();},5000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
+refresh();let lastRefresh=0;setInterval(()=>{const now=Date.now();if(!document.hidden&&now-lastRefresh>=(current?.transfer?.running?2000:5000)){lastRefresh=now;refresh();}},1000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh();});
 
 $('check-updates').onclick=async()=>{try{const r=await run($('check-updates'),'checkUpdates');$('update-info').textContent=`应用 ${r.apk?r.apk.versionName:'暂无更新'} · 界面 ${r.resourceVersion}${r.ui?'（有可用资源）':''}`;}catch{}};
 bind('update-resources','updateResources');bind('install-apk','installApk');$('upload-logs').onclick=()=>run($('upload-logs'),'uploadLogs',{description:$('report-note').value}).catch(()=>{});
@@ -131,7 +127,8 @@ document.addEventListener('submit',()=>{for(const box of document.querySelectorA
 
 $('library-order').onchange=()=>loadLibrary(false);document.addEventListener('visibilitychange',()=>{if(document.hidden)closeMedia();});
 
-let pickerDays=new Map(),selectedDays=new Set(),selectedItems=new Map(),pickerNext='',pickerBusy=false;
+let pickerDays=new Map(),selectedDays=new Set(),selectedItems=new Map(),pickerNext='',pickerBusy=false,pickerRefreshPending=false;
+function pickerAccess(access=current?.mediaAccess){$('picker-access').textContent=access?.label||current?.access||'请授权照片和视频';$('picker-settings').hidden=!access||access.full;$('picker-permission').textContent=access?.full?'管理权限':access?.partial?'重新选择授权':'相册权限';}
 function pickerSelection(){ $('picker-selected').textContent=selectedDays.size||selectedItems.size?`已选 ${selectedDays.size} 天 / ${selectedItems.size} 项`:'未选择';$('picker-confirm').disabled=pickerBusy||!selectedDays.size&&!selectedItems.size; }
 function updateDayChecks(date){const group=pickerDays.get(date);if(!group)return;for(const input of group.grid.querySelectorAll('input')){input.checked=input.dataset.ready!=='true'&&(selectedDays.has(date)||selectedItems.has(input.value));input.disabled=input.dataset.ready==='true'||selectedDays.has(date);}}
 async function pickerItems(date,more=false){const group=pickerDays.get(date);if(!group||group.loading)return;group.loading=true;group.button.disabled=true;try{const data=await nativeCall('mediaItems',{day:date,before:more?group.next:''});if(!more)group.grid.replaceChildren();
@@ -139,10 +136,44 @@ async function pickerItems(date,more=false){const group=pickerDays.get(date);if(
  const label=item.status==='READY'?'已备份':item.status==='UNCONFIRMED'?'待核实':({QUEUED:'已入队',HASHING:'校验中',UPLOADING:'上传中',VERIFYING:'电脑校验',COMMITTING:'入库中',ERROR:'可重试',SOURCE_MISSING:'源文件待确认',MISSING:'可重新备份'}[item.status]||'待备份');cell.append(image,input,element('span',(item.kind==='video'?'视频 · ':'')+label,item.status==='READY'?'backed-up':'unconfirmed'),element('span',`${bytes(item.size)}${item.width?' · '+item.width+'×'+item.height:''}`));cell.title=item.name;group.grid.append(cell);}
  group.next=data.next||'';group.button.textContent=group.next?'更多照片':'刷新照片';updateDayChecks(date);
  }catch(e){showError(e.message);}finally{group.loading=false;group.button.disabled=false;}}
-async function loadPicker(more=false){if(pickerBusy)return;pickerBusy=true;pickerSelection();$('picker-refresh').disabled=true;try{if(!more){pickerDays.clear();selectedDays.clear();selectedItems.clear();$('picker-days').replaceChildren();}page('picker');const data=await nativeCall('mediaDays',{before:more?pickerNext:'',reset:!more});$('picker-info').textContent='按文件日期分组；已备份会自动跳过，无法确认时标记待核实。';
+async function loadPicker(more=false){if(pickerBusy)return;pickerBusy=true;pickerRefreshPending=false;const revision=current?.mediaRevision;pickerSelection();$('picker-refresh').disabled=true;try{if(!more){pickerDays.clear();selectedDays.clear();selectedItems.clear();$('picker-days').replaceChildren();}page('picker');const data=await nativeCall('mediaDays',{before:more?pickerNext:'',reset:!more});if(revision!==current?.mediaRevision){pickerRefreshPending=true;return;}pickerAccess(data.mediaAccess);$('picker-info').textContent=data.mediaAccess?.partial?'仅显示已授权项目，选择“允许全部”可浏览完整本机相册。':'按文件修改日期分组；已备份自动跳过。';
  for(const day of data.items){const section=element('section','','picker-day'),head=element('div','','picker-day-head'),label=element('label',''),check=document.createElement('input'),button=element('button','查看','text-button'),grid=element('div','','picker-day-grid');check.type='checkbox';check.setAttribute('aria-label','全选'+day.day);label.append(check,element('span',(day.day==='unknown'?'未知日期':day.day)+` · ${day.count} 项`));head.append(label,button);section.append(head,grid);$('picker-days').append(section);const moreButton=element('button','更多照片','picker-item-more');moreButton.type='button';moreButton.hidden=true;section.append(moreButton);pickerDays.set(day.day,{grid,button:moreButton,next:'',loading:false});
  check.onchange=()=>{if(check.checked){if(selectedDays.size>=30){check.checked=false;showError('一次最多选择30天');return;}selectedDays.add(day.day);for(const [id,date] of selectedItems)if(date===day.day)selectedItems.delete(id);}else selectedDays.delete(day.day);updateDayChecks(day.day);pickerSelection();};button.onclick=()=>{moreButton.hidden=false;pickerItems(day.day);};moreButton.onclick=()=>pickerItems(day.day,!!pickerDays.get(day.day).next);}
  pickerNext=data.next||'';$('picker-more').hidden=!pickerNext;if(!data.items.length&&!more)$('picker-info').textContent='暂无可访问的照片；请先授权相册，或返回使用系统文件选择器。';
- }catch(e){showError(e.message);}finally{pickerBusy=false;$('picker-refresh').disabled=false;pickerSelection();}}
-$('choose-media').onclick=()=>loadPicker();$('picker-refresh').onclick=()=>loadPicker();$('picker-more').onclick=()=>loadPicker(true);$('picker-permission').onclick=()=>run($('picker-permission'),'permission').catch(()=>{});
+ }catch(e){showError(e.message);}finally{pickerBusy=false;$('picker-refresh').disabled=false;pickerSelection();if(pickerRefreshPending&&activePage==='picker')queueMicrotask(()=>loadPicker());}}
+$('choose-media').onclick=async()=>{await loadPicker();if(current?.mediaAccess&&!current.mediaAccess.any&&activePage==='picker')run($('picker-permission'),'permission').catch(()=>{});};$('picker-refresh').onclick=()=>loadPicker();$('picker-more').onclick=()=>loadPicker(true);$('picker-permission').onclick=()=>run($('picker-permission'),'permission').catch(()=>{});
 $('picker-confirm').onclick=async()=>{if(pickerBusy)return;pickerBusy=true;pickerSelection();try{const result=await nativeCall('mediaEnqueue',{days:[...selectedDays],ids:[...selectedItems.keys()]});selectedDays.clear();selectedItems.clear();await refresh();page('backup');showMessage(`已加入 ${result.added} 项，跳过已完成或已入队 ${result.skipped} 项`);}catch(e){showError(e.message);}finally{pickerBusy=false;pickerSelection();}};
+
+$('picker-settings').onclick=()=>run($('picker-settings'),'mediaSettings').catch(()=>{});window.addEventListener('homenas-media-changed',refresh);
+
+const taskRows=new Map();
+function renderTaskRows(items,canUpload){
+ const list=$('tasks'),keep=new Set();
+ if(items.length)for(const empty of list.querySelectorAll('.empty'))empty.remove();
+ items.forEach((task,index)=>{const key=String(task.diagnostic_id||task.name+'-'+index);keep.add(key);let entry=taskRows.get(key);
+  if(!entry){const row=element('div','','task-row'),left=element('div','','task-detail'),mark=element('span','','task-icon'),name=element('strong',''),info=element('small',''),state=element('span','','task-state'),progress=document.createElement('progress');progress.max=100;mark.append(icon(/\.(mp4|mov|mkv|avi|webm)$/i.test(task.name)?'video':'file'));left.append(name,info,progress);row.append(mark,left,state);entry={row,name,info,state,progress};taskRows.set(key,entry);}
+  const percent=task.state==='READY'?100:Math.min(100,100*Number(task.offset)/Math.max(1,Number(task.size)));
+  const values=[[entry.name,task.name],[entry.info,`${bytes(task.offset)} / ${bytes(task.size)}${task.error?' · '+task.error:''}`],[entry.state,labels[task.state]||task.state]];for(const [n,text] of values)if(n.textContent!==text)n.textContent=text;
+  entry.progress.classList.toggle('failed',['ERROR','SOURCE_MISSING'].includes(task.state));entry.name.title=task.name;entry.state.classList.toggle('failed',['ERROR','SOURCE_MISSING'].includes(task.state));if(entry.progress.value!==percent)entry.progress.value=percent;entry.progress.setAttribute('aria-label',task.name+'备份进度');
+  if(list.children[index]!==entry.row)list.insertBefore(entry.row,list.children[index]||null);
+ });for(const [key,entry] of taskRows)if(!keep.has(key)){entry.row.remove();taskRows.delete(key);}
+ if(!items.length&&!list.querySelector('.empty'))list.append(element('p',canUpload?'暂无传输任务':'可在资料库浏览共享文件','empty'));
+}
+function renderTransfer(s){
+ const t=s.transfer,running=!!t?.running;$('transfer-live').hidden=!running;
+ if(t){$('start').disabled=running;$('pause').disabled=!running;$('start').querySelector('span').textContent=running?'备份中':Number($('pending').textContent)>0?'继续备份':'开始备份';}
+ if(!running)return;
+ const stopping=!!s.paused;$('pause').disabled=stopping;const phase=stopping?'正在暂停':{PREPARING:'准备文件',HASHING:'读取并校验文件',UPLOADING:'上传到电脑',VERIFYING:'电脑完整校验',COMMITTING:'正在入库'}[t.phase]||'准备备份';$('transfer-phase').textContent=phase;$('transfer-name').textContent=t.name||'正在连接电脑…';
+ const size=Number(t.size),done=Number(t.processed);$('transfer-progress').value=size>0?Math.max(0,Math.min(100,100*done/size)):0;$('transfer-bytes').textContent=`${bytes(done)} / ${size>=0?bytes(size):'大小待读取'}`;
+ $('transfer-speed').textContent=!stopping&&t.phase==='UPLOADING'?(Number(t.bytes_per_second)>0?bytes(t.bytes_per_second)+'/s':'正在发送…'):'';
+ const eta=Number(t.eta_seconds);$('transfer-eta').textContent=!stopping&&t.phase==='UPLOADING'&&eta>=0?(eta<60?`约 ${eta} 秒`:`约 ${Math.ceil(eta/60)} 分钟`):'';
+ $('transfer-note').textContent=stopping?'正在停止当前请求，已确认进度会保留。':t.phase==='HASHING'?'首次备份先计算完整摘要，可识别重复文件。':['VERIFYING','COMMITTING'].includes(t.phase)?'文件已发送，等待电脑确认后显示“已备份”。':'速度按电脑确认的传输块计算。';
+}
+const choiceButtons=new Map();let choiceSource=null;
+function syncChoices(){for(const [select,button] of choiceButtons){button.hidden=select.hidden;button.disabled=select.disabled;const label=select.selectedOptions[0]?.textContent||'请选择';button.querySelector('span').textContent=label;}}
+for(const select of document.querySelectorAll('select')){
+ select.classList.add('choice-native');const button=element('button','','choice-trigger');button.type='button';button.setAttribute('aria-haspopup','dialog');button.setAttribute('aria-expanded','false');button.setAttribute('aria-label',select.getAttribute('aria-label')||select.closest('label')?.querySelector('span')?.textContent||'选择选项');button.append(element('span',''),icon('chevron'));select.after(button);choiceButtons.set(select,button);
+ const sync=()=>{syncChoices();if(choiceSource===select&&select.disabled&&$('choice-dialog').open)$('choice-dialog').close();};new MutationObserver(sync).observe(select,{attributes:true,childList:true,subtree:true});select.addEventListener('change',sync);
+ button.onclick=()=>{choiceSource=select;$('choice-title').textContent=button.getAttribute('aria-label');$('choice-options').replaceChildren();for(const option of select.options){if(option.hidden)continue;const item=element('button',option.textContent,'choice-option');item.type='button';item.disabled=option.disabled;item.setAttribute('role','option');item.setAttribute('aria-selected',String(option.selected));if(option.selected)item.append(element('span','✓'));item.onclick=()=>{select.value=option.value;$('choice-dialog').close();syncChoices();select.dispatchEvent(new Event('change',{bubbles:true}));};$('choice-options').append(item);}button.setAttribute('aria-expanded','true');$('choice-dialog').showModal();};
+}
+$('choice-dialog').addEventListener('close',()=>{if(choiceSource)choiceButtons.get(choiceSource)?.setAttribute('aria-expanded','false');choiceSource=null;});syncChoices();
