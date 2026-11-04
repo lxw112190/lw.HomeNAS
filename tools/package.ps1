@@ -1,4 +1,4 @@
-﻿param([string]$Executable)
+﻿param([string]$Executable,[string]$ClientReleaseDirectory)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $Executable) { $Executable = Join-Path $projectRoot 'out/Release/NasServer.exe' }
@@ -10,6 +10,7 @@ $stage = Join-Path $projectRoot ('deliveries/' + $name)
 if (Test-Path -LiteralPath $stage) { throw '打包目标已存在' }
 New-Item -ItemType Directory -Path $stage | Out-Null
 Copy-Item -LiteralPath $Executable -Destination (Join-Path $stage 'NasServer.exe')
+if($ClientReleaseDirectory){ Copy-Item -LiteralPath $ClientReleaseDirectory -Destination (Join-Path $stage 'client-release') -Recurse }
 foreach ($folder in @('web','config','deploy')) { Copy-Item -LiteralPath (Join-Path $projectRoot $folder) -Destination $stage -Recurse }
 foreach ($file in @('README.md','LICENSE','THIRD-PARTY-NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stage }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $stage -Recurse
@@ -43,6 +44,7 @@ Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不
 手机地址分开填写IP与端口，可测试连接、导出诊断ZIP；本轮Android尚待CI/真机验证。
 管理员可创建普通/只读账号。服务脚本支持安装、启停、查询与卸载，卸载保留数据。
 '@
+if($ClientReleaseDirectory){ $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。','本包附带CI APK：先停止NAS，运行deploy/import_android.bat导入，再启动即可网页下载。') }
 [IO.File]::WriteAllText((Join-Path $stage '开始使用.txt'), $quickStart, [Text.UTF8Encoding]::new($true))
 $archive = $stage + '.zip'
 Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal

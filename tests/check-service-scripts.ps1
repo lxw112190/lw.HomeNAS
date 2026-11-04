@@ -14,7 +14,7 @@ if ($plan.Account -ne 'NT SERVICE\lw.HomeNAS') { throw 'Service account mismatch
 if (-not (Test-Path -LiteralPath $plan.Config)) { throw 'Missing runtime config' }
 $httpPlan = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'deploy/service.ps1') -Action Configure -AllowInsecureLan -PlanOnly | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or -not $httpPlan.AllowInsecureLan -or -not $httpPlan.BinaryPath.EndsWith(' --allow-insecure-lan') -or $plan.BinaryPath.Contains('--allow-insecure-lan')) { throw 'HTTP/default service mode plans mismatch' }
-$entries = @('install_service.bat','start_service.bat','stop_service.bat','restart_service.bat','status_service.bat','uninstall_service.bat','start_console.bat','install_http_service.bat','configure_http_service.bat','configure_https_service.bat','start_console_http.bat','set_admin_password.bat','open_firewall.bat','remove_firewall.bat','status_firewall.bat')
+$entries = @('install_service.bat','start_service.bat','stop_service.bat','restart_service.bat','status_service.bat','uninstall_service.bat','start_console.bat','install_http_service.bat','configure_http_service.bat','configure_https_service.bat','start_console_http.bat','set_admin_password.bat','open_firewall.bat','remove_firewall.bat','status_firewall.bat','import_android.bat')
 foreach ($file in $entries) {
     if (-not (Test-Path -LiteralPath (Join-Path $root ('deploy/'+$file)))) { throw ('Missing script '+$file) }
 }

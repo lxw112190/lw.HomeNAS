@@ -33,7 +33,7 @@
     ]
   },
   "ci_executed": false,
-  "apk_generated": false,
+  "apk_generated": true,
   "jvm_tests": "UI rollback test added; pending CI for 0.4.0",
   "android_15_instrumentation_tests": "existing device tests pending CI on this version",
   "physical_phone_tests": "not performed",
@@ -54,5 +54,15 @@
     "signed UI staging/activation/rollback",
     "APK signing verification and system install",
     "native diagnostic upload"
-  ]
+  ],
+  "received_artifact": {
+    "name": "lw.HomeNAS-Android-3.zip",
+    "version": "0.4.0-dev",
+    "versionCode": 5,
+    "variant": "debug",
+    "APK_v2_signature": "independently verified",
+    "content_digest": "independently verified",
+    "CI_test_reports_received": false,
+    "physical_phone_tests": "not performed"
+  }
 }
