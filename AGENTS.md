@@ -17,12 +17,14 @@
 - 原生桥只接受可信本地页面主框架的固定命令；不返回令牌、不接受任意路径/URL。自签名证书导入保留主机名校验；会话用Keystore加密；APK签名身份存GitHub Secrets或仓库外，不进源码/日志。
 - Android自动任务采用有限批次，手动长任务使用用户明确启动的dataSync前台服务；不通过开机广播或永久长Worker绕过系统限制。每次显示成功必须取得服务端READY，暂停/退出保留队列和原件。
 - 调试采用CI构建→真机测试→导出诊断ZIP反馈；每轮APK递增versionCode，界面/日志记录版本、提交、CI编号与错误/请求关联ID。日志有界轮转，不记请求正文、密码、令牌、媒体文件名或URI，不打包真实日志。
+- 用户已配置仓库四个ANDROID签名Secrets：后续分发APK始终复用这套持久签名及com.lxw.homenas包名，修改APK时递增versionCode并更新versionName，不重新生成密钥。push/手动发布缺少签名配置应失败，不退回临时签名；PR仅验证，不分发临时签名APK。收到新APK后核对证书SHA256与固定签名基准；截图仅说明配置已填写，不等于实际产物签名已核验。
 - 地址草稿与已认证endpoint分开保存；失败测试不能改变Keystore密文AAD或将原队列路由到新服务器。电脑HTTP由allow_insecure_lan控制，按用户要求默认true，命令行显式开/关可覆盖；HTTPS不静默降级。
 - 离线管理员密码工具必须取得相同实例锁、拒绝运行中的资料库，不启动后台恢复/媒体处理线程，不打印或保存自选明文密码。
 - Android仪器测试结束后应用可能已卸载；CI采集截图前重新安装APK并解析实际Launcher，不硬编码applicationId与Activity组合。测试失败仍保留原退出码并在模拟器结束前采集日志。
 - Windows控制台中文统一使用consoleText：控制台走WriteConsoleW，文件/管道/服务日志保留UTF-8。不要强制修改父控制台代码页；PowerShell交互入口避免二次解码。兼容检查可运行tests/console_encoding.py，不能将本机代码页测试称为Server 2012 R2实机通过。
 
 - 客户端维护分为APK版本与已签名Web资源版本，原生桥协议变化须调整兼容要求。资源私钥仅保存在仓库忽略的local-signing目录或CI Secrets，源码只提交公钥；不得打进部署包。
+- 修改原生协议升级/活动界面重置逻辑时，同步更新ClientMaintenanceTest的启动前提：先模拟当前APK首次启动，再测试同协议资源回退；另测旧协议升级清理指针、保留其他状态。测试不能将首次迁移返回的builtin/null当成已下载界面目录。JUnit失败摘要须展示具体用例与堆栈，完整XML保留Artifact；不得跳过失败测试放行APK。
 - 防火墙脚本仅生成或验证计划，不自行在开发机开放端口；用户显式运行Open/Remove时才修改当前程序路径对应的受管规则。
 
 - 签名UI资源发布前必须按已分发APK的真实解包规则检查每个ZIP条目（路径/类型/数量/展开大小/重复/必要入口），不能仅验证签名和HTTP。现有APK拒绝TXT，许可证应保留全文为HTML；使用递增revision修复已发布包，不原地覆盖同版本。运行tools/check-android.py和test_android_*check.py回归。

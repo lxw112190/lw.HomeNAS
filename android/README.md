@@ -30,7 +30,9 @@
 
 ### 签名与覆盖升级
 
-已增加 **固定 Debug 签名**：push/手动 CI 检测到下表四个 Secrets 时，Debug 与 Release 使用同一个持久 JKS；不再每次生成不同 Debug 身份。未配置则继续临时签名并在 CI Summary 提示，PR/模拟器使用隔离开发签名。签名配置填写不全或密钥错误会使构建失败，不静默换钥。
+用户已于 2026-11-05 确认配置下表四个仓库 Secrets。后续 push/手动 CI 的 Debug 与 Release 均使用这一套持久 JKS，包名保持 `com.lxw.homenas`。修改 APK 时递增 `versionCode` 并更新 `versionName`，不重新生成签名。当前待构建版本为 `0.7.0-dev / code10`。
+
+缺少 Secrets、配置不完整或密钥错误时直接失败，不退回临时签名。PR 无法访问签名 Secrets，仍执行隔离开发签名下的编译/测试，但不上传可分发 APK。收到首次固定签名 APK 后记录公开证书 SHA256，后续各版核对一致；截图不代表实际签名产物已核验。
 
 没有 Android 开发环境时，一次性完成：
 
@@ -40,10 +42,10 @@
 4. 删除生成密钥的 Artifact，以后保持这四个 Secrets 不变；重新运行 Android APK 工作流。
 5. 后续每次发布递增 `versionCode`，并保留同一包名。比较各次 Artifact 的 `debug-signing.txt` 证书 SHA256，应保持一致。
 
-不要把 JKS、Base64 或密码提交 Git。第一次从旧的临时签名切换到固定签名仍可能无法覆盖，先处理好待备份队列。CI7 APK 不含原临时私钥，不能从 APK 反推私钥。本轮固定签名支持已修改源码，实际启用需用户配置 Secrets 并由后续 CI 验证。
+不要把 JKS、Base64 或密码提交 Git。第一次从旧的临时签名切换到固定签名仍可能无法覆盖，先处理好待备份队列。CI7 APK 不含原临时私钥，不能从 APK 反推私钥。现已完成 Secrets 配置，实际产物待下一次 CI 核验。
 
 
-默认Debug APK适合先试功能。不同CI运行可能生成不同的临时Debug签名，不能保证互相覆盖安装；卸载会清掉手机本地队列和授权，不会删除电脑原件。
+后续默认 Debug APK 也使用固定签名，保持相同包名、相同签名及更高版本号时可覆盖升级。历史临时签名 APK 与新固定签名若不一致，首次切换仍不能直接覆盖；卸载会清掉手机本地队列和授权，不会删除电脑原件。
 
 长期使用或发给他人，准备自己的JKS签名文件，设置仓库Settings → Secrets and variables → Actions：
 
@@ -54,7 +56,7 @@
 | ANDROID_KEY_ALIAS | 签名别名 |
 | ANDROID_KEY_PASSWORD | 对应私钥密码 |
 
-CI只在push或手动运行时使用这些Secrets；未配置时只生成测试APK。配置后还生成 `release/app-release.apk` 并用apksigner验证，SHA256在Artifact根目录。JKS、密码和Base64不提交Git、不粘贴在Issue或日志中。必须始终保留同一Package Name及签名身份才能覆盖升级。
+CI只在push或手动运行时使用这些Secrets；未配置时拒绝分发。还生成 `release/app-release.apk` 并用apksigner验证，文件SHA256在Artifact根目录，Debug证书信息在 `debug-signing.txt`。JKS、密码和Base64不提交Git、不粘贴在Issue或日志中。必须始终保留同一Package Name及签名身份才能覆盖升级。
 
 没有JDK时也能准备签名：先设置两个密码Secret（均至少16字符），手动运行[Prepare Android signing key](../.github/workflows/android-signing-key.yml)。下载其中加密JKS，离线备份后将其Base64填入Secret，别名设为homenas；删除该Artifact，避免长期留在CI。密钥库仍需强密码保护，已经分发过正式APK后不要重新生成签名身份。PowerShell可用 `[Convert]::ToBase64String([IO.File]::ReadAllBytes("签名文件绝对路径"))` 取得内容；不要将命令输出保存进Git或公开日志。
 

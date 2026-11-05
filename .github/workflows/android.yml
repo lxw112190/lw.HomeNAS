@@ -58,7 +58,8 @@ jobs:
             echo "ANDROID_CI_DEBUG_KEYSTORE_PATH=$RUNNER_TEMP/homenas-ci-debug.jks" >> "$GITHUB_ENV"
             echo 'Debug APK uses the persistent signing identity from Secrets.' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo 'No persistent signing key configured. Debug APK uses a temporary key and may not overwrite previous installs. See android/README.md.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Persistent signing Secrets are required for distributed APKs. Refusing to use a temporary signing key.'
+            exit 1
           fi
       - name: Lint, JVM tests and debug APK
         env:
@@ -66,9 +67,12 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: gradle -p android --no-daemon :app:lintDebug :app:testDebugUnitTest :app:assembleDebug
+      - name: Show JUnit failure details
+        if: always()
+        run: python3 tools/android-test-summary.py
       - name: Record resolved runtime dependencies
         run: gradle -p android --no-daemon :app:dependencies --configuration debugRuntimeClasspath > android/app/build/reports/runtime-dependencies.txt
-      - name: Optional stable signed release
+      - name: Stable signed release
         if: github.event_name != 'pull_request'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -85,7 +89,8 @@ jobs:
             gradle -p android --no-daemon :app:assembleRelease
             "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose android/app/build/outputs/apk/release/app-release.apk
           else
-            echo 'No signing secret configured. Debug APK is available; its CI signing key is temporary.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Persistent signing key is required. Refusing to distribute a differently signed APK.'
+            exit 1
           fi
       - name: APK checksums and signing information
         shell: bash
@@ -98,6 +103,7 @@ jobs:
         shell: bash
         run: rm -f "$RUNNER_TEMP/homenas-ci-debug.jks"
       - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
         with:
           name: lw.HomeNAS-Android-${{ github.run_number }}
           path: android/app/build/outputs/apk/
