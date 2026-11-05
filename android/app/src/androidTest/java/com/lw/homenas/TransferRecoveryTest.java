@@ -36,15 +36,16 @@ public class TransferRecoveryTest {
         try(MockWebServer server=new MockWebServer()) {
             server.setDispatcher(new Dispatcher(){
                 private MockResponse response(JSONObject object){return new MockResponse().setHeader("Content-Type","application/json").setBody(object.toString());}
-                private JSONObject task() throws Exception {return new JSONObject().put("id",taskId).put("state",remoteState[0]).put("asset_id",remoteState[0].equals("READY")?repeated('d',48):"").put("sha256",digest).put("size",Integer.toString(payload.length)).put("offset",Integer.toString(received.size())).put("error","");}
+                private JSONObject task() throws Exception {return new JSONObject().put("id",taskId).put("state",remoteState[0]).put("asset_id",remoteState[0].equals("READY")?repeated('d',48):"").put("sha256",digest).put("size",Integer.toString(payload.length)).put("offset",Integer.toString(received.size())).put("error","").put("folder_id","default").put("effective_folder_id","default").put("folder_name","默认文件夹").put("folder_defaulted",false);}
                 @Override public MockResponse dispatch(RecordedRequest request) {
                     try {
                         String path=request.getPath();
-                        if(path.equals("/api/v1/server"))return response(new JSONObject().put("server_id",serverId));
+                        if(path.equals("/api/v1/server"))return response(new JSONObject().put("server_id",serverId).put("version","0.5.0-dev").put("backup_folders",true));
                         if(path.equals("/api/v1/login")){JSONObject input=new JSONObject(request.getBody().readUtf8());assertEquals("native",input.getString("client"));return response(new JSONObject(me.toString()).put("token",token));}
                         if(!("Bearer "+token).equals(request.getHeader("Authorization")))return new MockResponse().setResponseCode(401).setBody("{}");
+                        if(path.equals("/api/v1/folders/default"))return response(new JSONObject().put("id","default").put("name","默认文件夹").put("can_write",true).put("can_edit",false).put("is_default",true));
                         if(path.equals("/api/v1/overview"))return response(new JSONObject().put("chunk_bytes","65536"));
-                        if(path.equals("/api/v1/uploads")) {JSONObject input=new JSONObject(request.getBody().readUtf8());assertEquals(digest,input.getString("sha256"));assertEquals(payload.length,Long.parseLong(input.getString("size")));return response(task());}
+                        if(path.equals("/api/v1/uploads")) {JSONObject input=new JSONObject(request.getBody().readUtf8());assertEquals(digest,input.getString("sha256"));assertEquals(payload.length,Long.parseLong(input.getString("size")));assertEquals("default",input.getString("folder_id"));return response(task());}
                         if(path.endsWith("/data")) {
                             if(Long.parseLong(request.getHeader("X-Upload-Offset"))!=received.size())return new MockResponse().setResponseCode(409).setBody("{}");
                             byte[] bytes=request.getBody().readByteArray();assertEquals(Protocol.hash(bytes,bytes.length),request.getHeader("X-Chunk-SHA256"));received.write(bytes);
