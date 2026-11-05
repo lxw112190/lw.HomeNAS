@@ -18,8 +18,13 @@ def digest(path):
 def verified(path, record):
     if not path.is_file():
         return False
-    if path.stat().st_size != record['bytes'] or digest(path) != record['sha256']:
-        raise ValueError('Pinned FFmpeg dependency differs: ' + path.name)
+    actual_size=path.stat().st_size
+    actual_hash=digest(path)
+    if actual_size != record['bytes'] or actual_hash != record['sha256']:
+        hint=''
+        if actual_size <= 4*1024*1024 and hashlib.sha256(path.read_bytes().replace(b'\r\n',b'\n')).hexdigest()==record['sha256']:
+            hint='\nGit CRLF conversion changed pinned bytes. Restore with tools/ffmpeg/** -text; do not change the pin or skip validation.'
+        raise ValueError('Pinned FFmpeg dependency differs: '+path.name+'\nExpected bytes/SHA256: '+str(record['bytes'])+' / '+record['sha256']+'\nActual bytes/SHA256:   '+str(actual_size)+' / '+actual_hash+hint)
     return True
 
 

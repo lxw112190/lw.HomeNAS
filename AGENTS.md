@@ -29,4 +29,4 @@
 - 完整包CI接续可信main分支Android成功运行，APK与模拟器job都要通过，Windows与APK固定同一提交，证书匹配android/signing-certificate.json；发布前验收实际ZIP。只公开附件齐全的草稿，已公开发布不覆盖，不自动提交版本或重建私钥。UI签名Secret可选，缺少时使用APK完整内置界面；自动UI revision使用1000000+Android CI序号。PowerShell辅助函数避免与python等外部命令同名并递归调用。
 
 - 签名UI资源发布前必须按已分发APK的真实解包规则检查每个ZIP条目（路径/类型/数量/展开大小/重复/必要入口），不能仅验证签名和HTTP。现有APK拒绝TXT，许可证应保留全文为HTML；使用递增revision修复已发布包，不原地覆盖同版本。运行tools/check-android.py和test_android_*check.py回归。
-- third_party的锁定哈希针对上游原始字节，.gitattributes必须保持third_party/** -text，避免Windows core.autocrlf改写依赖导致CI校验失败。不得通过跳过校验、更新为CRLF哈希或校验时忽略换行掩盖问题；发布测试应覆盖Windows Git检出过滤器和实际内容篡改拒绝。
+- 所有锁定哈希针对原始字节，.gitattributes必须同时保持third_party/** -text及tools/ffmpeg/** -text，FFmpeg许可证/README也受provenance.json锁定，不只保护C/C++源码。避免Windows core.autocrlf改写导致CI校验失败；不得跳过校验、改为CRLF哈希或校验时忽略换行。发布测试须合并两份锁定清单检查所有已入库文件的Git属性，并覆盖Windows检出过滤器及篡改拒绝。

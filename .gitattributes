@@ -1,3 +1,5 @@
 # Pinned upstream dependencies must retain their exact locked bytes on all runners.
 # In particular, Windows core.autocrlf must not rewrite these files during checkout.
 third_party/** -text
+# FFmpeg license/readme bytes are pinned by provenance.json as well.
+tools/ffmpeg/** -text

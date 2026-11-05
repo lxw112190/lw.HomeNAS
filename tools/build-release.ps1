@@ -9,10 +9,10 @@ $root=Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
 function Invoke-ReleasePython { & python.exe @args; if($LASTEXITCODE -ne 0){throw ('Python check failed: '+$args[0])} }
 Invoke-ReleasePython @('tools/check-dependencies.py')
+Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_release_*check.py')
 Invoke-ReleasePython @('tools/fetch-ffmpeg.py')
 Invoke-ReleasePython @('tools/check-android.py')
 Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_android_*check.py')
-Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_release_*check.py')
 & (Join-Path $PSScriptRoot 'build.ps1')
 if($LASTEXITCODE -ne 0){throw 'Windows Release build failed'}
 $exe=Join-Path $root 'build/app/Release/NasServer.exe'

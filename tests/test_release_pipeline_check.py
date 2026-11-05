@@ -63,6 +63,14 @@ class ReleaseChecks(unittest.TestCase):
         self.assertEqual(workflow['permissions']['contents'],'read');self.assertEqual(workflow['jobs']['publish']['permissions']['contents'],'write')
         self.assertIn("needs.select.outputs.publish == 'true'",workflow['jobs']['publish']['if'])
 
+    def test_ffmpeg_crlf_pin_remains_strict_with_diagnostic(self):
+        with tempfile.TemporaryDirectory() as d:
+            file=Path(d)/'COPYING.txt';pin={'bytes':5,'sha256':hashlib.sha256(b'line\n').hexdigest()}
+            file.write_bytes(b'line\r\n')
+            with self.assertRaisesRegex(ValueError,'Git CRLF conversion'):ffmpeg.verified(file,pin)
+            file.write_bytes(b'other\n')
+            with self.assertRaisesRegex(ValueError,'differs'):ffmpeg.verified(file,pin)
+
     def test_selection_and_draft_publishing_with_fake_api(self):
         node=shutil.which('node');self.assertIsNotNone(node,'Node is required for release-workflow checks')
         subprocess.run([node,str(ROOT/'tests/release_workflow.test.cjs')],check=True,cwd=ROOT)
