@@ -1,11 +1,12 @@
-﻿param([string]$Executable,[string]$ClientReleaseDirectory)
+﻿param([string]$Executable,[string]$ClientReleaseDirectory,[string]$ReleaseLabel,[string]$ResultFile)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 if (-not $Executable) { $Executable = Join-Path $projectRoot 'out/Release/NasServer.exe' }
 if (-not (Test-Path -LiteralPath $Executable)) { throw '请先生成 Release x64' }
 $version = (& $Executable --version | Out-String).Trim()
 if ($LASTEXITCODE -ne 0 -or $version -notmatch '^\d+\.\d+\.\d+(-[a-z0-9.-]+)?$') { throw '无法读取程序版本' }
-$name = 'lw.HomeNAS-' + $version + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-win-x64'
+$label=if($ReleaseLabel){if($ReleaseLabel -notmatch '^ci[1-9][0-9]*$'){throw 'ReleaseLabel must be ci followed by a positive run number'};$ReleaseLabel}else{Get-Date -Format 'yyyyMMdd-HHmmss'}
+$name = 'lw.HomeNAS-' + $version + '-' + $label + '-win-x64'
 $stage = Join-Path $projectRoot ('deliveries/' + $name)
 if (Test-Path -LiteralPath $stage) { throw '打包目标已存在' }
 New-Item -ItemType Directory -Path $stage | Out-Null
@@ -24,7 +25,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $stage -Recu
 # Copy source explicitly: never ship local Gradle caches, build outputs or signing/config files.
 $androidStage = Join-Path $stage 'android'
 New-Item -ItemType Directory -Path (Join-Path $androidStage 'app') -Force | Out-Null
-foreach ($file in @('README.md','build.gradle','settings.gradle','gradle.properties','project.example.json')) {
+foreach ($file in @('README.md','build.gradle','settings.gradle','gradle.properties','project.example.json','signing-certificate.json')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot ('android/'+$file)) -Destination $androidStage
 }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'android/app/build.gradle') -Destination (Join-Path $androidStage 'app')
@@ -67,4 +68,5 @@ Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel
 $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText(($archive+'.sha256'), ($hash+'  '+[IO.Path]::GetFileName($archive)+"`n"), [Text.UTF8Encoding]::new($false))
 Write-Output $archive
+if($ResultFile){[IO.File]::WriteAllText([IO.Path]::GetFullPath($ResultFile),([pscustomobject]@{archive=$archive;stage=$stage;sha256=$hash;version=$version}|ConvertTo-Json),[Text.UTF8Encoding]::new($false))}
 Write-Output ('SHA256: '+$hash)

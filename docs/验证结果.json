@@ -346,5 +346,50 @@
       "migration": "test-results/端到端-21ddb526b3",
       "timeline": "test-results/端到端-e071c76f25"
     }
+  },
+  "delivery_CI12": {
+    "server_version": "0.4.0-dev",
+    "apk_version": "0.7.0-dev",
+    "versionCode": 10,
+    "nativeApi": 4,
+    "variant": "release",
+    "resource_revision": 7,
+    "resource_minNative": 4,
+    "apk_sha256": "28ae0f8cac674c6a6316532f92a9097d78d0f908a9c8ab01758df94531d0ecb5",
+    "certificate_sha256": "4ee768356e5a938d9a97c796a98184bbd70eac45c34fe112ded09df6a0004dc5",
+    "ci_run": "https://github.com/lxw112190/lw.HomeNAS/actions/runs/41948167962",
+    "ci_apk_job": "passed",
+    "ci_android15_emulator_tests": 7,
+    "physical_device_tested": false,
+    "packaged_defaults": {
+      "allow_external_hosts": true,
+      "allow_insecure_lan": true,
+      "initial_username": "admin",
+      "initial_password": "admin123",
+      "existing_password_preserved": true
+    },
+    "package_checks": 20,
+    "album_checks": 13,
+    "local_android_host_checks": 18,
+    "user_reported_device_validation": "User reports all tested with no problems; agent did not install on a physical device."
+  },
+  "release_automation": {
+    "workflow": ".github/workflows/release.yml",
+    "status": "implemented; first remote execution pending user push",
+    "trigger": "successful trusted main Android APK run including emulator",
+    "publication": "verified draft then public prerelease; existing public assets immutable",
+    "local_full_pipeline": "passed using real CI12 APK, pinned fixed certificate and same commit",
+    "signed_ui_package_checks": 17,
+    "builtin_ui_package_checks": 17,
+    "native_smoke_checks": 84,
+    "album_checks": 13,
+    "timeline_checks": 9,
+    "android_host_checks": 18,
+    "python_release_checks": 5,
+    "node_release_checks": 20,
+    "GitHub_mutation_performed": false,
+    "optional_resource_secret": "UI_SIGNING_KEY_BASE64; missing uses complete APK builtin UI",
+    "signed_fixture": "test-results/端到端-84b41f98b8",
+    "builtin_fixture": "test-results/端到端-0beb5fade0"
   }
 }

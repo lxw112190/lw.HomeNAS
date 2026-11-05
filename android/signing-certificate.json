@@ -1,0 +1,7 @@
+{
+  "package": "com.lxw.homenas",
+  "certificate_sha256": "4ee768356e5a938d9a97c796a98184bbd70eac45c34fe112ded09df6a0004dc5",
+  "first_verified_artifact": "CI12",
+  "debug_release_same_certificate": true,
+  "note": "Public certificate fingerprint only. Keep future APK signing identity unchanged; no private key is stored here."
+}

@@ -9,7 +9,7 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
+    paths: ['android/**', 'src/**', 'web/**', 'config/**', 'deploy/**', 'tools/**', 'tests/**', 'third_party/**', 'CMakeLists.txt', '.github/workflows/android.yml', '.github/workflows/release.yml', '.github/scripts/**']
   pull_request:
     paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
 

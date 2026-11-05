@@ -4,6 +4,7 @@
 /logs/
 /deliveries/
 /test-results/
+/incoming-android/
 /.vs/
 *.user
 *.suo

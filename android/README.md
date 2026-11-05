@@ -1,3 +1,5 @@
+> 当前默认分发为已核验 **CI12 Release 0.7.0-dev/code10/nativeApi4**，配套r7。Debug与Release证书一致，固定签名基准记录在[公开证书指纹](signing-certificate.json)。构建、JVM单元测试和Android15模拟器7项检查通过，真机仍待验证。[部署说明](../docs/20261105-CI12安卓安装包发布.md)。下文“待CI”及CI9等信息均为历史记录。
+
 > 当前源码 **0.7.0-dev / code10 / nativeApi4**，新增图集、时间线/图集切换、输入去焦点外框及分层返回。签名资源 **r7/minNative4** 已准备；新 APK 需 CI 编译、真机验证。旧活动资源在首次升级原生协议时让位于新内置界面。[本轮说明](../docs/20261105-图集与手机返回键.md)。下列 CI9/code9 等均为历史记录。
 
 > 默认 APK 已更新为核验过的 **CI9 0.6.2-dev/code9**，配套 r6 与电脑端 FFmpeg。源码/页面与 APK 匹配，测试报告不在 Artifact 内，本机未运行 APK。[部署与签名限制](../docs/20261105-CI9安卓安装包发布.md)。下文“待 CI”及 CI7/CI5 的内容为历史记录。

@@ -2,9 +2,11 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-当前开发源码：电脑服务 **0.4.0-dev**，Android **0.7.0-dev / versionCode 10 / nativeApi4**。新增图集管理、时间线/图集切换、无外框输入与分层返回键，详见[本轮使用与验证](docs/20261105-图集与手机返回键.md)。Windows 已编译验证；新 APK 待 CI 编译和真机测试。
+当前完整部署版本：电脑服务 **0.4.0-dev**，默认安卓 **CI12 Release 0.7.0-dev / code10 / nativeApi4**，签名页面资源 **r7** 与 FFmpeg 视频封面依赖。APK签名、内容摘要、版本、内置页面和资源公钥均已核验；GitHub Actions构建、单元测试及Android15模拟器7项测试通过，用户已反馈本轮全部测试无问题。[部署及签名说明](docs/20261105-CI12安卓安装包发布.md)。
 
-当前已核验的历史完整部署包仍为电脑服务 **0.3.2-dev + CI9 APK 0.6.2-dev/code9 + r6**，尚不包含图集功能。[历史部署与升级说明](docs/20261105-CI9安卓安装包发布.md)。
+已增加 **Full package and GitHub Release** 自动工作流：Android CI成功后，验证同提交APK、构建和验收Windows完整包，再发布GitHub预发布版；也可手动仅打包。沿用现有固定签名，无需新建APK密钥。[启用与使用说明](docs/20261105-自动打包与发布CI.md)。
+
+包含图集管理、时间线/图集切换、输入去焦点外框及分层返回键，详见[使用说明](docs/20261105-图集与手机返回键.md)。历史CI9/r6包不含这些新功能。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
