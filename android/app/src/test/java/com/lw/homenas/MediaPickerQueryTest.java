@@ -24,17 +24,25 @@ public class MediaPickerQueryTest {
     public static class Provider extends ContentProvider {
         final List<long[]> rows=new ArrayList<>();boolean ignoreOrder;String requestedSort="";
         @Override public boolean onCreate(){return true;}
+        private static boolean isItem(Uri uri){return uri.getPath()!=null&&uri.getPath().matches(".*/(images|video)/media/[0-9]+$");}
+        private static Object value(long[] row,String column){switch(column){case "_id":return row[0];case "date_modified":return row[1];case "_display_name":return "fixture.jpg";case "_size":return 123L;case "volume_name":return "external_primary";case "bucket_display_name":return "CI";default:return 32L;}}
+        private Cursor itemMetadata(Uri uri,String[] projection){
+            String[] columns=projection==null?new String[]{"_display_name","_size","date_modified","volume_name","_id"}:projection;
+            MatrixCursor result=new MatrixCursor(columns);
+            for(long[] row:rows)if(Long.toString(row[0]).equals(uri.getLastPathSegment())){Object[] values=new Object[columns.length];for(int i=0;i<columns.length;i++)values[i]=value(row,columns[i]);result.addRow(values);}
+            return result;
+        }
         @Override public Cursor query(Uri uri,String[] projection,Bundle options,CancellationSignal cancel) {
-            if(projection==null){MatrixCursor result=new MatrixCursor(new String[]{"_display_name","_size","date_modified"});for(long[] row:rows)if(Long.toString(row[0]).equals(uri.getLastPathSegment()))result.addRow(new Object[]{"fixture.jpg",123L,row[1]});return result;}
+            if(isItem(uri))return itemMetadata(uri,projection);
             requestedSort=options.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER,"");
             String selection=options.getString(ContentResolver.QUERY_ARG_SQL_SELECTION,"");String[] args=options.getStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS);
             List<long[]> matches=new ArrayList<>();
             for(long[] row:rows){if(selection.contains("date_modified>=?")){if(row[1]<Long.parseLong(args[0])||row[1]>=Long.parseLong(args[1]))continue;}else if(selection.contains("date_modified<?")&&row[1]>=Long.parseLong(args[0]))continue;matches.add(row);}
             if(!ignoreOrder&&requestedSort.equals("date_modified DESC, _id DESC"))matches.sort((a,b)->{int order=Long.compare(b[1],a[1]);return order!=0?order:Long.compare(b[0],a[0]);});
             int limit=options.getInt(ContentResolver.QUERY_ARG_LIMIT,Integer.MAX_VALUE);MatrixCursor result=new MatrixCursor(projection);
-            for(long[] row:matches.subList(0,Math.min(limit,matches.size()))){Object[] values=new Object[projection.length];for(int i=0;i<projection.length;i++){switch(projection[i]){case "_id":values[i]=row[0];break;case "date_modified":values[i]=row[1];break;case "_display_name":values[i]="fixture.jpg";break;case "_size":values[i]=123L;break;case "volume_name":values[i]="external_primary";break;case "bucket_display_name":values[i]="CI";break;default:values[i]=32L;}}result.addRow(values);}return result;
+            for(long[] row:matches.subList(0,Math.min(limit,matches.size()))){Object[] values=new Object[projection.length];for(int i=0;i<projection.length;i++)values[i]=value(row,projection[i]);result.addRow(values);}return result;
         }
-        @Override public Cursor query(Uri u,String[] p,String s,String[] a,String order){throw new AssertionError("Use explicit Bundle query");}
+        @Override public Cursor query(Uri u,String[] p,String s,String[] a,String order){if(isItem(u))return itemMetadata(u,p);throw new AssertionError("Use explicit Bundle query for collection listings");}
         @Override public String getType(Uri u){return "image/jpeg";}
         @Override public Uri insert(Uri u,ContentValues v){throw new UnsupportedOperationException();}
         @Override public int update(Uri u,ContentValues v,String s,String[] a){throw new UnsupportedOperationException();}
@@ -56,6 +64,15 @@ public class MediaPickerQueryTest {
     }
     @Test public void providerIgnoringOrderMustFailInsteadOfSilentlyHidingRecentPhotos() throws Exception {
         provider.ignoreOrder=true;try{picker.days(session,"",true,new RunControl(30000));fail("Unordered provider was silently accepted");}catch(java.io.IOException expected){assertTrue(expected.getMessage().contains("日期"));}
+    }
+    @Test public void itemMetadataSupportsLegacyAndBundleQueries() throws Exception {
+        Uri uri=Uri.parse("content://media/external_primary/images/media/1");
+        MediaCatalog.Info info=MediaCatalog.describe(context.getContentResolver(),uri);
+        assertEquals("fixture.jpg",info.name);assertEquals(123L,info.size);assertEquals(provider.rows.get(0)[1]*1000L,info.modified);
+        try(Cursor row=context.getContentResolver().query(uri,new String[]{"volume_name","_id"},new Bundle(),null)){assertNotNull(row);assertTrue(row.moveToFirst());assertEquals("external_primary",row.getString(0));assertEquals(1L,row.getLong(1));assertFalse(row.moveToNext());}
+    }
+    @Test public void collectionLegacyQueryStillFailsTheFixtureContract() {
+        assertThrows(AssertionError.class,()->provider.query(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,new String[]{"_id"},null,null,null));
     }
     @Test public void wholeDayExceptOneDoesNotEnqueueTheExcludedPhoto() throws Exception {
         long when=provider.rows.get(0)[1];provider.rows.clear();provider.rows.add(new long[]{1,when});provider.rows.add(new long[]{2,when});
