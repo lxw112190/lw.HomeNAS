@@ -14,11 +14,16 @@ if ($plan.Account -ne 'NT SERVICE\lw.HomeNAS') { throw 'Service account mismatch
 if (-not (Test-Path -LiteralPath $plan.Config)) { throw 'Missing runtime config' }
 $httpPlan = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'deploy/service.ps1') -Action Configure -AllowInsecureLan -PlanOnly | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0 -or -not $httpPlan.AllowInsecureLan -or -not $httpPlan.BinaryPath.EndsWith(' --allow-insecure-lan') -or $plan.BinaryPath.Contains('--allow-insecure-lan')) { throw 'HTTP/default service mode plans mismatch' }
+$httpsPlan = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'deploy/service.ps1') -Action Configure -DisableInsecureLan -PlanOnly | ConvertFrom-Json
+if($LASTEXITCODE -ne 0 -or $httpsPlan.AllowInsecureLan -or -not $httpsPlan.BinaryPath.EndsWith(' --no-allow-insecure-lan')){throw 'HTTPS service mode must override a true configuration'}
+$config = Get-Content -LiteralPath $plan.Config -Raw -Encoding UTF8 | ConvertFrom-Json
+$expectedHttp=if($config.PSObject.Properties.Name -contains 'allow_insecure_lan'){[bool]$config.allow_insecure_lan}else{$true}
+if($plan.AllowInsecureLan -ne $expectedHttp){throw 'Default service plan must follow config, defaulting to true'}
 $entries = @('install_service.bat','start_service.bat','stop_service.bat','restart_service.bat','status_service.bat','uninstall_service.bat','start_console.bat','install_http_service.bat','configure_http_service.bat','configure_https_service.bat','start_console_http.bat','set_admin_password.bat','open_firewall.bat','remove_firewall.bat','status_firewall.bat','import_android.bat')
 foreach ($file in $entries) {
     if (-not (Test-Path -LiteralPath (Join-Path $root ('deploy/'+$file)))) { throw ('Missing script '+$file) }
 }
-foreach ($suffix in @('', ' --allow-insecure-lan')) {
+foreach ($suffix in @('', ' --allow-insecure-lan', ' --no-allow-insecure-lan')) {
 $process = [Diagnostics.Process]::new()
 $process.StartInfo.FileName = $plan.Executable
 $process.StartInfo.Arguments = ('--service --config "'+$plan.Config+'"'+$suffix)
@@ -32,7 +37,7 @@ $process.WaitForExit()
 if ($process.ExitCode -eq 0 -or $result -notmatch '1063') { throw 'Service mode must reject non-SCM startup with 1063' }
 $process.Dispose()
 }
-Write-Output ('Checked '+$files.Count+' PowerShell files, '+$entries.Count+' batch entry points, default/HTTP plans, Unicode/spaced paths and both non-SCM modes.')
+Write-Output ('Checked '+$files.Count+' PowerShell files, '+$entries.Count+' batch entry points, config/HTTP/HTTPS plans, Unicode/spaced paths and three non-SCM modes.')
 Write-Output 'No service, firewall rule or ACL was installed/changed by these checks.'
 
 foreach ($action in @('Open','Remove')) {

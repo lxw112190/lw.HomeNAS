@@ -15,4 +15,6 @@ Android专用Runtime沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2A
 
 Android APK内置许可说明与Apache-2.0全文，见android/app/src/main/assets/www/licenses。未包含Android SDK、Google Build Tools或任何签名私钥。各组件版权与许可仍归原作者；以实际Gradle构建解析结果为准。
 
-当前没有集成 FFmpeg 或 AI 模型。后续增加时单独记录版本与分发内容。
+CI9 Windows 完整部署包新增独立命令行工具 FFmpeg 7.1（Gyan essentials Windows x64，来自 imageio-ffmpeg 0.6.0 wheel），仅用于视频封面截帧。该实际构建启用 GPL 和 version3，许可为 GPL-3.0-or-later，不将其误标为 LGPL-only。原始 EXE 未修改，版本/构建参数、GPLv3全文、来源/摘要记录和 FFmpeg 7.1 上游源码归档位于 `tools/ffmpeg/`；FFmpeg 和各启用组件版权归各自作者。上游说明：[FFmpeg](https://ffmpeg.org/)、[Gyan builds](https://www.gyan.dev/ffmpeg/builds/)、[ImageIO 分发](https://github.com/imageio/imageio-ffmpeg/tree/v0.6.0)。
+
+未集成 AI 模型。

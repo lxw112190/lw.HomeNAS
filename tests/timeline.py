@@ -1,7 +1,8 @@
 """Timeline paging and authoritative account-scoped backup status on a real isolated NAS."""
-import json,sqlite3,requests,hashlib
+import json,sqlite3,requests,hashlib,argparse
 from smoke import Harness,ROOT
-h=Harness(ROOT/'out/Release/NasServer.exe')
+p=argparse.ArgumentParser();p.add_argument('--exe',type=__import__('pathlib').Path,default=ROOT/'out/Release/NasServer.exe')
+h=Harness(p.parse_args().exe)
 try:
  h.start();password=(h.home/'数据/initial-admin-password.txt').read_text(encoding='utf-8').strip();h.post('login',{'username':'admin','password':password})
  member=h.post('users',{'username':'timeline_member','display_name':'fixture','role':'member','password':'test123'},status=201)

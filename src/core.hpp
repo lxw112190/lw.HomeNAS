@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <map>
 #include <stdexcept>
 #include <mutex>
@@ -18,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.3.1-dev";
+constexpr const char* Version = "0.4.0-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -31,6 +32,7 @@ struct Config {
     fs::path data, web, ffmpeg;
     int httpPort = 8787, httpsPort = 9443;
     bool allowExternalHosts = false;
+    bool allowInsecureLan = true;
     uint64_t chunkBytes = 8388608, minFree = 268435456, maxFile = 137438953472ULL;
     static Config load(const fs::path& path);
 };
@@ -107,6 +109,10 @@ public:
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
     json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created");
+    json albums(const std::string& before,const Identity& who);
+    json album(const std::string& id,const Identity& who,bool edit=false);
+    json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
+    json changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who);
     json sourceStatus(const json& input, const Identity& who);
     json asset(const std::string& id);
     json tasks(const Identity& who);

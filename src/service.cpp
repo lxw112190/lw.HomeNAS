@@ -7,7 +7,7 @@ namespace nas {
 namespace {
 constexpr const wchar_t* ServiceName=L"lw.HomeNAS";
 fs::path serviceConfig;
-bool serviceInsecureLan=false;
+std::optional<bool> serviceInsecureLan;
 SERVICE_STATUS_HANDLE statusHandle=nullptr;
 SERVICE_STATUS status{};
 std::mutex statusMutex;
@@ -45,7 +45,7 @@ void WINAPI serviceMain(DWORD,wchar_t**) {
         if(fs::exists(logPath)&&fs::file_size(logPath)>4*1024*1024){std::error_code error;fs::remove(config.data/"logs/service.previous.log",error);fs::rename(logPath,config.data/"logs/service.previous.log");}
         log.open(logPath,std::ios::app|std::ios::binary);if(!log)throw std::runtime_error("Cannot open service log");
         std::cout.rdbuf(log.rdbuf());std::cerr.rdbuf(log.rdbuf());std::cout<<"\nService starting: "<<millis()<<std::endl;
-        std::cout<<"LAN HTTP mode: "<<(serviceInsecureLan?"enabled (unencrypted)":"disabled; HTTP management is loopback only")<<std::endl;
+        std::cout<<"LAN HTTP mode: "<<(serviceInsecureLan.value_or(config.allowInsecureLan)?"enabled (unencrypted)":"disabled; HTTP management is loopback only")<<std::endl;
         int result=runServer(config,serviceInsecureLan,[&]{finishStartup();report(SERVICE_RUNNING);});
         if(result!=0)exit=ERROR_SERVICE_SPECIFIC_ERROR;
         std::cout<<"Service stopped: "<<millis()<<std::endl;
@@ -60,7 +60,7 @@ void WINAPI serviceMain(DWORD,wchar_t**) {
     std::cout.rdbuf(originalOut);std::cerr.rdbuf(originalError);if(log.is_open())log.close();report(SERVICE_STOPPED,exit);
 }
 }
-int runWindowsService(const fs::path& config,bool insecureLan) {
+int runWindowsService(const fs::path& config,std::optional<bool> insecureLan) {
     serviceConfig=fs::absolute(config);
     serviceInsecureLan=insecureLan;
     SERVICE_TABLE_ENTRYW table[]={{const_cast<wchar_t*>(ServiceName),serviceMain},{nullptr,nullptr}};

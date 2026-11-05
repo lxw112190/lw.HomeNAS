@@ -102,6 +102,10 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
     migrateAccounts();
+    db.exec(R"SQL(
+      CREATE TABLE IF NOT EXISTS albums(id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',owner_id TEXT NOT NULL REFERENCES users(id),created INTEGER NOT NULL,updated INTEGER NOT NULL,cover_id TEXT NOT NULL DEFAULT '');
+      CREATE TABLE IF NOT EXISTS album_items(album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,asset_id TEXT NOT NULL REFERENCES assets(id),PRIMARY KEY(album_id,asset_id));
+    )SQL");
     db.exec("CREATE INDEX IF NOT EXISTS asset_pending_video ON assets(created,id) WHERE state='READY' AND category='video' AND preview='PENDING';");
     db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});}
 }

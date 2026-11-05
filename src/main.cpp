@@ -34,17 +34,18 @@ int initializeAdmin(const nas::Config& config) {
 
 int wmain(int argc,wchar_t** argv) {
     try {
-        auto path=nas::executableDirectory()/"config/server.json";bool insecure=false,service=false,adminPassword=false;
+        auto path=nas::executableDirectory()/"config/server.json";std::optional<bool> insecure;bool service=false,adminPassword=false;
         for(int i=1;i<argc;++i){std::wstring arg=argv[i];
             if(arg==L"--config"&&i+1<argc)path=nas::fs::absolute(argv[++i]);
             else if(arg==L"--allow-insecure-lan")insecure=true;
+            else if(arg==L"--no-allow-insecure-lan")insecure=false;
             else if(arg==L"--service")service=true;
             else if(arg==L"--initialize-admin")adminPassword=true;
             else if(arg==L"--version"){nas::consoleText(std::string(nas::Version)+"\n");return 0;}
             else if(arg==L"--sha256"&&i+1<argc){nas::consoleText(nas::hashFile(nas::fs::path(argv[++i]))+"\n");return 0;}
-            else throw std::runtime_error("Usage: NasServer.exe [--config file] [--service] [--allow-insecure-lan] [--initialize-admin] [--version] [--sha256 file]");
+            else throw std::runtime_error("Usage: NasServer.exe [--config file] [--service] [--allow-insecure-lan|--no-allow-insecure-lan] [--initialize-admin] [--version] [--sha256 file]");
         }
-        if(adminPassword){if(service||insecure)throw std::runtime_error("--initialize-admin is an offline maintenance command");return initializeAdmin(nas::Config::load(path));}
+        if(adminPassword){if(service||insecure.has_value())throw std::runtime_error("--initialize-admin is an offline maintenance command");return initializeAdmin(nas::Config::load(path));}
         if(service)return nas::runWindowsService(path,insecure);
         return nas::runServer(nas::Config::load(path),insecure);
     }catch(const std::exception& error){nas::consoleText(std::string("启动失败：")+error.what()+"\n",true);return 1;}

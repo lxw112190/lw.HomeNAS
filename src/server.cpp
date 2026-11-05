@@ -135,6 +135,10 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/uploads/([a-f0-9]{48})/cancel",[&store](const auto& request,auto& response){body(request);reply(response,store.cancel(request.matches[1],store.authenticate(token(request))));});
     server.Get("/api/v1/tasks",[&store](const auto& request,auto& response){reply(response,store.tasks(store.authenticate(token(request))));});
     server.Get("/api/v1/tasks/page",[&store](const auto& request,auto& response){reply(response,store.taskPage(store.authenticate(token(request)),request.get_param_value("before"),request.get_param_value("filter")));});
+    server.Get("/api/v1/albums",[&store](const auto& request,auto& response){reply(response,store.albums(request.get_param_value("before"),store.authenticate(token(request))));});
+    server.Post("/api/v1/albums",[&store](const auto& request,auto& response){reply(response,store.changeAlbum("","create",body(request),store.authenticate(token(request))),201);});
+    server.Get("/api/v1/albums/([a-f0-9]{48})/items",[&store](const auto& request,auto& response){reply(response,store.albumItems(request.matches[1],request.get_param_value("before"),request.get_param_value("type"),request.get_param_value("q"),store.authenticate(token(request))));});
+    server.Post("/api/v1/albums/([a-f0-9]{48})/(edit|delete|add|remove|cover)",[&store](const auto& request,auto& response){reply(response,store.changeAlbum(request.matches[1],request.matches[2],body(request),store.authenticate(token(request))));});
     server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");reply(response,store.assets(request.get_param_value("before"),request.get_param_value("type"),search,request.has_param("limit")?static_cast<int>(std::min<uint64_t>(number(json{{"limit",request.get_param_value("limit")}},"limit"),101)):60,request.has_param("order")?request.get_param_value("order"):"created"));});
     server.Get("/api/v1/assets/([a-f0-9]{48})/original",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);auto type=row["mime"].template get<std::string>();serveFile(request,response,store.originalPath(row),type,row["name"],request.get_param_value("download")=="1"||type=="application/octet-stream");});
     server.Get("/api/v1/assets/([a-f0-9]{48})/metadata",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);json details={{"id",row["id"]},{"name",row["name"]},{"mime",row["mime"]},{"size",row["size"]},{"sha256",row["sha256"]},{"modified",row["modified"]},{"created",row["created"]},{"image",nullptr}};if(row["category"]=="image"){try{details["image"]=imageMetadata(store.originalPath(row));}catch(...){details["image"]={{"available",false},{"exif",json::object()}};}}reply(response,details);});
@@ -152,7 +156,8 @@ void requestServerStop() {
     if(runningStore)runningStore->stopping=true;
     if(httpServer)httpServer->stop();if(tlsServer)tlsServer->stop();
 }
-int runServer(Config config,bool insecureLan,const std::function<void()>& ready) {
+int runServer(Config config,std::optional<bool> insecureLanOverride,const std::function<void()>& ready) {
+    const bool insecureLan=insecureLanOverride.value_or(config.allowInsecureLan);
     extern void initializeTlsThreads(); initializeTlsThreads();
     fs::create_directories(config.data);
     auto lockPath=config.data/"instance.lock";
@@ -180,7 +185,7 @@ int runServer(Config config,bool insecureLan,const std::function<void()>& ready)
         if(!ready)banner<<"首次管理员密码："<<readText(config.data/"initial-admin-password.txt")<<"登录后请修改密码。\n";
         else banner<<"首次管理员密码位于数据目录的 initial-admin-password.txt，不写入服务日志。\n";
     }
-    if(insecureLan)banner<<"当前已显式开启局域网 HTTP 试用模式，传输未加密，仅用于前台联调。\n";
+    if(insecureLan)banner<<"当前已开启局域网 HTTP，传输未加密；HTTPS 同时保留。\n";
     if(config.allowExternalHosts)banner<<"公网地址测试已开启：接受公网IP或域名Host，不限本机网卡地址；账号登录仍需用户名和密码。\n";
     banner<<"按 Ctrl+C 停止服务；关闭浏览器不影响服务。\n";consoleText(banner.str());
     std::thread local([&]{http.listen_after_bind();});

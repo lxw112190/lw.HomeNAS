@@ -1,0 +1,31 @@
+{
+  "COPYING.GPLv3.txt": {
+    "url": "https://raw.githubusercontent.com/FFmpeg/FFmpeg/n7.1/COPYING.GPLv3",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+    "bytes": 35147
+  },
+  "ffmpeg-7.1.tar.xz": {
+    "url": "https://ffmpeg.org/releases/ffmpeg-7.1.tar.xz",
+    "sha256": "40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6",
+    "bytes": 11011364
+  },
+  "imageio-ffmpeg-LICENSE.txt": {
+    "url": "https://raw.githubusercontent.com/imageio/imageio-ffmpeg/v0.6.0/LICENSE",
+    "sha256": "eca73421d0c905a92e952a553d4d58919c5a507c2c2c76e3c0cf9ba408c299e4",
+    "bytes": 1317
+  },
+  "imageio-binaries-README.md": {
+    "url": "https://raw.githubusercontent.com/imageio/imageio-ffmpeg/v0.6.0/imageio_ffmpeg/binaries/README.md",
+    "sha256": "b0d36dfb1ba1ea5ca873a6f6dbcc2295b7a7944aea875071d91a6aad1870e77d",
+    "bytes": 45
+  },
+  "ffmpeg.exe": {
+    "sha256": "2ce797a0f88d7f067180338fb227f7b1928ea727bd9a4d7a1d022f7c52af71a3",
+    "bytes": 87638016,
+    "origin_wheel": "imageio_ffmpeg-0.6.0-py3-none-win_amd64.whl",
+    "origin_wheel_sha256": "02fa47c83703c37df6bfe4896aab339013f62bf02c5ebf2dce6da56af04ffc0a",
+    "upstream_builder": "Gyan 7.1 essentials",
+    "license": "GPL-3.0-or-later",
+    "modified": false
+  }
+}

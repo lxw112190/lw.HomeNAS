@@ -1,6 +1,6 @@
 {
   "date": "2026-11-04",
-  "version": "0.3.1-dev",
+  "version": "0.3.2-dev",
   "target": "Windows 10/11 x64, MSVC v143, C++17",
   "native_solution_build": "passed",
   "cmake_release_build": "historical pass; current 0.3.0 build validated via VS2022 solution",
@@ -264,19 +264,21 @@
     "media_integration_checks": 13,
     "host_android_checks": 18,
     "java_grammar_files": 31,
-    "native_android_tests": "0.6.2/code9 pending CI",
-    "new_deployment_package_built": false,
+    "native_android_tests": "CI9 artifact received; reports not included; physical tests pending",
+    "new_deployment_package_built": true,
     "browser_tests": "real isolated NAS for EXIF/video cover/H264; simulated native bridge for Android UI",
-    "user_service_or_firewall_modified": false
+    "user_service_or_firewall_modified": false,
+    "deployment_checks": 15
   },
   "current_round_evidence": {
-    "smoke": "端到端-27fc8bd681",
+    "smoke": "端到端-8d681f1884",
     "timeline": "端到端-db65b9a97d",
     "pagination": "端到端-03dc866dde",
     "bootstrap": "端到端-2d057cfc16",
-    "migration": "端到端-44256db591",
-    "media_integration": "端到端-6652ca2d20",
-    "browser": "Screenshots in docs/images; no private user media used"
+    "migration": "端到端-94c2751b3d",
+    "media_integration": "端到端-6c7fa93dba",
+    "browser": "Screenshots in docs/images; no private user media used",
+    "http_admin": "端到端-e44d635f4d"
   },
   "CI7_package_validation": {
     "apk": "0.6.0-dev/code7",
@@ -288,5 +290,61 @@
     "APK_signature": "v2 and content digest verified",
     "private_keys_or_user_data_in_package": false,
     "Android_runtime_tested": false
+  },
+  "CI9_package_validation": {
+    "version": "0.3.2-dev",
+    "apk": "0.6.2-dev/code9",
+    "resource_revision": 6,
+    "bundled_ffmpeg": "7.1",
+    "deployment_checks": 15,
+    "default_external_hosts": true,
+    "fresh_bootstrap_password": "public bootstrap admin123; existing passwords retained",
+    "private_user_data_or_signing_keys_shipped": false,
+    "physical_android_runtime_test": false,
+    "default_lan_http": true
+  },
+  "http_configuration": {
+    "default": true,
+    "field": "allow_insecure_lan",
+    "CLI_override": true,
+    "checks": 19,
+    "actual_bind_addresses_verified": true,
+    "HTTPS_retained": true,
+    "service_checks": "plan/parser and non-SCM only; no service/firewall mutation",
+    "evidence": "端到端-e9a1e6084d",
+    "deployment_checks": 15
+  },
+  "albums_20261105": {
+    "server": "0.4.0-dev",
+    "android_source": "0.7.0-dev",
+    "versionCode": 10,
+    "nativeApi": 4,
+    "windows_release_build": "passed",
+    "album_checks": 13,
+    "upload_auth_recovery_checks": 84,
+    "legacy_migration_checks": 13,
+    "timeline_checks": 9,
+    "android_host_checks": 18,
+    "java_syntax_files": 31,
+    "android_compiled_locally": false,
+    "CI": "pending",
+    "physical_device_tested": false,
+    "browser_web_flow": "create/add/cover passed on isolated server",
+    "browser_android_flow": "mock native bridge + real isolated album API; create/choose/add/back hierarchy passed",
+    "viewport_width": 390,
+    "horizontal_overflow": false,
+    "resource": {
+      "revision": 7,
+      "minNative": 4,
+      "size": 35948,
+      "sha256": "934f2b19c10d3cf0044fc4b5ebfe9dc7c8d349bdabaff7ece6a31984d83971d8"
+    },
+    "resource_signature_and_source_match": "passed",
+    "evidence": {
+      "albums": "test-results/端到端-d3c7898d6d",
+      "smoke": "test-results/端到端-907eb668fc",
+      "migration": "test-results/端到端-21ddb526b3",
+      "timeline": "test-results/端到端-e071c76f25"
+    }
   }
 }

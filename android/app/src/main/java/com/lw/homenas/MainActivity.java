@@ -147,7 +147,7 @@ public final class MainActivity extends Activity {
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",3).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",4).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true);
         String pem=settings.prefs.getString("pending_cert","");
@@ -161,6 +161,23 @@ public final class MainActivity extends Activity {
     private Object dispatch(JSONObject input) throws Exception {
         String action=input.getString("action");JSONObject data=input.optJSONObject("data");if(data==null)data=new JSONObject();
         switch(action) {
+            case "finishActivity": ui(this::finish);return new JSONObject();
+            case "albumList": case "albumItems": case "albumChange": {
+                boolean write=action.equals("albumChange");Settings.Session session=requireSession(write);String albumId=data.optString("albumId","");
+                if(!albumId.isEmpty()&&!Protocol.assetId(albumId))throw new IllegalArgumentException("图集标识无效");
+                JSONObject result;
+                if(write){String operation=data.optString("operation");if(!operation.matches("create|edit|delete|add|remove|cover")||(!operation.equals("create")&&albumId.isEmpty()))throw new IllegalArgumentException("图集操作无效");
+                    JSONObject value=data.optJSONObject("value");if(value==null)value=new JSONObject();
+                    try{result=api(session).post(operation.equals("create")?"albums":"albums/"+albumId+"/"+operation,value,new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}
+                }else{String before=data.optString("before","");if(before.length()>48)throw new IllegalArgumentException("分页游标无效");
+                    String query="before="+java.net.URLEncoder.encode(before,"UTF-8");
+                    if(action.equals("albumItems")){if(albumId.isEmpty())throw new IllegalArgumentException("请选择图集");query+="&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8");}
+                    result=authenticatedGet(session,action.equals("albumList")?"albums?"+query:"albums/"+albumId+"/items?"+query);
+                }
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");
+                if(action.equals("albumItems")){assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}}
+                return result;
+            }
             case "uiReady": maintenance.ready();return new JSONObject();
             case "checkUpdates": return maintenance.check();
             case "updateResources": settings.message(maintenance.stageUi());return snapshot();
@@ -328,6 +345,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null){web.onResume();mediaChanged();}}
     @Override protected void onPause(){visible=false;Diagnostics.event("activity.pause","");if(web!=null)web.onPause();super.onPause();}
-    @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null&&web.canGoBack())web.goBack();else super.onBackPressed();}
+    @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null&&local(Uri.parse(web.getUrl()==null?"":web.getUrl())))web.evaluateJavascript("typeof window.homeNasBack==='function' ? (window.homeNasBack(),true) : false",handled->{if(!"true".equals(handled)&&!isFinishing())finish();});else super.onBackPressed();}
     @Override protected void onDestroy(){if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
 }

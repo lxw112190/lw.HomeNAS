@@ -17,6 +17,7 @@ def run(legacy, current):
     # The v0.1 executable rejects config fields introduced after its release.
     config=json.loads(h.config.read_text(encoding='utf-8'))
     config.pop('allow_external_hosts',None)
+    config.pop('allow_insecure_lan',None)
     config.pop('bootstrap_admin_password',None)
     config.pop('ffmpeg_path',None)
     h.config.write_text(json.dumps(config,ensure_ascii=False),encoding='utf-8')

@@ -34,10 +34,10 @@
       "390px no overflow"
     ]
   },
-  "ci_executed": "0.6.2/code9 pending CI; received CI7 APK is historical evidence",
-  "apk_generated": false,
-  "jvm_tests": "0.6.2 pending CI",
-  "android_15_instrumentation_tests": "0.6.2 pending CI",
+  "ci_executed": "CI9 APK artifact received; test reports not provided",
+  "apk_generated": true,
+  "jvm_tests": "CI9 reports not provided",
+  "android_15_instrumentation_tests": "CI9 reports not provided",
   "physical_phone_tests": "not performed",
   "git_commit_push": "user managed; not performed",
   "baseline_ci": {
@@ -61,36 +61,37 @@
     "WebView native Range streaming preview"
   ],
   "received_artifact": {
-    "name": "lw.HomeNAS-Android-7.zip",
+    "name": "lw.HomeNAS-Android-9.zip",
     "package": "com.lxw.homenas",
-    "versionName": "0.6.0-dev",
-    "versionCode": 7,
+    "versionName": "0.6.2-dev",
+    "versionCode": 9,
     "variant": "debug",
-    "bytes": 8824699,
-    "sha256": "9289f6b14b209a7dcd29ba7501f3e7f5969ea5f673b0e8235bf13f131f32f2d7",
-    "certificate_sha256": "187f763c407fa8e969dc5ffb752c1c62e0ed778d39edebaca329e76c0b7a7b6a",
+    "bytes": 8836807,
+    "sha256": "cd8a62682b5b2891d8134ae666b09286ca4fee6e24aa0d6ff4a4714e1f22ecec",
+    "certificate_sha256": "cf7341819a968eb65c02b11bff669b34da8a6cb5c8325bdf8a70727c87f8506b",
     "apk_v2_signature": "verified",
     "apk_content_digest": "verified",
     "embedded_resource_key": "matches source",
     "embedded_page_files": 14,
     "embedded_pages_match_source_ignoring_crlf": true,
     "physical_install_test": false,
+    "can_replace_CI7_without_uninstall": false,
     "can_replace_CI5_without_uninstall": false,
     "ci_test_reports_in_artifact": false,
     "can_replace_CI3_without_uninstall": false
   },
   "default_apk": {
-    "version": "0.6.0-dev",
-    "versionCode": 7,
-    "source": "user provided CI7 artifact",
-    "same_signing_identity_as_CI5": false
+    "version": "0.6.2-dev",
+    "versionCode": 9,
+    "source": "user provided CI9 artifact",
+    "same_signing_identity_as_CI7": false
   },
   "signed_ui": {
-    "revision": 5,
+    "revision": 6,
     "minNative": 1,
-    "signature": "verified with APK embedded public key",
-    "runtime_phone_test": "pending",
-    "browser_preview": "previous simulated bridge; current bundled assets match source"
+    "signature": "verified with APK embedded key",
+    "extractor_policy": "host path/type/size/count/required entry checks passed",
+    "runtime_phone_test": "pending"
   },
   "current_ui_checks": {
     "CI_host_unit_tests": 15,
@@ -117,7 +118,7 @@
     "source_layout_CSP_tests": 18,
     "Java_grammar_files": 31,
     "Java_compilation": "pending CI",
-    "new_deployment_package_built": false,
+    "new_deployment_package_built": true,
     "new_APK_built": false,
     "browser_bridge_is_simulated": true,
     "mobile_viewport": 390,
@@ -135,7 +136,9 @@
       "MKV/AVI legacy MIME compatibility",
       "rotation beyond full retention",
       "unchanged confirmation does not rewrite queue"
-    ]
+    ],
+    "new_APK_received": true,
+    "new_signed_ui_built": true
   },
   "persistent_debug_signing": {
     "source_support_added": true,
@@ -147,7 +150,50 @@
     "reported_failure": "compileDebugUnitTestJavaWithJavac: Files.readString unavailable in Android API stubs",
     "change": "readAllBytes + explicit UTF-8 + StringBuilder; rotation assertions retained",
     "host_checks": 18,
-    "Android_compilation": "pending CI rerun",
+    "Android_compilation": "CI9 APK built and received; detailed JVM/emulator reports not included",
     "APK_published_from_failed_build": false
+  },
+  "delivery_CI9": {
+    "server_version": "0.3.2-dev",
+    "apk_version": "0.6.2-dev",
+    "versionCode": 9,
+    "resource_revision": 6,
+    "bundled_ffmpeg": "7.1 Windows x64; real cover test passed",
+    "deployment_checks": 15,
+    "physical_device_tested": false,
+    "allow_insecure_lan_default": true
+  },
+  "albums_20261105": {
+    "server": "0.4.0-dev",
+    "android_source": "0.7.0-dev",
+    "versionCode": 10,
+    "nativeApi": 4,
+    "windows_release_build": "passed",
+    "album_checks": 13,
+    "upload_auth_recovery_checks": 84,
+    "legacy_migration_checks": 13,
+    "timeline_checks": 9,
+    "android_host_checks": 18,
+    "java_syntax_files": 31,
+    "android_compiled_locally": false,
+    "CI": "pending",
+    "physical_device_tested": false,
+    "browser_web_flow": "create/add/cover passed on isolated server",
+    "browser_android_flow": "mock native bridge + real isolated album API; create/choose/add/back hierarchy passed",
+    "viewport_width": 390,
+    "horizontal_overflow": false,
+    "resource": {
+      "revision": 7,
+      "minNative": 4,
+      "size": 35948,
+      "sha256": "934f2b19c10d3cf0044fc4b5ebfe9dc7c8d349bdabaff7ece6a31984d83971d8"
+    },
+    "resource_signature_and_source_match": "passed",
+    "evidence": {
+      "albums": "test-results/端到端-d3c7898d6d",
+      "smoke": "test-results/端到端-907eb668fc",
+      "migration": "test-results/端到端-21ddb526b3",
+      "timeline": "test-results/端到端-e071c76f25"
+    }
   }
 }

@@ -2,9 +2,9 @@
 
 轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
 
-当前开发源码：电脑 **0.3.1-dev**，Android **0.6.2-dev / versionCode 9**。新增相册授权/日期查询修复、备份速度与阶段反馈、底部选项面板、视频封面、图片 EXIF 及播放/轮转诊断，详见[本轮功能与验证](docs/20261104-相册权限与媒体预览优化.md)。Android 需提交到 CI 编译与真机验证。
+当前开发源码：电脑服务 **0.4.0-dev**，Android **0.7.0-dev / versionCode 10 / nativeApi4**。新增图集管理、时间线/图集切换、无外框输入与分层返回键，详见[本轮使用与验证](docs/20261105-图集与手机返回键.md)。Windows 已编译验证；新 APK 待 CI 编译和真机测试。
 
-已分发部署包仍为电脑 0.3.0-dev + CI7 APK 0.6.0-dev/code7 + 签名资源 r5，见[CI7 发布说明](docs/20261104-CI7安卓安装包发布.md)。本轮不使用旧 APK 冒充新版本；固定 Debug 签名支持保留，需用户配置 Secrets。
+当前已核验的历史完整部署包仍为电脑服务 **0.3.2-dev + CI9 APK 0.6.2-dev/code9 + r6**，尚不包含图集功能。[历史部署与升级说明](docs/20261105-CI9安卓安装包发布.md)。
 
 ![用户名密码登录](docs/images/login-accounts.png)
 
@@ -12,7 +12,7 @@
 
 新增APK网页下载/发布、签名资源更新、诊断日志上传与防火墙批处理，详见[客户端维护使用说明](docs/20261104-客户端更新与日志反馈.md)。新版APK需先通过CI编译安装，才能使用原生维护功能。
 
-已收到 CI7 APK，含 APK 部署包可用导入脚本发布网页下载。CI7 Debug 签名与 CI5 不同，不能直接覆盖旧版；请先阅读[升级与数据说明](docs/20261104-CI7安卓安装包发布.md)。
+已收到 CI9 APK，含 APK 部署包可用导入脚本发布网页下载。CI9 Debug 签名与 CI7 不同，不能直接覆盖旧版；请先阅读[升级与数据说明](docs/20261105-CI9安卓安装包发布.md)。
 
 ## 已实现
 
@@ -23,11 +23,12 @@
 - 上传会话持久化、重选文件续传、块摘要及整文件校验、完整校验后台执行。
 - 临时文件尾部回退与 COMMITTING 中间状态恢复；原件丢失不会误报去重成功。
 - 精确内容去重、同名不同文件分别保留、文件名搜索与游标分页。
-- Web / Android 按文件时间或入库时间分组展示；Android 按天选图、服务器核实已备份状态、照片和视频预览及紧凑保存按钮（需新 APK）。
+- Web / Android 时间线按文件时间分组，与图集双按钮切换；支持图集创建、说明、批量加入/移出、封面及分页。图集共享浏览、按创建者管理，删除图集保留原件（Android 需新 APK）。
+- Android 按天选图、服务器核实已备份状态、照片和视频预览及紧凑保存按钮。
 - Windows WIC 图片缩略图与8种 EXIF方向处理；原件下载、视频/音频的浏览器原生播放与单段 Range 读取。
 - 手机删除或禁用账号不删除电脑原件，本版没有自动删除原件的功能。
 
-HEIC/RAW等文件可以按原件保存，预览由本机WIC/浏览器实际支持决定；本版未做视频封面或兼容转码。超过4GiB长度的协议字段已检查，但完整超4GiB上传仍需后续真机测试。
+HEIC/RAW等文件可以按原件保存，预览由本机WIC/浏览器实际支持决定；视频封面使用随包 FFmpeg 生成，未做整段兼容转码。超过4GiB长度的协议字段已检查，但完整超4GiB上传仍需后续真机测试。
 
 旧版Windows CMD中文输出修复及验证范围见[控制台兼容记录](docs/20261104-控制台中文输出兼容.md)。
 
@@ -57,7 +58,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
 
 首次连接使用自签名证书，需要核对服务器证书摘要并配置可信证书。IP变化后，旧证书中的IP名称可能不匹配；不要通过关闭证书验证解决。现有 Web2Android 的远程网址模式要求证书受 WebView 信任，具体系统/WebView行为要在真机验证。
 
-家庭局域网需要HTTP时，可以显式运行：
+局域网 HTTP 现在默认开启：`config/server.json` 的 `allow_insecure_lan` 默认为 true，直接启动 EXE 或普通服务即可。设为 false 可改为 HTTP 仅本机；显式命令行开/关覆盖配置，见[HTTP 配置说明](docs/20261105-局域网HTTP配置.md)。原有命令仍兼容：
 
 ```powershell
 .\out\Release\NasServer.exe --allow-insecure-lan
@@ -101,6 +102,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
   "https_port": 9443,
   "https_host": "0.0.0.0",
   "allow_external_hosts": false,
+  "allow_insecure_lan": true,
   "data_dir": "../data",
   "web_dir": "../web",
   "ffmpeg_path": "../tools/ffmpeg/ffmpeg.exe",

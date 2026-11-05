@@ -1,11 +1,14 @@
 ﻿param(
     [ValidateSet('Install','Configure','Start','Stop','Restart','Status','Uninstall','Console','AdminPassword')][string]$Action = 'Status',
     [switch]$AllowInsecureLan,
+    [switch]$DisableInsecureLan,
     [switch]$PlanOnly
 )
 $ErrorActionPreference = 'Stop'
 $serviceName = 'lw.HomeNAS'
 $packageRoot = Split-Path -Parent $PSScriptRoot
+if($AllowInsecureLan -and $DisableInsecureLan){throw 'Choose AllowInsecureLan or DisableInsecureLan, not both.'}
+$httpArguments=if($AllowInsecureLan){' --allow-insecure-lan'}elseif($DisableInsecureLan){' --no-allow-insecure-lan'}else{''}
 
 function Get-Layout {
     $candidates = @((Join-Path $packageRoot 'NasServer.exe'), (Join-Path $packageRoot 'out/Release/NasServer.exe'), (Join-Path $packageRoot 'build/app/Release/NasServer.exe'))
@@ -15,6 +18,8 @@ function Get-Layout {
     $runtimeRoot = Split-Path -Parent $exe
     $configPath = Join-Path $runtimeRoot 'config/server.json'
     $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if($config.PSObject.Properties.Name -contains 'allow_insecure_lan' -and $config.allow_insecure_lan -isnot [bool]){throw 'allow_insecure_lan must be true or false.'}
+    $effectiveHttp=if($AllowInsecureLan){$true}elseif($DisableInsecureLan){$false}elseif($config.PSObject.Properties.Name -contains 'allow_insecure_lan'){[bool]$config.allow_insecure_lan}else{$true}
     $configRoot = Split-Path -Parent $configPath
     $dataPath = [IO.Path]::GetFullPath(([IO.Path]::Combine($configRoot,[string]$config.data_dir))).TrimEnd('\')
     $webPath = [IO.Path]::GetFullPath(([IO.Path]::Combine($configRoot,[string]$config.web_dir))).TrimEnd('\')
@@ -32,8 +37,8 @@ function Get-Layout {
         Data = $dataPath
         Web = $webPath
         Account = "NT SERVICE\$serviceName"
-        BinaryPath = ('"'+$exe+'" --service --config "'+$configPath+'"'+$(if($AllowInsecureLan){' --allow-insecure-lan'}else{''}))
-        AllowInsecureLan = [bool]$AllowInsecureLan
+        BinaryPath = ('"'+$exe+'" --service --config "'+$configPath+'"'+$httpArguments)
+        AllowInsecureLan = $effectiveHttp
         HttpUrl = ('http://127.0.0.1:'+[int]$config.http_port+'/')
     }
 }
@@ -84,7 +89,7 @@ try {
     if ($Action -eq 'Console') {
         $layout = Get-Layout
         $arguments = '--config "'+$layout.Config+'"'
-        if ($AllowInsecureLan) { $arguments += ' --allow-insecure-lan' }
+        $arguments += $httpArguments
         $process = Start-Process -FilePath $layout.Executable -ArgumentList $arguments -NoNewWindow -Wait -PassThru
         try { exit $process.ExitCode } finally { $process.Dispose() }
     }

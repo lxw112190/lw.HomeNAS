@@ -1,6 +1,8 @@
+> 最新完整包为电脑 0.3.2-dev + CI9 APK 0.6.2-dev/code9 + r6，已附带 FFmpeg。先运行 import_android.bat，再启动 NAS；[部署步骤](../docs/20261105-CI9安卓安装包发布.md)。下文历史版本说明保留。
+
 # Windows 服务批处理
 
-当前部署包默认 `allow_external_hosts: true`、`bootstrap_admin_password: "admin123"`；全新数据目录首次账号为 **admin / admin123**，登录后修改。此设置只在首次初始化生效，已有账号不会重置。源码默认配置仍使用随机初始密码和外部 Host 关闭。已接收 CI7 APK，见[部署说明](../docs/20261104-CI7安卓安装包发布.md)。
+当前部署包默认 `allow_insecure_lan: true`、`allow_external_hosts: true`、`bootstrap_admin_password: "admin123"`；全新数据目录首次账号为 **admin / admin123**，登录后修改。此设置只在首次初始化生效，已有账号不会重置。源码默认配置仍使用随机初始密码和外部 Host 关闭。已接收 CI7 APK，见[部署说明](../docs/20261104-CI7安卓安装包发布.md)。
 
 参考 [lw.OpenCVDNN.PPOCR/server/deploy](https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/tree/main/server/deploy) 的入口组织，提供：
 
@@ -15,7 +17,7 @@
 | start_console.bat | 前台运行，便于查看启动错误及初始账号密码 |
 | install_http_service.bat | 新安装服务，显式启用局域网HTTP 8787，HTTPS仍保留 |
 | configure_http_service.bat | 将当前安装目录对应的已有服务切到局域网HTTP |
-| configure_https_service.bat | 恢复默认：局域网HTTPS，HTTP仅本机 |
+| configure_https_service.bat | 显式切为局域网HTTPS，HTTP仅本机 |
 | start_console_http.bat | 显式开启局域网HTTP的前台运行方式 |
 | set_admin_password.bat | 停止程序后，自选/重置管理员admin密码 |
 
@@ -37,9 +39,11 @@
 
 ## 家庭局域网HTTP
 
+0.3.2 起，config/server.json 的 allow_insecure_lan 默认 true，普通安装/启动脚本跟随配置，直接启动即可访问内网HTTP。显式关闭、旧参数优先级及生效规则见[HTTP 配置说明](../docs/20261105-局域网HTTP配置.md)。
+
 首次安装用 `install_http_service.bat`；已安装到当前目录的服务用 `configure_http_service.bat`，无需卸载或清空数据。配置脚本只调整启动参数，保留服务账号和目录权限：服务原来运行则停止、修改后重新启动，原来停止则保持停止。安装和配置需要管理员权限。
 
-手机选择“HTTP 家庭内网”，填写电脑IP，端口8787。HTTP传输未加密，使用你信任的家庭网络。以后运行 `configure_https_service.bat` 可恢复默认模式。脚本不会修改防火墙；电脑端还需按实际网络情况允许对应端口。
+手机选择“HTTP 家庭内网”，填写电脑IP，端口8787。HTTP传输未加密，使用你信任的家庭网络。以后运行 `configure_https_service.bat` 可关闭局域网HTTP。脚本不会修改防火墙；电脑端还需按实际网络情况允许对应端口。
 
 公网/云服务器NAT测试（0.2.2起）：在EXE旁 `config/server.json` 设置 `allow_external_hosts: true`，并把http_port设为需要的端口（如8080），再重启HTTP服务。它接受公网IP/域名，无需维护白名单；具体示例见[公网地址测试](../docs/20261104-公网地址测试.md)。更新程序时保留原config和data。
 
