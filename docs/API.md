@@ -1,4 +1,4 @@
-# API v1（0.3.1 时间线与媒体详情预览）
+# API v1（0.5.0 备份文件夹）
 
 同源网页使用 HttpOnly 会话 Cookie；原生客户端可使用 `Authorization: Bearer <会话令牌>`。统一采用用户名与密码登录，普通网页登录不在JSON中返回令牌；原生客户端在登录JSON中设置 `client:"native"` 才取得令牌。当前为共享家庭资料库，文件不按用户隔离，上传任务按账号归属。
 
@@ -27,7 +27,17 @@
 | GET /api/v1/assets/{id}/original | 原件/单段Range，`?download=1`强制下载 |
 | GET /api/v1/assets/{id}/metadata | 登录后读取文件信息及有限的图片尺寸/EXIF；解码不可用时 image.available=false，字段缺失不推断 |
 | GET /api/v1/assets/{id}/thumbnail | JPEG缩略图；不可用时404 |
+| POST /api/v1/assets/{id}/rename | `{name,old_name}`；更改共享资料库名称，保留扩展名 |
 | GET /api/v1/certificate | 管理员下载公开服务器证书 |
+| GET /api/v1/folders | 共享文件夹列表，48项分页，before游标；默认文件夹在第一页首项 |
+| POST /api/v1/folders | `{name,description?}` 创建本人文件夹 |
+| GET /api/v1/folders/{id} | 文件夹信息及can_write/can_edit/is_default |
+| GET /api/v1/folders/{id}/items | 48项分页，before/type/q；普通文件同样支持 |
+| POST /api/v1/folders/{id}/edit | `{name,description?}` 修改名称/说明 |
+| POST /api/v1/folders/{id}/delete | 文件归入默认目录，原件保留 |
+| POST /api/v1/folders/{id}/add | `{asset_ids:[...]}` 添加引用，不复制内容 |
+| POST /api/v1/folders/{id}/remove | `{asset_ids:[...]}` 从此目录归入默认目录 |
+| POST /api/v1/folders/{id}/move | `{asset_ids:[...],target_id}` 移动目录引用 |
 
 JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`。状态改变操作拒绝非同源 Origin。未提供跨域网页 CORS 或通用原生桥。
 
@@ -61,3 +71,15 @@ JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`�
 `sources/status` 返回 `{items:[{id,state,size,modified,sha256,asset_id}]}`。仅返回当前账号上传任务，即使管理员也不返回别人的匹配项；不存在或不属于自己的 ID 被省略。READY 任务对应原件缺失/大小不符时返回 MISSING，不暴露路径或手机 URI。此接口核对现有本机历史任务，不按任意文件名推断已备份，也不取代最终完整 SHA256 校验。
 
 0.3.1 视频封面与图片复用 thumbnail API，preview=READY 后返回 JPEG。封面失败不改变原件 READY；新增 MKV/AVI/3GP/MPEG/TS 类型，并修复旧视频的 octet-stream MIME。metadata 返回 size/created/modified 的十进制字符串，图片像素与方向为数值，EXIF 常见字段位于 image.exif，不含磁盘路径。
+
+0.4.1：资料库列表和图集内容列表的文件新增布尔字段 `can_rename`，由当前账号权限决定。管理员可重命名所有 READY 文件；普通用户需要存在自己所属的 READY 上传任务指向该文件（内容去重后的多个上传者均可管理）；只读用户不可修改。图集管理权限不等于文件改名权限。
+
+`POST assets/{id}/rename` 接收完整新名称 `name`（UTF-8 最多240字节）和打开编辑时的完整原名称 `old_name`。原名称不符返回409/NAME_CHANGED，避免覆盖其他人的修改；修改扩展名返回400/EXTENSION_CHANGED；无归属权限返回403/ASSET_OWNER_REQUIRED，只读返回403/READ_ONLY。禁止路径字符、控制字符、首尾空格、末尾句点及Windows保留名称。成功返回更新后的文件对象及 `can_rename`，不包含磁盘路径。
+
+仅修改 `assets.name`：下载名称、按名称搜索和所有图集使用新名称；文件ID、内容路径、字节、摘要、MIME、大小与时间线时间不变。上传任务与手机来源名称保留，重选原文件仍按摘要去重，不会恢复旧名称。允许不同文件拥有相同的显示名称。
+
+0.5：公共server信息新增 `backup_folders:true`。文件夹是逻辑关联，ID为 `default` 或48位小写十六进制。所有账号可浏览；管理员管理全部，member可写默认目录及自己创建的目录，viewer只读。默认目录不可改名或删除；其他目录名称按创建者去重。文件夹add/remove/move每次1至100个不重复文件ID，整批事务执行；从共享默认目录移出时，普通用户还必须有对应文件的已确认上传记录。文件夹管理权限不授予全局文件重命名权限。
+
+上传创建新增可选 `folder_id`，省略使用default。服务端保存原始请求目标，同一个client_task_id不能改变目标。新入库和内容去重都添加目录关联，重复引用幂等；原件可同时属于多个目录。删除目录使用墓碑，现有引用归入默认目录，正在上传或未开始请求的旧目标仍能回退。任务返回 `folder_id`（原始目标）、`effective_folder_id`、`folder_name` 和布尔 `folder_defaulted`，回退时必须向用户说明。
+
+`sources/status` 可附带 `folder_id`，每项增加 `in_folder`，同时核对原件存在和目录关联。不能仅凭全局READY跳过向另一个目录添加关联。默认未指定folder_id时保持旧响应兼容。旧客户端省略目录仍使用默认目录。升级会将现有READY原件补关联到默认目录，不移动内容文件；运行旧服务程序写入升级后的库会遗漏目录关联，不支持回退运行。

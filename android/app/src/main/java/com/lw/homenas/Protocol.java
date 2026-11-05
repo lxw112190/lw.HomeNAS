@@ -10,6 +10,7 @@ import java.util.Locale;
 /** Rules shared by native transport, queue and JVM tests. All lengths remain long. */
 public final class Protocol {
     private Protocol() {}
+    public static boolean folderId(String value){return "default".equals(value)||assetId(value);}
     public static final String DEFAULT_CONNECTION="http://192.168.1.100:8787";
     public static String connectionAddress(String value,String protocol,String port) {
         try {

@@ -50,6 +50,7 @@ public final class MainActivity extends Activity {
     private Settings settings;
     private PreviewStreams previews;
     private MediaPicker mediaPicker;
+    private Settings.Session fileSession;private String fileFolder,fileFolderName;
     private JSONObject pendingDownload;
     private Settings.Session downloadSession;
     private volatile boolean visible;
@@ -146,8 +147,9 @@ public final class MainActivity extends Activity {
         Settings.Session session=settings.session();if(session==null)throw new SecurityException("请先登录家庭服务器");
         if(upload&&!session.canUpload)throw new SecurityException("当前为只读账号，不能备份");return session;
     }
+    private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",4).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",7).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true);
         String pem=settings.prefs.getString("pending_cert","");
@@ -162,6 +164,27 @@ public final class MainActivity extends Activity {
         String action=input.getString("action");JSONObject data=input.optJSONObject("data");if(data==null)data=new JSONObject();
         switch(action) {
             case "finishActivity": ui(this::finish);return new JSONObject();
+            case "backupFolder": {
+                Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");
+                JSONObject folder=authenticatedGet(session,"folders/"+id);if(!folder.optBoolean("can_write"))throw new SecurityException("不能备份到其他用户的文件夹");
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();return snapshot();
+            }
+            case "folderList": case "folderItems": case "folderChange": {
+                boolean write=action.equals("folderChange");Settings.Session session=requireSession(write);String folderId=data.optString("folderId","");
+                if(!folderId.isEmpty()&&!Protocol.folderId(folderId))throw new IllegalArgumentException("文件夹标识无效");
+                JSONObject result;
+                if(write){String operation=data.optString("operation");if(!operation.matches("create|edit|delete|add|remove|move")||(!operation.equals("create")&&folderId.isEmpty()))throw new IllegalArgumentException("文件夹操作无效");
+                    JSONObject value=data.optJSONObject("value");if(value==null)value=new JSONObject();
+                    try{result=api(session).post(operation.equals("create")?"folders":"folders/"+folderId+"/"+operation,value,new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}
+                }else{String before=data.optString("before","");if(before.length()>48)throw new IllegalArgumentException("分页游标无效");
+                    String query="before="+java.net.URLEncoder.encode(before,"UTF-8");
+                    if(action.equals("folderItems")){if(folderId.isEmpty())throw new IllegalArgumentException("请选择文件夹");query+="&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8");}
+                    result=authenticatedGet(session,action.equals("folderList")?"folders?"+query:"folders/"+folderId+"/items?"+query);
+                }
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");
+                if(action.equals("folderItems")){assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}}
+                return result;
+            }
             case "albumList": case "albumItems": case "albumChange": {
                 boolean write=action.equals("albumChange");Settings.Session session=requireSession(write);String albumId=data.optString("albumId","");
                 if(!albumId.isEmpty()&&!Protocol.assetId(albumId))throw new IllegalArgumentException("图集标识无效");
@@ -193,7 +216,7 @@ public final class MainActivity extends Activity {
             case "queuePage": {Settings.Session session=requireSession(false);String before=data.optString("before",""),filter=data.optString("filter","active");TaskStore.get(this).summary(session.scope,before,filter);synchronized(this){queueBefore=before;queueFilter=filter;return snapshot();}}
             case "previewClose": previews.closeAll();return new JSONObject();
             case "playbackError": {requireSession(false);JSONObject item=assets.get(data.optString("id"));if(item==null)throw new IllegalArgumentException("请重新打开预览");Diagnostics.event("preview.playback_error","code="+Math.max(0,Math.min(4,data.optInt("code")))+" network="+Math.max(0,Math.min(3,data.optInt("network")))+" ready="+Math.max(0,Math.min(4,data.optInt("ready")))+" mime="+item.optString("mime").replaceAll("[^A-Za-z0-9/+-]","")+" sdk="+Build.VERSION.SDK_INT);return new JSONObject();}
-            case "mediaDays": {Settings.Session session=requireSession(true);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
+            case "mediaDays": {Settings.Session session=requireSession(true);if(data.optBoolean("reset"))ensureDestination(session);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
             case "mediaItems": {Settings.Session session=requireSession(true);return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000));}
             case "mediaEnqueue": {Settings.Session session=requireSession(true);JSONObject result=mediaPicker.enqueue(session,data,api(session),new RunControl(90000));settings.message("已加入 "+result.getInt("added")+" 项，跳过已完成或已入队 "+result.getInt("skipped")+" 项");return result;}
             case "snapshot": return snapshot();
@@ -232,7 +255,7 @@ public final class MainActivity extends Activity {
             }
             case "importCertificate": ui(()->pick(CERTIFICATE));return new JSONObject().put("message","请选择电脑导出的公开证书，不要选择私钥");
             case "clearCertificate": settings.prefs.edit().remove("pending_cert").commit();return snapshot();
-            case "chooseFiles": requireSession(true);ui(()->pick(FILES));return new JSONObject().put("message","请在系统文件选择器中选择文件");
+            case "chooseFiles": {Settings.Session session=requireSession(true);ensureDestination(session);fileSession=session;fileFolder=settings.folder(session.scope);fileFolderName=settings.folderName(session.scope);ui(()->pick(FILES));return new JSONObject().put("message","请在系统文件选择器中选择文件");}
             case "permission": requireSession(true);ui(this::requestMedia);return new JSONObject();
             case "mediaSettings": requireSession(true);ui(this::openMediaSettings);return new JSONObject();
             case "metadataPermission": requireSession(true);ui(()->requestPermissions(new String[]{Manifest.permission.ACCESS_MEDIA_LOCATION},METADATA_PERMISSION));return new JSONObject();
@@ -244,11 +267,16 @@ public final class MainActivity extends Activity {
                 Diagnostics.event("preferences.saved","album_count="+albums.size()+" auto="+data.optBoolean("auto")+" wifi="+data.optBoolean("wifiOnly",true)+" charging="+data.optBoolean("charging"));
                 if(data.optBoolean("auto"))settings.pause(false);BackupScheduler.configure(this);return snapshot();
             }
-            case "scan": {Settings.Session session=requireSession(true);long added=MediaCatalog.scan(this,session,new RunControl(90000));settings.message("本轮扫描新增 "+added+" 项；未上传项保留在本机队列");return snapshot();}
+            case "scan": {Settings.Session session=requireSession(true);ensureDestination(session);long added=MediaCatalog.scan(this,session,new RunControl(90000));settings.message("本轮扫描新增 "+added+" 项；未上传项保留在本机队列");return snapshot();}
             case "start": requireSession(true);settings.pause(false);ui(this::startManual);return new JSONObject();
             case "pause": requireSession(true);settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));return snapshot();
             case "retry": {Settings.Session session=requireSession(true);TaskStore.get(this).retry(session.scope);return snapshot();}
             case "overview": {Settings.Session session=requireSession(false);return authenticatedGet(session,"overview");}
+            case "assetRename": {
+                Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.assetId(id))throw new IllegalArgumentException("文件标识无效");
+                JSONObject result;try{result=api(session).post("assets/"+id+"/rename",new JSONObject().put("name",data.getString("name")).put("old_name",data.getString("old_name")),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");assets.put(id,result);return result;
+            }
             case "assets": {
                 Settings.Session session=requireSession(false);String cursor=data.optString("before","");if(cursor.length()>100)throw new IllegalArgumentException("分页游标无效");
                 String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8")+"&order="+java.net.URLEncoder.encode(data.optString("order","created"),"UTF-8");
@@ -303,6 +331,8 @@ public final class MainActivity extends Activity {
             if(result==RESULT_OK&&item==null){settings.message("保存操作被系统中断，请重新选择要下载的文件");return;}
             if(result==RESULT_OK&&intent!=null&&intent.getData()!=null&&item!=null) {Uri destination=intent.getData();if(!"content".equals(destination.getScheme())){settings.message("仅支持系统文档提供器的保存位置");return;}io.execute(()->download(item,session,destination));}return;
         }
+        final Settings.Session selectedFileSession=fileSession;final String selectedFileFolder=fileFolder,selectedFileFolderName=fileFolderName;
+        if(request==FILES){fileSession=null;fileFolder=null;fileFolderName=null;}
         if(result!=RESULT_OK||intent==null)return;
         io.execute(()->{
             try {
@@ -313,7 +343,7 @@ public final class MainActivity extends Activity {
                     String pem="-----BEGIN CERTIFICATE-----\n"+android.util.Base64.encodeToString(cert.getEncoded(),android.util.Base64.NO_WRAP)+"\n-----END CERTIFICATE-----\n";
                     settings.prefs.edit().putString("pending_cert",pem).commit();settings.message("公开证书已读取，请对照电脑SHA256摘要后勾选确认，再登录");
                 }else if(request==FILES) {
-                    Settings.Session session=requireSession(true);int count=0;ClipData clips=intent.getClipData();int total=clips==null?1:clips.getItemCount();
+                    Settings.Session session=requireSession(true);if(selectedFileSession==null||!settings.current(selectedFileSession)||!session.scope.equals(selectedFileSession.scope)||selectedFileFolder==null)throw new SecurityException("选择操作已中断或账号已改变，请重新选择文件");int count=0;ClipData clips=intent.getClipData();int total=clips==null?1:clips.getItemCount();
                     android.database.sqlite.SQLiteDatabase queueDb=TaskStore.get(this).getWritableDatabase();queueDb.beginTransaction();
                     try{for(int i=0;i<Math.min(total,5000);i++) {
                         Uri uri=clips==null?intent.getData():clips.getItemAt(i).getUri();if(uri==null||!"content".equals(uri.getScheme()))continue;
@@ -321,7 +351,7 @@ public final class MainActivity extends Activity {
                         uri=MediaCatalog.originalIfAllowed(this,uri);
                         MediaCatalog.Info info=MediaCatalog.describe(getContentResolver(),uri);
                         String source=Protocol.key("chosen:"+uri+":"+info.size+":"+(info.modified==0?UUID.randomUUID():info.modified));
-                        if(TaskStore.get(this).enqueue(session.scope,source,uri.toString(),info.name,"手动选择",info.size,info.modified)!=-1)count++;
+                        if(TaskStore.get(this).enqueue(session.scope,source,uri.toString(),info.name,"手动选择",info.size,info.modified,selectedFileFolder,selectedFileFolderName)!=-1)count++;
                         if((i+1)%100==0){queueDb.setTransactionSuccessful();queueDb.endTransaction();queueDb.beginTransaction();}
                     }queueDb.setTransactionSuccessful();}finally{queueDb.endTransaction();}
                     settings.message("已加入 "+count+" 项，请点击立即备份"+(total>5000?"；单次最多5000项，大相册可使用相册扫描":""));

@@ -2,6 +2,8 @@
 
 # Windows 服务批处理
 
+HTTP安装脚本已在本机实际完成安装、HTTP访问、重启、停止、启动和卸载等14项隔离检查，使用中文空格路径及虚拟服务账号；[实测记录与复测命令](../docs/20261105-HTTP服务安装实测.md)。
+
 当前部署包默认 `allow_insecure_lan: true`、`allow_external_hosts: true`、`bootstrap_admin_password: "admin123"`；全新数据目录首次账号为 **admin / admin123**，登录后修改。此设置只在首次初始化生效，已有账号不会重置。源码默认配置仍使用随机初始密码和外部 Host 关闭。已接收 CI7 APK，见[部署说明](../docs/20261104-CI7安卓安装包发布.md)。
 
 参考 [lw.OpenCVDNN.PPOCR/server/deploy](https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/tree/main/server/deploy) 的入口组织，提供：

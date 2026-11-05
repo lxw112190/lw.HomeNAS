@@ -32,7 +32,7 @@ json Store::albumItems(const std::string& id,const std::string& before,const std
     if(!search.empty()){sql+=" AND s.name LIKE ?";params.push_back("%"+search+"%");}
     auto rows=db.query(sql+" ORDER BY i.asset_id DESC LIMIT 49",params);std::string next;
     if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}
-    return {{"album",info},{"items",rows},{"next",next}};
+    assetPermissions(rows,who);return {{"album",info},{"items",rows},{"next",next}};
 }
 json Store::changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who){
     writer(who);std::string resultId=id;

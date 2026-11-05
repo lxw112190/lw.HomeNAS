@@ -18,10 +18,11 @@ final class MediaPicker {
     private final Context context;private final Settings settings;
     private String scope="";private final Map<String,Stamp> stamps=new HashMap<>();
     private final Map<String,Item> handles=new java.util.concurrent.ConcurrentHashMap<>();
-    private static final class Stamp {long id,size,modified;String state,remote,sha;}
+    private final Map<String,String> identities=new HashMap<>();
+    private static final class Stamp {long id,size,modified;String state,remote,sha,folder;}
     private static final class Item {String handle,name,album,kind,identity;Uri uri;long id,size,modified,width,height,duration;}
     MediaPicker(Context context,Settings settings){this.context=context;this.settings=settings;}
-    synchronized void clear(){scope="";stamps.clear();handles.clear();}
+    synchronized void clear(){scope="";stamps.clear();handles.clear();identities.clear();}
     private String key(Uri uri,long size,long modified) {
         try {
             Uri media=DocumentsContract.isDocumentUri(context,uri)?MediaStore.getMediaUri(context,uri):uri;
@@ -36,12 +37,12 @@ final class MediaPicker {
     private void index(Settings.Session session,RunControl control) throws Exception {control.check();clear();scope=session.scope;}
     private void lookup(Settings.Session session,Item item,RunControl control) throws Exception {
         if(stamps.containsKey(item.identity))return;Stamp found=null;
-        try(Cursor c=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id,uri,size,modified,state,remote,sha FROM tasks WHERE scope=? AND size=? AND modified=? ORDER BY id DESC",new String[]{session.scope,Long.toString(item.size),Long.toString(item.modified)})){
+        try(Cursor c=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id,uri,size,modified,state,remote,sha,folder_id FROM tasks WHERE scope=? AND size=? AND modified=? ORDER BY (folder_id=?) DESC,(state='READY') DESC,id DESC",new String[]{session.scope,Long.toString(item.size),Long.toString(item.modified),settings.folder(session.scope)})){
             while(c.moveToNext()){control.check();Uri uri=Uri.parse(c.getString(1));String last=uri.getLastPathSegment();
                 if("media".equals(uri.getAuthority())&&!Long.toString(item.id).equals(last))continue;
                 if("com.android.providers.media.documents".equals(uri.getAuthority())&&last!=null&&!last.endsWith(":"+item.id))continue;
                 if(!key(uri,c.getLong(2),c.getLong(3)).equals(item.identity))continue;
-                found=new Stamp();found.id=c.getLong(0);found.size=c.getLong(2);found.modified=c.getLong(3);found.state=c.getString(4);found.remote=c.getString(5);found.sha=c.getString(6);break;
+                found=new Stamp();found.id=c.getLong(0);found.size=c.getLong(2);found.modified=c.getLong(3);found.state=c.getString(4);found.remote=c.getString(5);found.sha=c.getString(6);found.folder=c.getString(7);break;
             }
         }
         stamps.put(item.identity,found);
@@ -90,18 +91,18 @@ final class MediaPicker {
     private Map<String,JSONObject> verify(Settings.Session session,List<Item> items,NativeApi api,RunControl control) throws Exception {
         LinkedHashSet<String> ids=new LinkedHashSet<>();for(Item item:items){Stamp stamp=stamps.get(item.identity);if(stamp!=null&&stamp.state.equals("READY")&&Protocol.assetId(stamp.remote))ids.add(stamp.remote);}
         Map<String,JSONObject> checked=new HashMap<>();List<String> all=new ArrayList<>(ids);
-        for(int start=0;start<all.size();start+=100){control.check();JSONArray batch=new JSONArray(all.subList(start,Math.min(start+100,all.size())));JSONObject response=api.post("sources/status",new JSONObject().put("task_ids",batch),control);JSONArray rows=response.getJSONArray("items");for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);checked.put(row.getString("id"),row);}for(int i=0;i<batch.length();i++){String id=batch.getString(i);if(!checked.containsKey(id))checked.put(id,new JSONObject().put("state","MISSING"));}}
+        for(int start=0;start<all.size();start+=100){control.check();JSONArray batch=new JSONArray(all.subList(start,Math.min(start+100,all.size())));JSONObject response=api.post("sources/status",new JSONObject().put("task_ids",batch).put("folder_id",settings.folder(session.scope)),control);JSONArray rows=response.getJSONArray("items");for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);checked.put(row.getString("id"),row);}for(int i=0;i<batch.length();i++){String id=batch.getString(i);if(!checked.containsKey(id))checked.put(id,new JSONObject().put("state","MISSING"));}}
         if(!settings.current(session))throw new SecurityException("登录已改变");return checked;
     }
     private String status(Item item,Map<String,JSONObject> checked){
         Stamp stamp=stamps.get(item.identity);if(stamp==null)return "NEW";if(!stamp.state.equals("READY"))return stamp.state;
         JSONObject remote=checked.get(stamp.remote);if(remote==null)return "UNCONFIRMED";
-        return remote.optString("state").equals("READY")&&remote.optString("sha256").equals(stamp.sha)&&remote.optString("size").equals(Long.toString(item.size))?"READY":"MISSING";
+        return remote.optString("state").equals("READY")&&remote.optString("sha256").equals(stamp.sha)&&remote.optString("size").equals(Long.toString(item.size))?(remote.optBoolean("in_folder")?"READY":"BACKED_UP"):"MISSING";
     }
     synchronized JSONObject items(Settings.Session session,String date,String before,NativeApi api,RunControl control) throws Exception {
         if(!scope.equals(session.scope))index(session,control);List<Item> items=records(date,before,50,control);boolean more=items.size()>50;if(more)items=new ArrayList<>(items.subList(0,50));Map<String,JSONObject> checked;for(Item item:items)lookup(session,item,control);
         try{checked=verify(session,items,api,control);}catch(Exception error){Diagnostics.error("picker.status",error);checked=new HashMap<>();}
-        JSONArray rows=new JSONArray();for(Item item:items){if(handles.size()>=5000)throw new IOException("请先完成本次选择再刷新");item.handle=UUID.randomUUID().toString().replace("-","");handles.put(item.handle,item);rows.put(new JSONObject().put("id",item.handle).put("name",item.name).put("size",Long.toString(item.size)).put("modified",Long.toString(item.modified)).put("width",item.width).put("height",item.height).put("kind",item.kind).put("status",status(item,checked)));}
+        JSONArray rows=new JSONArray();for(Item item:items){item.handle=identities.get(item.identity);if(item.handle==null){if(handles.size()>=5000)throw new IOException("请先完成本次选择再刷新");item.handle=UUID.randomUUID().toString().replace("-","");identities.put(item.identity,item.handle);}handles.put(item.handle,item);rows.put(new JSONObject().put("id",item.handle).put("name",item.name).put("size",Long.toString(item.size)).put("modified",Long.toString(item.modified)).put("width",item.width).put("height",item.height).put("kind",item.kind).put("status",status(item,checked)));}
         String next="";if(more){Item last=items.get(items.size()-1);next=(last.modified/1000)+":"+last.id+":"+(last.kind.equals("video")?"1":"0");}
         return new JSONObject().put("items",rows).put("next",next).put("day",date);
     }
@@ -110,14 +111,20 @@ final class MediaPicker {
         Bitmap bitmap=context.getContentResolver().loadThumbnail(item.uri,new Size(256,256),null);try{ByteArrayOutputStream data=new ByteArrayOutputStream();if(!bitmap.compress(Bitmap.CompressFormat.JPEG,80,data)||data.size()>1024*1024)throw new IOException("缩略图不可用");return data.toByteArray();}finally{bitmap.recycle();}
     }
     synchronized JSONObject enqueue(Settings.Session session,JSONObject selection,NativeApi api,RunControl control) throws Exception {
-        if(!scope.equals(session.scope))throw new IOException("请刷新照片列表");JSONArray days=selection.optJSONArray("days"),ids=selection.optJSONArray("ids");if(days==null)days=new JSONArray();if(ids==null)ids=new JSONArray();if(days.length()>30||ids.length()>5000)throw new IllegalArgumentException("本次选择过多");
+        if(!scope.equals(session.scope))throw new IOException("请刷新照片列表");JSONArray days=selection.optJSONArray("days"),ids=selection.optJSONArray("ids"),exclude=selection.optJSONArray("exclude_ids");if(days==null)days=new JSONArray();if(ids==null)ids=new JSONArray();if(exclude==null)exclude=new JSONArray();if(days.length()>30||ids.length()>5000||exclude.length()>5000)throw new IllegalArgumentException("本次选择过多");
+        String destination=settings.folder(session.scope);if(!selection.optString("folder_id",destination).equals(destination))throw new IOException("目标文件夹已改变，请刷新后重新选择");
         Map<String,Item> selected=new LinkedHashMap<>();for(int i=0;i<days.length();i++){for(Item item:records(days.getString(i),"",5001,control))selected.put(item.identity,item);if(selected.size()>5000)throw new IOException("单次最多5000项，请分天或分批选择");}
         for(int i=0;i<ids.length();i++){Item item=handles.get(ids.getString(i));if(item==null)throw new IOException("照片选择已过期，请刷新");selected.put(item.identity,item);}if(selected.isEmpty()||selected.size()>5000)throw new IOException("请选择1至5000项");
-        List<Item> items=new ArrayList<>(selected.values());for(Item item:items)lookup(session,item,control);Map<String,JSONObject> checked=verify(session,items,api,control);TaskStore tasks=TaskStore.get(context);int added=0,skipped=0;
+        // Resolve opaque handles before enqueueing anything. Exceptions win over both days and explicit IDs.
+        for(int i=0;i<exclude.length();i++){Item item=handles.get(exclude.getString(i));if(item==null)throw new IOException("排除的照片已过期，请刷新");selected.remove(item.identity);}
+        if(selected.isEmpty())throw new IOException("已取消所有照片，请重新选择");
+        List<Item> items=new ArrayList<>(selected.values());for(Item item:items)lookup(session,item,control);Map<String,JSONObject> checked=verify(session,items,api,control);TaskStore tasks=TaskStore.get(context);String folder=destination,folderName=settings.folderName(session.scope);if(!destination.equals(settings.folder(session.scope)))throw new IOException("目标文件夹已改变，请刷新");int added=0,skipped=0;
         for(Item item:items){control.check();if(!settings.current(session))throw new SecurityException("登录已改变");MediaCatalog.Info info=MediaCatalog.describe(context.getContentResolver(),item.uri);if(info.size!=item.size||info.modified!=item.modified)throw new IOException("部分文件已变化，请刷新；已入队项目会保留");String state=status(item,checked);Stamp stamp=stamps.get(item.identity);
             if(state.equals("READY")){skipped++;continue;}
-            if(stamp!=null){if(state.equals("UNCONFIRMED"))throw new IOException("无法核实已备份记录，请检查电脑连接后重试");if(state.equals("ERROR")||state.equals("SOURCE_MISSING")||state.equals("MISSING")){if(tasks.requeue(stamp.id,item.uri.toString()))added++;else skipped++;}else skipped++;}
-            else if(tasks.enqueue(session.scope,Protocol.key(item.uri+":"+item.size+":"+item.modified),item.uri.toString(),item.name,item.album,item.size,item.modified)!=-1)added++;else skipped++;
+            if(state.equals("BACKED_UP")&&stamp!=null&&folder.equals(stamp.folder)){if(tasks.relink(stamp.id))added++;else skipped++;continue;}
+            if(state.equals("UNCONFIRMED"))throw new IOException("无法核实已备份记录，请检查电脑连接后重试");
+            if(stamp!=null&&folder.equals(stamp.folder)&&!state.equals("BACKED_UP")){if(state.equals("ERROR")||state.equals("SOURCE_MISSING")||state.equals("MISSING")){if(tasks.requeue(stamp.id,item.uri.toString()))added++;else skipped++;}else skipped++;}
+            else if(tasks.enqueue(session.scope,Protocol.key(item.uri+":"+item.size+":"+item.modified),item.uri.toString(),item.name,item.album,item.size,item.modified,folder,folderName)!=-1)added++;else skipped++;
         }
         Diagnostics.event("picker.enqueue","added="+added+" skipped="+skipped);return new JSONObject().put("added",added).put("skipped",skipped);
     }

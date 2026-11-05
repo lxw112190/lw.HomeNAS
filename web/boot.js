@@ -9,7 +9,7 @@
    return await response.text();
   }));
   slots.forEach((slot,index)=>slot.innerHTML=pages[index]);
-  const script=document.createElement('script');script.src='./app.js';script.onerror=fail;document.head.append(script);
+  for(const file of ['library-collections.js','photo-viewer.js','app.js'])await new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='./'+file;script.onload=resolve;script.onerror=reject;document.head.append(script);});
  } catch {fail();}
  function fail(){document.body.replaceChildren();const p=document.createElement('p');p.textContent='页面资源加载失败，请重新打开应用；网页请检查服务中的 web 文件夹是否完整。';document.body.append(p);}
 })();

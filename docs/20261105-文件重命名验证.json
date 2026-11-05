@@ -1,0 +1,37 @@
+{
+  "date": "2026-11-05",
+  "server_version": "0.4.1-dev",
+  "android_source": {"versionName": "0.7.1-dev", "versionCode": 11, "nativeApi": 5},
+  "windows_build": {"cmake_release": "passed", "direct_vs2022_release_x64": "passed"},
+  "checks": {
+    "smoke": 84,
+    "rename": 14,
+    "albums": 13,
+    "timeline": 9,
+    "legacy_migration": 13,
+    "maintenance": 16,
+    "android_host_unittests": 18,
+    "release_host_unittests": 9,
+    "release_node_checks_included": 20,
+    "javascript_syntax": "passed for Web and Android pages",
+    "java_grammar_files": 31
+  },
+  "evidence_directories": {
+    "smoke": "test-results/端到端-b231e8a37e",
+    "rename": "test-results/端到端-40749c3507",
+    "albums": "test-results/端到端-db587b259c",
+    "timeline": "test-results/端到端-51c469396c",
+    "migration": "test-results/端到端-13a8154bcc",
+    "maintenance": "test-results/端到端-dce25ebd77"
+  },
+  "browser_validation": {
+    "web": "Actual browser, isolated real server: rename and immediate preview/list updates passed",
+    "android_page": "390x844 browser with simulated native bridge to real isolated server: rename, invalid name, cancel and Escape passed",
+    "images": ["images/web-file-renamed.png", "images/android-file-rename.png"],
+    "private_media_used": false
+  },
+  "android_build_local": false,
+  "android_junit_lint_apk_emulator": "pending CI for this source version",
+  "physical_device": "pending",
+  "remote_commit_push_or_release_performed": false
+}

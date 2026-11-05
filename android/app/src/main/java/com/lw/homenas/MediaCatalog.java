@@ -73,12 +73,13 @@ final class MediaCatalog {
     }
     static long scan(Context context,Settings.Session session,RunControl control) throws Exception {
         Set<String> selected=new Settings(context).albums();if(selected.isEmpty())return 0;
+        Settings settings=new Settings(context);String folder=settings.folder(session.scope),folderName=settings.folderName(session.scope);
         TaskStore tasks=TaskStore.get(context);long[] added={0};int[] batch={0};
         android.database.sqlite.SQLiteDatabase db=tasks.getWritableDatabase();db.beginTransaction();
         try{visit(context,control,(key,album,uri,name,size,modified)->{
             if(selected.contains(key)&&size>0) {
                 String source=Protocol.key(uri+":"+size+":"+modified);
-                if(tasks.enqueue(session.scope,source,uri.toString(),name,album,size,modified)!=-1)added[0]++;
+                if(tasks.enqueue(session.scope,source,uri.toString(),name,album,size,modified,folder,folderName)!=-1)added[0]++;
                 if(++batch[0]%100==0){db.setTransactionSuccessful();db.endTransaction();db.beginTransaction();}
             }
         });db.setTransactionSuccessful();}finally{db.endTransaction();}return added[0];

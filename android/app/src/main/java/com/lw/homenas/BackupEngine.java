@@ -31,7 +31,9 @@ final class BackupEngine {
         try {
             session=settings.session();if(session==null||!session.canUpload||settings.paused()){Diagnostics.event("backup.skipped","logged_in="+(session!=null)+" paused="+settings.paused());return;}
             TransferProgress.begin(session.scope);check(session,control);NativeApi api=new NativeApi(session);
-            if(!session.serverId.equals(api.get("server",control).getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
+            JSONObject server=api.get("server",control);if(!server.optBoolean("backup_folders"))throw new IOException("请先升级电脑服务至0.5，确保备份目录正确");
+            if(!session.serverId.equals(server.getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
+            settings.ensureFolder(session,api,control);
             JSONObject overview=api.get("overview",control);long advertised=Long.parseLong(overview.getString("chunk_bytes"));
             int block=(int)Math.min(8*1024*1024L,advertised);if(block<1)throw new IOException("服务器块大小无效");
             boolean scanned=false;TaskStore.Task task;
@@ -47,6 +49,7 @@ final class BackupEngine {
                     if(error.status==401)throw error;
                     if(error.retryable())throw error;
                     tasks.state(task.id,"ERROR",error.getMessage());
+                    if(error.status==403){settings.pause(true);throw new InterruptedIOException("目标目录无写入权限，已暂停；请恢复权限，或选择新目录重新加入文件");}
                 }
             }
             progress.update("本轮完成；仅“已备份”表示服务器完整校验并入库");
@@ -66,13 +69,15 @@ final class BackupEngine {
     private static boolean changed(MediaCatalog.Info expected,MediaCatalog.Info actual) {
         return (expected.size>=0&&actual.size>=0&&expected.size!=actual.size)||(expected.modified>0&&actual.modified>0&&expected.modified!=actual.modified);
     }
-    private void confirm(long localId,JSONObject remote,String hash,long size) throws Exception {
+    private void confirm(TaskStore.Task task,JSONObject remote,String hash,long size) throws Exception {
         String state=remote.getString("state");long offset=Protocol.offset(remote.getString("offset"),size);
+        if(!task.folderId.equals(remote.optString("folder_id"))||!Protocol.folderId(remote.optString("effective_folder_id"))||!(remote.optBoolean("folder_defaulted")?remote.optString("effective_folder_id").equals("default"):remote.optString("effective_folder_id").equals(task.folderId)))throw new IOException("服务器返回的备份目录不一致，未确认成功");
         if(!Protocol.assetId(remote.getString("id"))||!hash.equals(remote.getString("sha256"))
             ||Long.parseLong(remote.getString("size"))!=size||(state.equals("READY")&&(offset!=size||!Protocol.assetId(remote.optString("asset_id"))))
             ||!java.util.Arrays.asList("UPLOADING","VERIFYING","COMMITTING","READY","ERROR","CANCELLED").contains(state))
             throw new IOException("服务器任务摘要、长度或状态不一致，未确认备份成功");
-        if(tasks.confirmed(localId,remote))Diagnostics.event("task.confirmed","task="+localId+" state="+state+" offset="+offset+" size="+size);
+        if(remote.optBoolean("folder_defaulted")){settings.fallbackFolder(task.scope,task.folderId);settings.message("目标文件夹已删除，本任务保存到默认文件夹；后续备份改用默认文件夹");}
+        if(tasks.confirmed(task.id,remote))Diagnostics.event("task.confirmed","task="+task.id+" state="+state+" offset="+offset+" size="+size);
     }
     private void send(TaskStore.Task task,Settings.Session session,NativeApi api,int block,RunControl control,Progress progress) throws Exception {
         TransferProgress.phase(task,"PREPARING",task.offset,task.size);
@@ -97,8 +102,8 @@ final class BackupEngine {
             Diagnostics.event("hash.done","task="+task.id+" bytes="+size+" ms="+((System.nanoTime()-hashStarted)/1000000));
         }
         JSONObject creation=new JSONObject().put("client_task_id",task.client).put("name",task.name).put("size",Long.toString(size)).put("sha256",hash)
-            .put("source_key","android:"+Protocol.key(task.uri+":"+task.modified+":"+size)).put("album",task.album).put("modified",Long.toString(Math.max(0,task.modified)));
-        JSONObject remote=api.post("uploads",creation,control);confirm(task.id,remote,hash,size);
+            .put("folder_id",task.folderId).put("source_key","android:"+Protocol.key(task.uri+":"+task.modified+":"+size)).put("album",task.album).put("modified",Long.toString(Math.max(0,task.modified)));
+        JSONObject remote=api.post("uploads",creation,control);confirm(task,remote,hash,size);
         if(remote.getString("state").equals("READY"))return;
         String id=remote.getString("id");long offset=Protocol.offset(remote.getString("offset"),size);
         if(remote.getString("state").equals("UPLOADING")) {
@@ -111,16 +116,16 @@ final class BackupEngine {
                     // If acknowledgement is lost, leave the old local offset and query the server next run.
                     long sentAt=System.nanoTime();remote=api.chunk(id,offset,bytes,count,control);long confirmed=Protocol.offset(remote.getString("offset"),size);
                     if(confirmed!=offset+count)throw new IOException("服务器确认长度与发送块不一致");
-                    confirm(task.id,remote,hash,size);offset=confirmed;TransferProgress.acknowledged(offset,size,count,System.nanoTime()-sentAt);
+                    confirm(task,remote,hash,size);offset=confirmed;TransferProgress.acknowledged(offset,size,count,System.nanoTime()-sentAt);
                     progress.update("正在上传："+task.name+" · "+(size==0?100:Math.round(100.0*offset/size))+"%");
                 }
             }
             if(changed(before,MediaCatalog.describe(context.getContentResolver(),uri))){tasks.state(task.id,"ERROR","上传期间源文件改变，未提交");return;}
-            remote=api.post("uploads/"+id+"/complete",new JSONObject(),control);confirm(task.id,remote,hash,size);
+            remote=api.post("uploads/"+id+"/complete",new JSONObject(),control);confirm(task,remote,hash,size);
         }
         int verifyDelay=600;while(remote.optString("state").equals("VERIFYING")||remote.optString("state").equals("COMMITTING")) {
             TransferProgress.phase(task,remote.optString("state"),size,size);check(session,control);progress.update("电脑完整校验中："+task.name);Thread.sleep(verifyDelay);verifyDelay=Math.min(2000,verifyDelay+300);
-            remote=api.get("uploads/"+id,control);confirm(task.id,remote,hash,size);
+            remote=api.get("uploads/"+id,control);confirm(task,remote,hash,size);
         }
         if(!remote.optString("state").equals("READY"))tasks.state(task.id,"ERROR","电脑未确认入库："+remote.optString("error",remote.optString("state")));
     }

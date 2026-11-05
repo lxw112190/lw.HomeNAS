@@ -65,7 +65,7 @@ final class NativeApi {
         return (X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(pem.getBytes(java.nio.charset.StandardCharsets.US_ASCII)));
     }
     private Request.Builder request(String path) throws IOException {
-        if(!path.matches("(albums(\\?.*)?|albums/[a-f0-9]{48}/(items(\\?.*)?|edit|delete|add|remove|cover)|sources/status|client/latest|diagnostics|server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
+        if(!path.matches("(folders(\\?.*)?|folders/(default|[a-f0-9]{48})(/(items(\\?.*)?|edit|delete|add|remove|move))?|albums(\\?.*)?|albums/[a-f0-9]{48}/(items(\\?.*)?|edit|delete|add|remove|cover)|sources/status|client/latest|diagnostics|server|login|me|logout|overview|assets(\\?.*)?|assets/[a-f0-9]{48}/(original|thumbnail|rename)|uploads|uploads/[a-f0-9]{48}(/(data|complete))?)"))throw new IOException("不支持的接口");
         Request.Builder request=new Request.Builder().url(endpoint+"/api/v1/"+path);
         if(!token.isEmpty())request.header("Authorization","Bearer "+token);
         return request;

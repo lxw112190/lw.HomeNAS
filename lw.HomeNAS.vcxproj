@@ -11,6 +11,9 @@
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\windows.cpp" />
     <ClCompile Include="src\store.cpp" />
+    <ClCompile Include="src\albums.cpp" />
+    <ClCompile Include="src\rename.cpp" />
+    <ClCompile Include="src\folders.cpp" />
     <ClCompile Include="src\thumbnail.cpp" />
     <ClCompile Include="src\server.cpp" />
     <ClCompile Include="src\service.cpp" />

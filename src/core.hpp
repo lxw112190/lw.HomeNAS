@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "0.4.0-dev";
+constexpr const char* Version = "0.5.0-dev";
 
 struct Error : std::runtime_error {
     int status;
@@ -113,8 +113,16 @@ public:
     json album(const std::string& id,const Identity& who,bool edit=false);
     json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
     json changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who);
+    json folders(const std::string& before,const Identity& who);
+    json folder(const std::string& id,const Identity& who,bool write=false);
+    json folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
+    json changeFolder(const std::string& id,const std::string& action,const json& input,const Identity& who);
+    std::string resolveFolder(const std::string& id,const Identity& who);
+    void folderMembership(json& items,const std::string& folderId);
     json sourceStatus(const json& input, const Identity& who);
     json asset(const std::string& id);
+    void assetPermissions(json& rows,const Identity& who);
+    json renameAsset(const std::string& id,const json& input,const Identity& who);
     json tasks(const Identity& who);
     json taskPage(const Identity& who, const std::string& before, const std::string& filter);
     json overview(const Identity& caller);
@@ -141,5 +149,7 @@ private:
     json taskRow(const std::string& id);
     std::string credential(const std::string& id, uint64_t expires);
     void migrateAccounts();
+    void initializeFolders();
+    void attachFolder(const std::string& requested,const std::string& assetId);
 };
 }

@@ -1,0 +1,47 @@
+{
+  "date": "2026-11-05",
+  "server_version": "0.5.0-dev",
+  "android_source": {
+    "versionName": "0.8.0-dev",
+    "versionCode": 13,
+    "nativeApi": 7
+  },
+  "build": {
+    "cmake_release": "passed",
+    "direct_vs2022_release_x64": "passed"
+  },
+  "checks": {
+    "folders": 22,
+    "smoke": 86,
+    "albums": 13,
+    "rename": 14,
+    "timeline": 9,
+    "legacy_migration": 13,
+    "maintenance": 16,
+    "android_host": 20,
+    "actual_queue_sql_tests_included": 2,
+    "release_host": 9,
+    "node_release_checks_included": 20,
+    "java_grammar_files": 31,
+    "javascript_syntax": "passed",
+    "node_selection": "passed"
+  },
+  "evidence": {
+    "folders": "test-results/端到端-981496c34f",
+    "smoke": "test-results/端到端-a7c5888a95",
+    "albums": "test-results/端到端-e176dac539",
+    "rename": "test-results/端到端-cbdd18cfe8",
+    "timeline": "test-results/端到端-98be2db385",
+    "migration": "test-results/端到端-2eccce8aa2",
+    "maintenance": "test-results/端到端-3a78def8b5"
+  },
+  "browser": {
+    "web": "real isolated server; create folder, move item, counts, album create/add regression passed",
+    "android_page": "390x844 browser with simulated native bridge; real server folder APIs; choose destination, reselect backed-up item and folder browse passed",
+    "private_media_used": false
+  },
+  "android_junit_lint_apk_emulator": "pending CI for code13",
+  "android_compiled_locally": false,
+  "physical_device": "pending",
+  "remote_commit_push_release": false
+}

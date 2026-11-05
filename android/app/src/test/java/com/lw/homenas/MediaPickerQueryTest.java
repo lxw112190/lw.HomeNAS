@@ -25,6 +25,7 @@ public class MediaPickerQueryTest {
         final List<long[]> rows=new ArrayList<>();boolean ignoreOrder;String requestedSort="";
         @Override public boolean onCreate(){return true;}
         @Override public Cursor query(Uri uri,String[] projection,Bundle options,CancellationSignal cancel) {
+            if(projection==null){MatrixCursor result=new MatrixCursor(new String[]{"_display_name","_size","date_modified"});for(long[] row:rows)if(Long.toString(row[0]).equals(uri.getLastPathSegment()))result.addRow(new Object[]{"fixture.jpg",123L,row[1]});return result;}
             requestedSort=options.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER,"");
             String selection=options.getString(ContentResolver.QUERY_ARG_SQL_SELECTION,"");String[] args=options.getStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS);
             List<long[]> matches=new ArrayList<>();
@@ -55,5 +56,29 @@ public class MediaPickerQueryTest {
     }
     @Test public void providerIgnoringOrderMustFailInsteadOfSilentlyHidingRecentPhotos() throws Exception {
         provider.ignoreOrder=true;try{picker.days(session,"",true,new RunControl(30000));fail("Unordered provider was silently accepted");}catch(java.io.IOException expected){assertTrue(expected.getMessage().contains("日期"));}
+    }
+    @Test public void wholeDayExceptOneDoesNotEnqueueTheExcludedPhoto() throws Exception {
+        long when=provider.rows.get(0)[1];provider.rows.clear();provider.rows.add(new long[]{1,when});provider.rows.add(new long[]{2,when});
+        JSONObject days=picker.days(session,"",true,new RunControl(30000));String day=days.getJSONArray("items").getJSONObject(0).getString("day");
+        JSONArray first=picker.items(session,day,"",null,new RunControl(30000)).getJSONArray("items");
+        JSONArray refreshed=picker.items(session,day,"",null,new RunControl(30000)).getJSONArray("items");
+        String excluded=first.getJSONObject(0).getString("id");assertEquals(excluded,refreshed.getJSONObject(0).getString("id"));
+        JSONObject result=picker.enqueue(session,new JSONObject().put("days",new JSONArray().put(day)).put("ids",new JSONArray()).put("exclude_ids",new JSONArray().put(excluded)),null,new RunControl(30000));
+        assertEquals(1,result.getInt("added"));
+        try(Cursor queued=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT uri FROM tasks WHERE scope=?",new String[]{session.scope})){
+            assertEquals(1,queued.getCount());assertTrue(queued.moveToFirst());assertEquals("1",Uri.parse(queued.getString(0)).getLastPathSegment());
+        }
+    }
+    @Test public void expiredExclusionRejectsBeforeAnyEnqueue() throws Exception {
+        String day=picker.days(session,"",true,new RunControl(30000)).getJSONArray("items").getJSONObject(0).getString("day");
+        JSONObject input=new JSONObject().put("days",new JSONArray().put(day)).put("exclude_ids",new JSONArray().put("stale-handle"));
+        assertThrows(java.io.IOException.class,()->picker.enqueue(session,input,null,new RunControl(30000)));
+        try(Cursor queued=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id FROM tasks WHERE scope=?",new String[]{session.scope})){assertEquals(0,queued.getCount());}
+    }
+    @Test public void changingDestinationInvalidatesAnOldSelection() throws Exception {
+        String day=picker.days(session,"",true,new RunControl(30000)).getJSONArray("items").getJSONObject(0).getString("day");
+        JSONObject input=new JSONObject().put("days",new JSONArray().put(day)).put("folder_id","a".repeat(48));
+        assertThrows(java.io.IOException.class,()->picker.enqueue(session,input,null,new RunControl(30000)));
+        try(Cursor queued=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id FROM tasks WHERE scope=?",new String[]{session.scope})){assertEquals(0,queued.getCount());}
     }
 }

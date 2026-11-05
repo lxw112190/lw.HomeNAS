@@ -18,6 +18,8 @@ if($LASTEXITCODE -ne 0){throw 'Windows Release build failed'}
 $exe=Join-Path $root 'build/app/Release/NasServer.exe'
 Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
 Invoke-ReleasePython @('tests/albums.py')
+Invoke-ReleasePython @('tests/folders.py')
+Invoke-ReleasePython @('tests/rename.py')
 Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
 & (Join-Path $root 'tests/check-service-scripts.ps1')
 if($LASTEXITCODE -ne 0){throw 'Service/firewall plans failed'}
@@ -25,7 +27,7 @@ $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','4','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','7','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare
@@ -41,7 +43,7 @@ $apkName='lw.HomeNAS-'+$apk.versionName+'-ci'+$CiNumber+'-release.apk'
 Copy-Item -LiteralPath (Join-Path $client ($apk.sha256+'.apk')) -Destination (Join-Path $assets $apkName)
 $utf8=[Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText((Join-Path $assets ($apkName+'.sha256')),($apk.sha256+'  '+$apkName+"`n"),$utf8)
-$manifest=[ordered]@{serverVersion=$result.version;androidVersion=$apk.versionName;versionCode=$apk.versionCode;androidRunNumber=$CiNumber;commit=$CiSha;package=[IO.Path]::GetFileName($result.archive);packageSha256=$result.sha256;apk=$apkName;apkSha256=$apk.sha256;ui=$(if($UiKeyPath){'signed r'+(1000000L+$CiNumber)}else{'APK builtin'});checks='Windows build, smoke, albums, timeline and package acceptance passed';physicalDeviceTested=$false}
+$manifest=[ordered]@{serverVersion=$result.version;androidVersion=$apk.versionName;versionCode=$apk.versionCode;androidRunNumber=$CiNumber;commit=$CiSha;package=[IO.Path]::GetFileName($result.archive);packageSha256=$result.sha256;apk=$apkName;apkSha256=$apk.sha256;ui=$(if($UiKeyPath){'signed r'+(1000000L+$CiNumber)}else{'APK builtin'});checks='Windows build, smoke, albums, folders, rename, timeline and package acceptance passed';physicalDeviceTested=$false}
 [IO.File]::WriteAllText((Join-Path $assets 'release-manifest.json'),($manifest|ConvertTo-Json -Depth 6),$utf8)
 $notes=@"
 lw.HomeNAS automatic full package / Android CI $CiNumber

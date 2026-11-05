@@ -102,6 +102,8 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
         db.transaction([&] { setting("server_id",randomHex()); setting("admin_salt",salt); setting("admin_hash",passwordHash(password,salt)); db.exec("INSERT INTO devices(id,name,admin,created,last_seen) VALUES('administrator','电脑管理员',1,?,?)",{now,now}); });
     }
     migrateAccounts();
+    initializeFolders();
+    db.exec("CREATE INDEX IF NOT EXISTS upload_ready_asset_owner ON uploads(user_id,asset_id) WHERE state='READY'");
     db.exec(R"SQL(
       CREATE TABLE IF NOT EXISTS albums(id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT NOT NULL DEFAULT '',owner_id TEXT NOT NULL REFERENCES users(id),created INTEGER NOT NULL,updated INTEGER NOT NULL,cover_id TEXT NOT NULL DEFAULT '');
       CREATE TABLE IF NOT EXISTS album_items(album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,asset_id TEXT NOT NULL REFERENCES assets(id),PRIMARY KEY(album_id,asset_id));
@@ -193,7 +195,7 @@ fs::path Store::part(const std::string& id) const { return config.data/"storage/
 fs::path Store::originalPath(const json& row) const { return config.data/fs::u8path(row["path"].get<std::string>()); }
 json Store::taskRow(const std::string& id) {
     if(id.size()!=48 || id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");
-    auto rows=db.query("SELECT * FROM uploads WHERE id=?",{id});if(rows.empty())throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");return rows[0];
+    auto rows=db.query("SELECT * FROM uploads WHERE id=?",{id});if(rows.empty())throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");auto row=rows[0];auto folders=db.query("SELECT id,name,deleted FROM folders WHERE id=?",{row["folder_id"]});bool fallback=folders.empty()||folders[0]["deleted"]=="1";row["effective_folder_id"]=fallback?json("default"):row["folder_id"];row["folder_name"]=fallback?json("默认文件夹"):folders[0]["name"];row["folder_defaulted"]=fallback;return row;
 }
 json Store::upload(const std::string& id,const Identity& who) {
     auto task=taskRow(id);if(!who.admin&&task["user_id"]!=who.userId)throw Error(403,"USER_MISMATCH","不能访问其他账号的上传任务");return cleanTask(task);
@@ -203,11 +205,13 @@ json Store::createUpload(const json& input,const Identity& who) {
     auto hash=normalizedHash(input),name=text(input,"name",512),client=text(input,"client_task_id",128),source=text(input,"source_key",1024);
     auto album=text(input,"album",256,true);auto size=number(input,"size"),modified=input.contains("modified")?number(input,"modified"):millis();
     if(size>config.maxFile || modified>static_cast<uint64_t>(INT64_MAX))throw Error(413,"FILE_TOO_LARGE","文件超过当前配置的大小上限");
+    auto requested=input.contains("folder_id")?text(input,"folder_id",48):std::string("default");
     json result;
     db.transaction([&]{
+        resolveFolder(requested,who);
         auto existing=db.query("SELECT * FROM uploads WHERE user_id=? AND client_task_id=? ORDER BY offset DESC",{who.userId,client});
         if(!existing.empty()) {
-            auto row=existing[0];if(row["sha256"]!=hash || number(row,"size")!=size)throw Error(409,"TASK_ID_CONFLICT","同一个任务ID不能用于不同文件");
+            auto row=existing[0];if(row["sha256"]!=hash || number(row,"size")!=size || row["folder_id"]!=requested)throw Error(409,"TASK_ID_CONFLICT","同一个任务ID不能用于不同文件");
             if(row["state"]=="READY"){
                 auto originals=db.query("SELECT * FROM assets WHERE id=? AND state='READY'",{row["asset_id"]});std::error_code ec;
                 if(originals.empty() || !fs::is_regular_file(originalPath(originals[0]),ec) || fs::file_size(originalPath(originals[0]),ec)!=size){
@@ -216,7 +220,7 @@ json Store::createUpload(const json& input,const Identity& who) {
                     row=taskRow(row["id"]);
                 }
             }
-            result=cleanTask(row);return;
+            result=cleanTask(taskRow(row["id"]));return;
         }
         auto assets=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY'",{hash,std::to_string(size)});
         std::string assetId;
@@ -232,9 +236,10 @@ json Store::createUpload(const json& input,const Identity& who) {
         }
         auto id=randomHex(),now=std::to_string(millis());
         if(assetId.empty()){File f(part(id),true,true);f.truncate(0);f.flush();}
-        db.exec("INSERT INTO uploads(id,client_task_id,device_id,user_id,name,sha256,size,offset,state,asset_id,source_key,album,modified,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            {id,client,who.userId,who.userId,name,hash,std::to_string(size),assetId.empty()?"0":std::to_string(size),assetId.empty()?"UPLOADING":"READY",assetId,source,album,std::to_string(modified),now,now});
+        db.exec("INSERT INTO uploads(id,client_task_id,device_id,user_id,name,sha256,size,offset,state,asset_id,source_key,album,modified,created,updated,folder_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            {id,client,who.userId,who.userId,name,hash,std::to_string(size),assetId.empty()?"0":std::to_string(size),assetId.empty()?"UPLOADING":"READY",assetId,source,album,std::to_string(modified),now,now,requested});
         if(!assetId.empty())db.exec("INSERT OR IGNORE INTO sources(device_id,source_key,asset_id,name,album,modified) VALUES(?,?,?,?,?,?)",{who.userId,source,assetId,name,album,std::to_string(modified)});
+        if(!assetId.empty())attachFolder(requested,assetId);
         result=cleanTask(taskRow(id));
     });return result;
 }
@@ -290,6 +295,7 @@ void Store::finishCommit(const json& task,const json& assetRow) {
         db.exec("UPDATE assets SET state='READY' WHERE id=?",{assetId});
         db.exec("UPDATE uploads SET state='READY',asset_id=?,offset=size,error='',updated=? WHERE id=?",{assetId,std::to_string(millis()),id});
         db.exec("INSERT OR IGNORE INTO sources(device_id,source_key,asset_id,name,album,modified) VALUES(?,?,?,?,?,?)",{task["device_id"],task["source_key"],assetId,task["name"],task["album"],task["modified"]});
+        attachFolder(task["folder_id"],assetId);
     });
 }
 void Store::process(const std::string& id) {
@@ -390,7 +396,7 @@ json Store::sourceStatus(const json& input,const Identity& who) {
     json items=json::array();for(auto row:rows){std::string state=row["state"];
         if(state=="READY"){std::error_code error;bool present=row["asset_state"]=="READY"&&!row["path"].is_null();if(present){auto file=config.data/fs::u8path(row["path"].get<std::string>());present=fs::is_regular_file(file,error)&&!error&&fs::file_size(file,error)==number(row,"size")&&!error;}if(!present)state="MISSING";}
         items.push_back({{"id",row["id"]},{"state",state},{"size",row["size"]},{"modified",row["modified"]},{"sha256",row["sha256"]},{"asset_id",row["asset_id"]}});
-    }return {{"items",items}};
+    }if(input.contains("folder_id"))folderMembership(items,resolveFolder(text(input,"folder_id",48),who));return {{"items",items}};
 }
 json Store::tasks(const Identity& who) {
     auto sql=std::string("SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,updated FROM uploads ");

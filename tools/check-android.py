@@ -35,7 +35,7 @@ class PageLayout(HTMLParser):
 def check_local_pages(assets):
     validate_ui_entries((path.relative_to(assets).as_posix(), path.stat().st_size)
                         for path in assets.rglob('*') if path.is_file())
-    for name in ('index.html', 'boot.js', 'app.js', 'style.css'):
+    for name in ('index.html', 'boot.js', 'app.js', 'style.css', 'photo-viewer.js', 'picker-selection.js', 'library-collections.js'):
         assert (assets / name).is_file(), f'Missing Android asset: {name}'
     layout = PageLayout((assets / 'index.html').read_text(encoding='utf-8'))
     assert len(layout.policies) == 1, 'Expected one Android page CSP'

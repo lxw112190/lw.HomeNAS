@@ -67,6 +67,18 @@ final class Settings {
     boolean paused() { return prefs.getBoolean("paused",true); }
     void pause(boolean value) { prefs.edit().putBoolean("paused",value).commit(); }
     Set<String> albums() { return new HashSet<>(prefs.getStringSet("albums",Collections.emptySet())); }
+    String folder(String scope){return prefs.getString("backup_folder_"+Protocol.key(scope),"default");}
+    String folderName(String scope){return prefs.getString("backup_folder_name_"+Protocol.key(scope),"默认文件夹");}
+    void folder(String scope,String id,String name){if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");synchronized(LOCK){if(!prefs.edit().putString("backup_folder_"+Protocol.key(scope),id).putString("backup_folder_name_"+Protocol.key(scope),name).commit())throw new IllegalStateException("无法保存目标文件夹");}}
+    void fallbackFolder(String scope,String previous){synchronized(LOCK){if(folder(scope).equals(previous))folder(scope,"default","默认文件夹");}}
+    void ensureFolder(Session session,NativeApi api,RunControl control) throws Exception {
+        String requested=folder(session.scope);JSONObject result;boolean fallback=false;
+        try{result=api.get("folders/"+requested,control);}catch(NativeApi.Failure failure){if(failure.status!=404||requested.equals("default"))throw failure;result=api.get("folders/default",control);fallback=true;}
+        if(!current(session)||!folder(session.scope).equals(requested))throw new java.io.InterruptedIOException("账号或目标目录已改变，请重试");
+        String expected=fallback?"default":requested;if(!expected.equals(result.optString("id")))throw new java.io.IOException("服务器返回的目标目录不一致");if(!result.optBoolean("can_write")){pause(true);throw new SecurityException("目标文件夹不可写，备份已暂停，请重新选择");}
+        String name=result.getString("name");if(fallback||!folderName(session.scope).equals(name))folder(session.scope,expected,name);
+        if(fallback)message("原目标文件夹已删除，后续备份使用默认文件夹；已排队任务保留");
+    }
     void rememberConnection(String endpoint,boolean http) {
         if(!prefs.edit().putString("draft_endpoint",endpoint).putBoolean("draft_http",http).commit())throw new IllegalStateException("无法保存电脑地址");
     }
@@ -78,7 +90,7 @@ final class Settings {
         result.put("lastUsername",new JSONObject(prefs.getString("me","{}")).optString("username","admin"));
         result.put("connectionAddress",prefs.getString("draft_endpoint",prefs.getString("endpoint",Protocol.DEFAULT_CONNECTION)))
             .put("connectionHttp",prefs.getBoolean("draft_http",prefs.getBoolean("http",!prefs.contains("endpoint"))));
-        try { Session s=session();if(s!=null)result.put("user",s.user).put("role",s.role).put("canUpload",s.canUpload).put("scope",s.scope); }
+        try { Session s=session();if(s!=null)result.put("user",s.user).put("role",s.role).put("canUpload",s.canUpload).put("scope",s.scope).put("backupFolderId",folder(s.scope)).put("backupFolderName",folderName(s.scope)); }
         catch(Exception error) { clear();result.put("message","本机凭据无法解密，请重新登录"); }
         return result;
     }

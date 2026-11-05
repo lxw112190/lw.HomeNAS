@@ -40,6 +40,8 @@ jobs:
         run: python3 tools/check-android.py
       - name: Check Android source and emulator evidence rules
         run: python3 -m unittest discover -s tests -p 'test_android_*check.py'
+      - name: Check day selection with exclusions
+        run: node tests/picker-selection.cjs
       - name: Restore persistent Debug signing identity
         if: github.event_name != 'pull_request'
         env:

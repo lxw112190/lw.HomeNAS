@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-05",
+  "server_version": "0.4.1-dev",
+  "android_source": {"versionName": "0.7.2-dev", "versionCode": 12, "nativeApi": 6},
+  "windows_build": {"cmake_release": "passed", "direct_vs2022_release_x64": "passed"},
+  "checks": {"smoke": 85, "rename": 14, "albums": 13, "timeline": 9, "http_service_real_scm": 14, "http_service_nonadmin": 7, "android_host": 18, "release_host": 9, "node_release_checks_included": 20, "day_selection_node": "passed", "javascript_syntax": "all passed", "java_grammar_files": 31},
+  "evidence": {
+    "smoke": "test-results/端到端-ad18e66207",
+    "rename": "test-results/端到端-c0d60acbaf",
+    "albums": "test-results/端到端-3e5ff946ec",
+    "timeline": "test-results/端到端-0367227a50",
+    "http_service": "test-results/http-service-5ae08d8fe59c43a3812b68abd0e1521e/result.json",
+    "http_service_nonadmin": "test-results/http-service-64f631411b3d463385c36e455d1c5e8c/result.json"
+  },
+  "scm_test": {"actual_install_executed": true, "test_service_uninstalled": true, "original_fixture_retained": true, "firewall_changed": false, "existing_services_replaced": false},
+  "browser": {"web_zoom_drag_reset": "passed", "mobile_day_exclusion_refresh_submit": "passed with simulated native bridge", "mobile_zoom_reset": "passed at 390x844 with simulated native bridge", "private_media_used": false},
+  "android_compiled_locally": false,
+  "native_junit_and_emulator": "pending CI for code12",
+  "physical_device_and_pinch": "pending",
+  "remote_commit_or_push": false
+}
