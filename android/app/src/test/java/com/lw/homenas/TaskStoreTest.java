@@ -4,6 +4,7 @@ import android.content.Context;
 import org.json.JSONObject;
 import org.junit.Test;
 import org.junit.Before;
+import org.junit.After;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
@@ -12,7 +13,8 @@ import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class) @Config(sdk=35)
 public class TaskStoreTest {
-    @Before public void reset() throws Exception {java.lang.reflect.Field field=TaskStore.class.getDeclaredField("instance");field.setAccessible(true);TaskStore previous=(TaskStore)field.get(null);if(previous!=null)previous.close();field.set(null,null);RuntimeEnvironment.getApplication().deleteDatabase("backup-queue.db");}
+    @Before public void reset() throws Exception {QueueFixture.reset(RuntimeEnvironment.getApplication());}
+    @After public void cleanup() throws Exception {QueueFixture.reset(RuntimeEnvironment.getApplication());}
     @Test public void destinationsKeepSeparateTasksAndReuseConfirmedDigest() throws Exception {
         TaskStore store=TaskStore.get(RuntimeEnvironment.getApplication());String scope="server:alice",folder="a".repeat(48);
         long first=store.enqueue(scope,"same-source","content://photos/1","fixture.jpg","Camera",100,200);

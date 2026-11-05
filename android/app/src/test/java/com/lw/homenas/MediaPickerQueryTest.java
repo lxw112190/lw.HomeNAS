@@ -50,11 +50,17 @@ public class MediaPickerQueryTest {
     }
     Context context;Settings settings;Settings.Session session;Provider provider;MediaPicker picker;
     @Before public void prepare() throws Exception {
-        context=RuntimeEnvironment.getApplication();Shadows.shadowOf((Application)context).grantPermissions(Manifest.permission.READ_MEDIA_IMAGES);
+        context=RuntimeEnvironment.getApplication();QueueFixture.reset(context);Shadows.shadowOf((Application)context).grantPermissions(Manifest.permission.READ_MEDIA_IMAGES);
         provider=new Provider();ProviderInfo info=new ProviderInfo();info.authority="media";provider.attachInfo(context,info);ShadowContentResolver.registerProviderInternal("media",provider);
         long start=LocalDate.of(2026,8,1).atTime(12,0).toEpochSecond(ZoneOffset.UTC);for(int i=0;i<80;i++)provider.rows.add(new long[]{i+1,start+i*86400L});
-        settings=new Settings(context);settings.prefs.edit().putLong("revision",42).putString("token","fixture-only").commit();
+        settings=new Settings(context);settings.prefs.edit().clear().putLong("revision",42).putString("token","fixture-only").commit();
         session=new Settings.Session("http://127.0.0.1:8787","","fixture-only","fixture-server",new JSONObject().put("user_id","picker-test"),true,42);picker=new MediaPicker(context,settings);
+        try(Cursor empty=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT COUNT(*) FROM tasks",null)){assertTrue(empty.moveToFirst());assertEquals("Fixture queue must start empty",0,empty.getInt(0));}
+    }
+    @After public void cleanup() throws Exception {
+        if(picker!=null)picker.clear();
+        if(context!=null)QueueFixture.reset(context);
+        if(settings!=null)settings.prefs.edit().clear().commit();
     }
     @Test public void newestDaysCannotDisappearBehindTheFirstThirtyOldDays() throws Exception {
         JSONObject page=picker.days(session,"",true,new RunControl(30000));String newest=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date(provider.rows.get(79)[1]*1000));

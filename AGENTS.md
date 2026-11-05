@@ -32,3 +32,4 @@
 - 所有锁定哈希针对原始字节，.gitattributes必须同时保持third_party/** -text及tools/ffmpeg/** -text，FFmpeg许可证/README也受provenance.json锁定，不只保护C/C++源码。避免Windows core.autocrlf改写导致CI校验失败；不得跳过校验、改为CRLF哈希或校验时忽略换行。发布测试须合并两份锁定清单检查所有已入库文件的Git属性，并覆盖Windows检出过滤器及篡改拒绝。
 - 备份文件夹是共享资料库的逻辑关联，不是客户端磁盘路径；删除/移动目录不能删除或搬动内容原件。默认目录兼容旧文件和旧客户端。队列入队时固定folder_id，改变偏好仅作用于新任务；幂等上传不可改目标。跨目录同内容复用原件但必须补目录关联，不能因全局READY跳过。手机队列升级保留ID、client、摘要、远端任务、64位确认偏移，目录须加入队列去重键；旧目录删除后默认回退需明确显示。修改此链路运行folders.py、smoke.py和Android队列SQL/迁移检查。
 - MediaStore测试夹具需分别支持集合列表与单项元数据查询：集合列表检查Bundle及SQL排序，单项URI要支持传统五参数query与Bundle重载，包含空/指定projection。MediaCatalog.describe会在真正入队前走五参数查询，不能用全局AssertionError拦截合法单项读取；修复时保留排除照片后的实际队列条数/URI断言，并分别回归元数据读取和集合旧查询拒绝。Java语法通过不等于ContentResolver重载路径已在Robolectric执行。
+- Robolectric用例不能依赖Application重置或执行顺序来隔离生产静态单例。涉及TaskStore的隔离用例通过测试专用QueueFixture在@Before/@After关闭旧helper、清空单例并删除测试SQLite数据库；设置偏好也显式初始化。保留“异常操作不入队”的零条断言，在@Before先确认空库，不能把其他用例残留记录解释成生产入队错误，也不能通过调整方法顺序或放宽数量断言绕过。
