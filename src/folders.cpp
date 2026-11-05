@@ -5,7 +5,7 @@
 namespace nas {
 namespace {
 bool folderId(const std::string& id){return id=="default"||(id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos);}
-const std::string folderFields="SELECT f.id,f.name,f.description,f.owner_id,f.created,f.updated,(SELECT display_name FROM users WHERE id=f.owner_id) AS owner_name,(SELECT count(*) FROM folder_items i JOIN assets a ON a.id=i.asset_id AND a.state='READY' WHERE i.folder_id=f.id) AS item_count FROM folders f ";
+const std::string folderFields="SELECT f.id,f.name,f.description,f.owner_id,f.created,f.updated,(SELECT display_name FROM users WHERE id=f.owner_id) AS owner_name,(SELECT count(*) FROM folder_items i JOIN assets a ON a.id=i.asset_id AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id) WHERE i.folder_id=f.id) AS item_count FROM folders f ";
 }
 void Store::initializeFolders(){
     db.transaction([&]{
@@ -43,7 +43,7 @@ json Store::folders(const std::string& before,const Identity& who){
 json Store::folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     auto info=folder(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
     if(!before.empty()&&(before.size()!=48||before.find_first_not_of("0123456789abcdef")!=std::string::npos))throw Error(400,"INVALID_CURSOR","文件分页游标无效");
-    Params args{id};std::string sql="SELECT a.id,a.sha256,a.size,a.name,a.mime,a.category,a.created,a.modified,a.preview FROM folder_items i JOIN assets a ON a.id=i.asset_id WHERE i.folder_id=? AND a.state='READY'";
+    Params args{id};std::string sql="SELECT a.id,a.sha256,a.size,a.name,a.mime,a.category,a.created,a.modified,a.preview FROM folder_items i JOIN assets a ON a.id=i.asset_id WHERE i.folder_id=? AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id)";
     if(!before.empty()){sql+=" AND a.id<?";args.push_back(before);}if(type=="image"||type=="video"||type=="file"){sql+=" AND a.category=?";args.push_back(type);}if(!search.empty()){sql+=" AND a.name LIKE ?";args.push_back("%"+search+"%");}
     auto rows=db.query(sql+" ORDER BY a.id DESC LIMIT 49",args);std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}assetPermissions(rows,who);
     return {{"folder",info},{"items",rows},{"next",next}};

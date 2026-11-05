@@ -9,7 +9,6 @@ on:
         default: true
   push:
     branches: [main]
-    paths: ['android/**', 'src/**', 'web/**', 'config/**', 'deploy/**', 'tools/**', 'tests/**', 'third_party/**', 'CMakeLists.txt', '.gitattributes', '.github/workflows/android.yml', '.github/workflows/release.yml', '.github/scripts/**']
   pull_request:
     paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
 
@@ -37,7 +36,9 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Validate Android source layout
-        run: python3 tools/check-android.py
+        run: |
+          python3 tools/check-version.py
+          python3 tools/check-android.py
       - name: Check Android source and emulator evidence rules
         run: python3 -m unittest discover -s tests -p 'test_android_*check.py'
       - name: Check day selection with exclusions

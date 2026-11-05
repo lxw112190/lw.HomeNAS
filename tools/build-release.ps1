@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$ArtifactDirectory,
     [Parameter(Mandatory=$true)][ValidateRange(1,2147483647)][int]$CiNumber,
     [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$CiSha,
@@ -8,6 +8,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
 function Invoke-ReleasePython { & python.exe @args; if($LASTEXITCODE -ne 0){throw ('Python check failed: '+$args[0])} }
+Invoke-ReleasePython @('tools/check-version.py')
 Invoke-ReleasePython @('tools/check-dependencies.py')
 Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_release_*check.py')
 Invoke-ReleasePython @('tools/fetch-ffmpeg.py')
@@ -19,15 +20,18 @@ $exe=Join-Path $root 'build/app/Release/NasServer.exe'
 Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
+Invoke-ReleasePython @('tests/recycle.py')
 Invoke-ReleasePython @('tests/rename.py')
 Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
 & (Join-Path $root 'tests/check-service-scripts.ps1')
 if($LASTEXITCODE -ne 0){throw 'Service/firewall plans failed'}
+& (Join-Path $root 'tests/deployment-scripts.ps1')
+if($LASTEXITCODE -ne 0){throw 'Deployment/logging checks failed'}
 $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','7','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','8','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare
@@ -49,10 +53,11 @@ $notes=@"
 lw.HomeNAS automatic full package / Android CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
+v1.0 highlights: Web file moves and recoverable recycle bin; Web/APK preview navigation and on-demand metadata.
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 Windows package tests and upstream Android CI passed. This does not replace physical-device testing.
 
-Fresh deployment: extract the ZIP, run deploy/import_android.bat, then start the server.
+Fresh deployment: extract the ZIP, import the bundled APK using deploy/import_android.ps1, then run deploy/install-service.bat as administrator.
 Open http://127.0.0.1:8787/ and sign in with admin / admin123. Change the initial password after login.
 Defaults: allow_insecure_lan=true, allow_external_hosts=true. Preserve existing config and data during upgrades.
 Switching from an old temporary APK signing key may require a one-time reinstall; preserve pending phone backup work first.

@@ -1,4 +1,4 @@
-﻿param(
+param(
     [ValidateSet('Install','Configure','Start','Stop','Restart','Status','Uninstall','Console','AdminPassword')][string]$Action = 'Status',
     [switch]$AllowInsecureLan,
     [switch]$DisableInsecureLan,
@@ -7,8 +7,35 @@
 $ErrorActionPreference = 'Stop'
 $serviceName = 'lw.HomeNAS'
 $packageRoot = Split-Path -Parent $PSScriptRoot
-if($AllowInsecureLan -and $DisableInsecureLan){throw 'Choose AllowInsecureLan or DisableInsecureLan, not both.'}
 $httpArguments=if($AllowInsecureLan){' --allow-insecure-lan'}elseif($DisableInsecureLan){' --no-allow-insecure-lan'}else{''}
+$operationLog = $null
+$stage = 'Preflight'
+
+function Initialize-OperationLog {
+    # No transcript: Console/AdminPassword may display a password. Log only explicit diagnostics.
+    foreach($directory in @((Join-Path $PSScriptRoot 'logs'),(Join-Path ([IO.Path]::GetTempPath()) 'lw.HomeNAS-deploy'))) {
+        try {
+            New-Item -ItemType Directory -Path $directory -Force | Out-Null
+            $path=Join-Path $directory 'service-install.log'
+            if((Test-Path -LiteralPath $path) -and (Get-Item -LiteralPath $path).Length -ge 1MB) {
+                if(Test-Path -LiteralPath ($path+'.3')){Remove-Item -LiteralPath ($path+'.3') -Force}
+                foreach($number in 2,1){if(Test-Path -LiteralPath ($path+'.'+$number)){Move-Item -LiteralPath ($path+'.'+$number) -Destination ($path+'.'+($number+1)) -Force}}
+                Move-Item -LiteralPath $path -Destination ($path+'.1') -Force
+            }
+            [IO.File]::AppendAllText($path,([DateTime]::UtcNow.ToString('o')+' BEGIN action='+$Action+"`r`n"),[Text.UTF8Encoding]::new($false))
+            $script:operationLog=$path
+            Write-Host ('Deployment log: '+$path)
+            return
+        }catch{continue}
+    }
+    Write-Warning 'Cannot write deployment log to deploy/logs or the temporary folder.'
+}
+function Write-OperationLog([string]$Message) {
+    if($operationLog) {
+        try{[IO.File]::AppendAllText($operationLog,([DateTime]::UtcNow.ToString('o')+' stage='+$stage+' '+$Message+"`r`n"),[Text.UTF8Encoding]::new($false))}
+        catch{Write-Warning 'Cannot append deployment log.'}
+    }
+}
 
 function Get-Layout {
     $candidates = @((Join-Path $packageRoot 'NasServer.exe'), (Join-Path $packageRoot 'out/Release/NasServer.exe'), (Join-Path $packageRoot 'build/app/Release/NasServer.exe'))
@@ -17,7 +44,9 @@ function Get-Layout {
     $exe = [IO.Path]::GetFullPath($exe)
     $runtimeRoot = Split-Path -Parent $exe
     $configPath = Join-Path $runtimeRoot 'config/server.json'
-    $config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    # JSON parser exceptions can quote the entire config, including bootstrap credentials.
+    try{$config = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json}
+    catch{throw 'Cannot read config/server.json. Check that it exists and contains valid UTF-8 JSON.'}
     if($config.PSObject.Properties.Name -contains 'allow_insecure_lan' -and $config.allow_insecure_lan -isnot [bool]){throw 'allow_insecure_lan must be true or false.'}
     $effectiveHttp=if($AllowInsecureLan){$true}elseif($DisableInsecureLan){$false}elseif($config.PSObject.Properties.Name -contains 'allow_insecure_lan'){[bool]$config.allow_insecure_lan}else{$true}
     $configRoot = Split-Path -Parent $configPath
@@ -66,7 +95,7 @@ function Stop-NasService {
 }
 function Start-NasService {
     $service = Get-NasService
-    if (-not $service) { throw 'Service not installed. Run install_service.bat first.' }
+    if (-not $service) { throw 'Service not installed. Run install-service.bat first.' }
     try {
         $service.Refresh()
         if ($service.Status -eq 'Running') { return }
@@ -78,7 +107,38 @@ function Grant-Directory([string]$Path,[string]$Rights,[string]$Sid) {
     & icacls.exe $Path /grant ('*'+$Sid+':(OI)(CI)'+$Rights) | Out-Host
     if ($LASTEXITCODE -ne 0) { throw ('Cannot grant service access to '+$Path) }
 }
+function New-NativeNasService($Layout) {
+    if(-not ('HomeNas.Deployment.NativeService' -as [type])) {
+        Add-Type -Path (Join-Path $PSScriptRoot 'service-native.cs')
+    }
+    try {
+        [HomeNas.Deployment.NativeService]::Create($serviceName,$Layout.BinaryPath,$Layout.Account)
+    } catch {
+        $nativeFailure=$_.Exception.GetBaseException()
+        if($nativeFailure -isnot [ComponentModel.Win32Exception] -or $nativeFailure.NativeErrorCode -ne 1783){throw}
+        Write-OperationLog ('Native creation failed: '+$nativeFailure.Message)
+        # A failed RPC may have reached SCM. Never adopt, overwrite or delete an existing service.
+        if([HomeNas.Deployment.NativeService]::Exists($serviceName)) {
+            throw 'Native creation returned 1783 but the service now exists. Refusing to retry; inspect its configuration before continuing.'
+        }
+        Write-Host 'CreateServiceW returned 1783. Trying Windows sc.exe once with the same virtual account.'
+        $script:stage='CreateServiceScExe'
+        $result=[HomeNas.Deployment.NativeService]::CreateWithSc($serviceName,$Layout.BinaryPath,$Layout.Account)
+        Write-OperationLog ('sc.exe exit code='+$result.ExitCode)
+        foreach($line in @($result.Output,$result.Error)) {
+            if($line){Write-Host $line;Write-OperationLog ('sc.exe: '+$line.Trim())}
+        }
+        if($result.ExitCode -ne 0) {
+            throw ('Native CreateServiceW failed with 1783; Windows sc.exe also failed, exit code '+$result.ExitCode+'. Check Windows service/RPC policies and protection software logs; no account or firewall setting was changed.')
+        }
+    }
+}
 try {
+    if(-not $PlanOnly -and $Action -notin @('Console','AdminPassword')) {
+        Initialize-OperationLog
+        Write-OperationLog ('OS='+[Environment]::OSVersion.VersionString+'; PowerShell='+$PSVersionTable.PSVersion+'; Process64Bit='+[Environment]::Is64BitProcess)
+    }
+    if($AllowInsecureLan -and $DisableInsecureLan){throw 'Choose AllowInsecureLan or DisableInsecureLan, not both.'}
     if ($PlanOnly) { Get-Layout | ConvertTo-Json -Depth 3; exit 0 }
     if ($Action -eq 'AdminPassword') {
         $layout = Get-Layout
@@ -101,26 +161,32 @@ try {
         $service.Dispose(); exit 0
     }
     Require-Administrator
+    Write-OperationLog 'Administrator=True'
     switch ($Action) {
         'Install' {
             $layout = Get-Layout
             if (Get-NasService) { throw 'Service already exists; use start/stop/restart/status. This installer will not delete or overwrite an existing service.' }
+            Write-OperationLog ('Executable='+$layout.Executable+'; Account='+$layout.Account+'; Config='+$layout.Config+'; Data='+$layout.Data+'; LAN HTTP='+$layout.AllowInsecureLan)
             New-Item -ItemType Directory -Path $layout.Data -Force | Out-Null
-            # Structured CIM argument preserves embedded quotes and Unicode paths.
-            # Omit StartPassword: virtual service accounts require a NULL password.
-            $created = Invoke-CimMethod -ClassName Win32_Service -MethodName Create -Arguments @{
-                Name=$serviceName;DisplayName='lw.HomeNAS';PathName=$layout.BinaryPath;
-                ServiceType=[byte]16;ErrorControl=[byte]1;StartMode='Automatic';
-                DesktopInteract=$false;StartName=$layout.Account
-            }
-            if ($created.ReturnValue -ne 0) { throw ('Create service failed, Win32_Service code '+$created.ReturnValue) }
+            $stage='CreateServiceW'
+            New-NativeNasService $layout
+            Write-OperationLog 'Service created; subsequent failures leave it installed for inspection.'
+            $stage='ServiceSid'
             & sc.exe sidtype $serviceName unrestricted | Out-Host
             if ($LASTEXITCODE -ne 0) { throw 'Unable to enable the service SID.' }
+            $stage='RecoveryPolicy'
+            & sc.exe failure $serviceName reset= 86400 actions= restart/5000/restart/15000 | Out-Host
+            if($LASTEXITCODE -ne 0){throw 'Unable to configure service restart recovery.'}
+            & sc.exe failureflag $serviceName 1 | Out-Host
+            if($LASTEXITCODE -ne 0){throw 'Unable to enable service failure recovery.'}
             $sid = ([Security.Principal.NTAccount]::new($layout.Account)).Translate([Security.Principal.SecurityIdentifier]).Value
+            $stage='DirectoryPermissions'
             Grant-Directory $layout.RuntimeRoot 'RX' $sid
             if (-not $layout.Web.StartsWith($layout.RuntimeRoot+'\',[StringComparison]::OrdinalIgnoreCase)) { Grant-Directory $layout.Web 'RX' $sid }
             Grant-Directory $layout.Data 'M' $sid
+            $stage='StartService'
             Start-NasService
+            Write-OperationLog 'Service running'
             Write-Host ('Installed and running: '+$layout.HttpUrl)
             Write-Host ('Initial username: admin; initial password file: '+(Join-Path $layout.Data 'initial-admin-password.txt'))
             Write-Host ('Service log: '+(Join-Path $layout.Data 'logs/service.log'))
@@ -129,7 +195,7 @@ try {
         'Configure' {
             $layout = Get-Layout
             $existing = Get-CimInstance Win32_Service -Filter "Name='$serviceName'"
-            if (-not $existing) { throw 'Service not installed. Use install_service.bat or install_http_service.bat first.' }
+            if (-not $existing) { throw 'Service not installed. Use install-service.bat first.' }
             $expectedPrefix = '"'+$layout.Executable+'"'
             if (-not $existing.PathName.StartsWith($expectedPrefix+' ',[StringComparison]::OrdinalIgnoreCase)) { throw 'The installed service points to another application path. Configure it from the matching installation directory.' }
             $wasRunning = $existing.State -ne 'Stopped'
@@ -150,8 +216,14 @@ try {
             Write-Host 'Service uninstalled. Application files, certificates and all data were retained.'
         }
     }
+    Write-OperationLog 'Action completed'
 } catch {
-    Write-Error -Message $_.Exception.Message -ErrorAction Continue
-    Write-Host 'Check status_service.bat, Windows Event Viewer, port conflicts, and data/logs/service.log.'
+    $failure=$_.Exception.GetBaseException()
+    Write-OperationLog ('FAILED: '+$failure.Message)
+    Write-Error -Message $failure.Message -ErrorAction Continue
+    if($operationLog){Write-Host ('Deployment log: '+$operationLog)}
+    Write-Host ('Failed stage: '+$stage)
+    Write-Host 'If creation failed, NasServer.exe has not started and service.log will not exist.'
+    Write-Host 'Check deploy/logs/service-install.log and Windows Event Viewer. For startup failures also check data/logs/service.log.'
     exit 1
 }

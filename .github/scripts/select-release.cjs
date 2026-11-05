@@ -1,7 +1,7 @@
 module.exports = async ({github, context, core}) => {
   const {owner, repo} = context.repo;
   const dispatch = context.eventName === 'workflow_dispatch';
-  const publish = !dispatch || core.getInput('publish') !== 'false';
+  let publish = !dispatch || core.getInput('publish') !== 'false';
   const input = dispatch ? core.getInput('android_run_id') : String(context.payload.workflow_run.id);
   if (input && (!/^[1-9][0-9]*$/.test(input) || !Number.isSafeInteger(Number(input)))) throw new Error('Android run ID must be a positive safe integer.');
   const valid = run => run.name === 'Android APK' && run.path === '.github/workflows/android.yml' && run.head_branch === 'main' && run.head_repository?.full_name === `${owner}/${repo}` && ['push','workflow_dispatch'].includes(run.event) && run.status === 'completed' && run.conclusion === 'success' && /^[a-f0-9]{40}$/.test(run.head_sha);
@@ -15,14 +15,17 @@ module.exports = async ({github, context, core}) => {
   }
   if (!selected) throw new Error('No eligible Android run found. Run Android APK on main with emulator enabled first.');
   const name = `lw.HomeNAS-Android-${selected.run_number}`;
-  const tag = `ci-${selected.run_number}`;
+  const versionFile=(await github.rest.repos.getContent({owner,repo,path:'VERSION',ref:selected.head_sha})).data;
+  if(versionFile.type!=='file'||versionFile.encoding!=='base64')throw new Error('VERSION must be a regular UTF-8 source file.');
+  const version=Buffer.from(versionFile.content,'base64').toString('utf8').trim();
+  if(!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/.test(version))throw new Error('Invalid semantic VERSION.');
+  const tag = `v${version}`;
   let already=false;
   if (publish) {
     try {
       const release=(await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;
-      if (release.target_commitish !== selected.head_sha) throw new Error('Existing release tag points at a different commit.');
-      already=!release.draft;
-      if (already) core.notice(`Already published: ${release.html_url}. Existing assets will not be overwritten.`);
+      if(!release.draft){publish=false;core.notice(`Version ${version} is already published. Building artifacts only; existing release remains unchanged.`);}
+      else if(release.target_commitish !== selected.head_sha)throw new Error('Unpublished version draft belongs to a different commit; resolve it before retrying.');
     } catch(error) { if(error.status !== 404) throw error; }
   }
   if(!already){
@@ -30,5 +33,5 @@ module.exports = async ({github, context, core}) => {
     const matching = artifacts.filter(artifact => artifact.name === name && !artifact.expired);
     if(matching.length !== 1 || matching[0].workflow_run?.head_sha !== selected.head_sha)throw new Error('Expected one unexpired APK artifact from the selected commit.');
   }
-  for(const [key,value] of Object.entries({run_id:selected.id,run_number:selected.run_number,sha:selected.head_sha,artifact_name:name,tag,publish:String(publish),already:String(already)}))core.setOutput(key,String(value));
+  for(const [key,value] of Object.entries({run_id:selected.id,run_number:selected.run_number,sha:selected.head_sha,artifact_name:name,tag,version,publish:String(publish),already:String(already)}))core.setOutput(key,String(value));
 };

@@ -97,6 +97,7 @@ final class MediaPicker {
     private String status(Item item,Map<String,JSONObject> checked){
         Stamp stamp=stamps.get(item.identity);if(stamp==null)return "NEW";if(!stamp.state.equals("READY"))return stamp.state;
         JSONObject remote=checked.get(stamp.remote);if(remote==null)return "UNCONFIRMED";
+        if(remote.optString("state").equals("TRASHED"))return "TRASHED";
         return remote.optString("state").equals("READY")&&remote.optString("sha256").equals(stamp.sha)&&remote.optString("size").equals(Long.toString(item.size))?(remote.optBoolean("in_folder")?"READY":"BACKED_UP"):"MISSING";
     }
     synchronized JSONObject items(Settings.Session session,String date,String before,NativeApi api,RunControl control) throws Exception {
@@ -120,7 +121,7 @@ final class MediaPicker {
         if(selected.isEmpty())throw new IOException("已取消所有照片，请重新选择");
         List<Item> items=new ArrayList<>(selected.values());for(Item item:items)lookup(session,item,control);Map<String,JSONObject> checked=verify(session,items,api,control);TaskStore tasks=TaskStore.get(context);String folder=destination,folderName=settings.folderName(session.scope);if(!destination.equals(settings.folder(session.scope)))throw new IOException("目标文件夹已改变，请刷新");int added=0,skipped=0;
         for(Item item:items){control.check();if(!settings.current(session))throw new SecurityException("登录已改变");MediaCatalog.Info info=MediaCatalog.describe(context.getContentResolver(),item.uri);if(info.size!=item.size||info.modified!=item.modified)throw new IOException("部分文件已变化，请刷新；已入队项目会保留");String state=status(item,checked);Stamp stamp=stamps.get(item.identity);
-            if(state.equals("READY")){skipped++;continue;}
+            if(state.equals("READY")||state.equals("TRASHED")){skipped++;continue;}
             if(state.equals("BACKED_UP")&&stamp!=null&&folder.equals(stamp.folder)){if(tasks.relink(stamp.id))added++;else skipped++;continue;}
             if(state.equals("UNCONFIRMED"))throw new IOException("无法核实已备份记录，请检查电脑连接后重试");
             if(stamp!=null&&folder.equals(stamp.folder)&&!state.equals("BACKED_UP")){if(state.equals("ERROR")||state.equals("SOURCE_MISSING")||state.equals("MISSING")){if(tasks.requeue(stamp.id,item.uri.toString()))added++;else skipped++;}else skipped++;}

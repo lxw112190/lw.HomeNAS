@@ -149,7 +149,7 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",7).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",8).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true);
         String pem=settings.prefs.getString("pending_cert","");
@@ -272,6 +272,10 @@ public final class MainActivity extends Activity {
             case "pause": requireSession(true);settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));return snapshot();
             case "retry": {Settings.Session session=requireSession(true);TaskStore.get(this).retry(session.scope);return snapshot();}
             case "overview": {Settings.Session session=requireSession(false);return authenticatedGet(session,"overview");}
+            case "assetMetadata": {
+                Settings.Session session=requireSession(false);String id=data.getString("id");if(!Protocol.assetId(id)||!assets.containsKey(id))throw new IllegalArgumentException("请刷新文件列表后重试");
+                return authenticatedGet(session,"assets/"+id+"/metadata");
+            }
             case "assetRename": {
                 Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.assetId(id))throw new IllegalArgumentException("文件标识无效");
                 JSONObject result;try{result=api(session).post("assets/"+id+"/rename",new JSONObject().put("name",data.getString("name")).put("old_name",data.getString("old_name")),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}

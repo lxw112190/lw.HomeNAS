@@ -1,4 +1,4 @@
-name: Full package and GitHub Release
+name: Build package and versioned Release
 
 on:
   workflow_run:
@@ -12,7 +12,7 @@ on:
         type: string
         required: false
       publish:
-        description: Publish GitHub prerelease (otherwise upload verified package only)
+        description: Publish only if VERSION has not been released (otherwise artifacts only)
         type: boolean
         default: true
 
@@ -30,11 +30,13 @@ jobs:
       sha: ${{ steps.source.outputs.sha }}
       artifact_name: ${{ steps.source.outputs.artifact_name }}
       tag: ${{ steps.source.outputs.tag }}
+      version: ${{ steps.source.outputs.version }}
       publish: ${{ steps.source.outputs.publish }}
       already: ${{ steps.source.outputs.already }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.select.outputs.sha }}
           persist-credentials: false
       - name: Validate source workflow, jobs, commit and artifact
         id: source
@@ -49,7 +51,6 @@ jobs:
 
   package:
     needs: select
-    if: needs.select.outputs.already != 'true'
     runs-on: windows-2022
     timeout-minutes: 35
     concurrency:
@@ -60,6 +61,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.select.outputs.sha }}
           ref: ${{ needs.select.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
@@ -115,11 +117,12 @@ jobs:
       contents: write
       actions: read
     concurrency:
-      group: publish-android-${{ needs.select.outputs.run_id }}
+      group: publish-version-${{ needs.select.outputs.tag }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ needs.select.outputs.sha }}
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:

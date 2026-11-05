@@ -36,7 +36,7 @@ function Invoke-Entry([string]$Action,[string[]]$Flags=@(),[int]$Expected=0){
 function Invoke-HttpBatch([int]$Expected){
     $process=[Diagnostics.Process]::new()
     $process.StartInfo.FileName=$env:ComSpec
-    $process.StartInfo.Arguments='/d /c ""'+(Join-Path $package 'deploy/install_http_service.bat')+'""'
+    $process.StartInfo.Arguments='/d /c ""'+(Join-Path $package 'deploy/install-service.bat')+'""'
     $process.StartInfo.WorkingDirectory=$env:SystemRoot
     $process.StartInfo.UseShellExecute=$false;$process.StartInfo.CreateNoWindow=$true
     $process.StartInfo.RedirectStandardInput=$true;$process.StartInfo.RedirectStandardOutput=$true;$process.StartInfo.RedirectStandardError=$true
@@ -48,7 +48,7 @@ function Invoke-HttpBatch([int]$Expected){
     }finally{$process.Dispose()}
 }
 function Service(){Get-CimInstance Win32_Service -Filter "Name='lw.HomeNAS'"}
-function Is-Owned($Service){return $Service -and $Service.PathName -eq ('"'+(Join-Path $package 'NasServer.exe')+'" --service --config "'+(Join-Path $package 'config/server.json')+'" --allow-insecure-lan')}
+function Is-Owned($Service){return $Service -and $Service.PathName -eq ('"'+(Join-Path $package 'NasServer.exe')+'" --service --config "'+(Join-Path $package 'config/server.json')+'"')}
 function Http-Identity(){(Invoke-RestMethod -Uri ('http://127.0.0.1:'+$config.http_port+'/api/v1/server') -TimeoutSec 10).server_id}
 $attempted=$false;$failure=$null
 try{
@@ -69,6 +69,8 @@ try{
         }
     }else{
         if(Service){throw 'lw.HomeNAS already exists. Refusing to alter an existing service; stop is not enough. Use an isolated test machine.'}
+        $config.allow_insecure_lan=$true
+        [IO.File]::WriteAllText((Join-Path $package 'config/server.json'),($config|ConvertTo-Json),$utf8)
         $attempted=$true
         [void](Invoke-HttpBatch 0)
         $service=Service

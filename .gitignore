@@ -2,6 +2,7 @@
 /out/
 /data/
 /logs/
+/deploy/logs/
 /deliveries/
 /test-results/
 /incoming-android/

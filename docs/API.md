@@ -83,3 +83,12 @@ JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`�
 上传创建新增可选 `folder_id`，省略使用default。服务端保存原始请求目标，同一个client_task_id不能改变目标。新入库和内容去重都添加目录关联，重复引用幂等；原件可同时属于多个目录。删除目录使用墓碑，现有引用归入默认目录，正在上传或未开始请求的旧目标仍能回退。任务返回 `folder_id`（原始目标）、`effective_folder_id`、`folder_name` 和布尔 `folder_defaulted`，回退时必须向用户说明。
 
 `sources/status` 可附带 `folder_id`，每项增加 `in_folder`，同时核对原件存在和目录关联。不能仅凭全局READY跳过向另一个目录添加关联。默认未指定folder_id时保持旧响应兼容。旧客户端省略目录仍使用默认目录。升级会将现有READY原件补关联到默认目录，不移动内容文件；运行旧服务程序写入升级后的库会遗漏目录关联，不支持回退运行。
+# v1.0新增：回收站与移动来源
+
+- `POST /api/v1/assets/trash`、`POST /api/v1/assets/restore`：JSON为 `{"asset_ids":["48位asset id"]}`，每批1至100项，整批事务；返回count/restored。管理员管理全部，member仅操作自己有上传记录的原件，恢复另要求本人删除；viewer拒绝。
+- `GET /api/v1/trash?before=&type=all&q=`：每页48项，返回items/next；按删除时间和id倒序，游标`deleted_at:id`。member仅列本人删除，管理员全部；不返回物理路径。
+- `GET /api/v1/assets/{id}/folders`：返回此活动原件当前所属的可浏览文件夹及can_write。移动使用已有 `POST /api/v1/folders/{source_id}/move`，提交asset_ids和target_id；指定来源之外的关联保持。
+- `POST /api/v1/sources/status`：回收站中的任务返回 `state:"TRASHED"`，区别于MISSING。原件保留、全局去重继续有效，客户端不应自动恢复或重新入队。
+- `GET /api/v1/overview`新增trash.files/trash.bytes，表示保留的回收站记录和大小。library仅统计活动原件；磁盘available仍来自实际文件系统。
+
+回收站记录保留原件及分类，普通列表、封面、原件/元数据读取隐藏。无永久清空/自动到期；恢复仍检查原件存在及大小。错误批次回滚，状态已改变返回409。现有所有认证、请求体限制和角色约束继续生效。

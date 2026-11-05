@@ -2,16 +2,21 @@
 
 - 功能优先，Windows x64 / C++17 / VS2022 是当前实际目标。不要为开源预先扩展跨平台、插件框架或复杂 CI。
 - 用户自己执行提交和推送。可以初始化与配置 remote；后续只给命令，不自动 git add/commit/push/tag 或修改远程。
+- 正式版本由根VERSION标识，并与core.hpp、CMake、Android versionName一致；APK生产变更另递增versionCode。main每次推送均构建包，只有尚未公开的vVERSION发布正式Release，已有公开标签附件不可改写。版本门禁不替代Windows/固定签名APK/模拟器/完整ZIP验收，不把本机准备称为已在线发布。
 - 默认相对路径按配置文件目录解析。默认配置位于 exe/config/server.json，不依赖进程工作目录。文档图片使用相对路径。
 - 原件入库前必须校验大小和完整 SHA256；确认偏移只在文件刷新与数据库持久化后前移。保留提交中间状态和崩溃恢复。
 - 上传采用有界流式读取，禁止 req.body / base64 承载整个大视频。所有文件长度/偏移保持64位，传到网页时使用十进制字符串。
 - 手机删除、撤销设备和预览失败都不能删除服务器原件。测试只能终止测试自己启动且路径确认的进程。
+- Web删除按用户选择进入可恢复回收站，不物理删除原件；用独立asset_trash标记保留全局去重及目录/图集关联。活动列表、封面、下载需一致隐藏，手机TRASHED不得误当MISSING自动恢复。批量操作权限和事务保持全有或全无；普通用户仅恢复自己删除，admin可全部。修改此链路运行recycle.py和对应smoke/folders，浏览器实走删除/恢复；不得隐式增加永久删除或自动清空。
 - data、真实照片、数据库、运行日志、凭据、TLS私钥和APK签名身份不进入 Git。不要对外提供用户测试数据。
 - 修改认证、上传、恢复、去重或缩略图方向后，运行对应 tests/smoke.py 检查。界面上传要用实际浏览器验证，不能仅以接口测试代替。
 - 明确区分设计、已实现、自动测试通过、Android真机验证；不能把现有网页前台上传称为后台自动备份。
 
 - 账号版本采用admin/member/viewer三角色，服务端限制所有写接口；当前资料库共享，不承诺文件隔离。schema2升级需保留原件/确认偏移并撤销旧配对凭据。不能保留配对入口作为绕过账号的后门。
 - Windows服务走原生SCM入口，脚本卸载不删数据、不静默覆盖同名服务；只制作脚本时不在开发机自行安装服务。日志不得打印密码或令牌。
+- deploy只保留用户指定的7个BAT（install/start/stop/restart/uninstall-service及open/remove_firewall），其余维护用PowerShell命令。安装直接调用Unicode CreateServiceW、虚拟账号密码传NULL，保留Win32原码；创建失败也必须有独立安装日志，不能只指向尚不存在的service.log。禁止transcript捕获密码、配置正文或程序输出，打包/复制运行目录使用部署文件白名单排除本地日志。新的原生安装路径未实测前不能沿用旧WMI安装的通过结论。
+- CreateServiceW的1783是RPC数据错误，不等同于已确定系统损坏或防火墙拦截。仅在确认同名服务不存在时允许一次同账号/同路径sc.exe兼容尝试，其他错误不重试，保留两条路径错误；不自动切LocalSystem、关闭防火墙或采用已有服务。含嵌套引号的binPath通过无Shell进程参数转义并用真实argv回显验证，不能只检查生成字符串。
+- 双路径同错后先做范围诊断，不能反复改调用器并声称修复。diagnose-service默认只读；创建探测必须显式-ProbeCreation，GUID临时名、Disabled、系统无害命令、永不启动，仅用本次成功创建返回的句柄删除。真实探测不在开发机自动执行，不碰正式服务/config/data/ACL/防火墙，不因账号对照而自动改变正式服务身份；报告可能含路径/系统事件，只存忽略目录。
 - Android专用Runtime在android/app，采用Java+可信内置网页，完整APK由GitHub Actions编译；用户当前没有Android开发环境，不自行安装SDK。不得把语法检查称为Android编译或真机通过。
 - Android单元测试也使用Android API桩编译；CI用JDK17不代表所有桌面JDK方法可用。读取UTF-8文件用Files.readAllBytes加显式字符集，避免Files.readString/writeString；同步运行tools/check-android.py与test_android_*check.py。
 - 原生桥只接受可信本地页面主框架的固定命令；不返回令牌、不接受任意路径/URL。自签名证书导入保留主机名校验；会话用Keystore加密；APK签名身份存GitHub Secrets或仓库外，不进源码/日志。

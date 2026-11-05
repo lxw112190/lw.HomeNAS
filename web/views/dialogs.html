@@ -55,15 +55,17 @@
   <div class="preview-body">
   <div id="preview-content">
   </div>
-  <details id="preview-metadata" open>
+  <details id="preview-metadata">
    <summary>文件与拍摄信息</summary>
    <dl id="preview-details"></dl>
    <p id="preview-metadata-state" class="fine"></p>
   </details>
   </div>
   <div class="preview-footer">
+   <button class="secondary" id="preview-prev" aria-label="上一张">‹ 上一张</button><button class="secondary" id="preview-next" aria-label="下一张">下一张 ›</button>
    <span id="preview-info">
    </span>
+   <button class="secondary" id="move-file" type="button" hidden>移动文件夹</button><button class="secondary" id="trash-file" type="button" hidden>移入回收站</button>
    <button class="secondary" id="rename-file" type="button" hidden>重命名</button>
    <a class="button primary" id="download-original">
     下载原文件

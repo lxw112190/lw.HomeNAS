@@ -4,7 +4,7 @@ const sha='a'.repeat(40),other='b'.repeat(40);let checks=0;
 function fixture(change={}){
  const run={id:123,run_number:13,name:'Android APK',path:'.github/workflows/android.yml',head_branch:'main',head_repository:{full_name:'owner/repo'},event:'push',status:'completed',conclusion:'success',head_sha:sha,...change};
  const jobs=[{name:'apk',conclusion:'success'},{name:'emulator',conclusion:'success'}],artifacts=[{name:'lw.HomeNAS-Android-13',expired:false,workflow_run:{head_sha:sha}}],outputs={};
- const github={rest:{actions:{getWorkflowRun:async()=>({data:run}),listWorkflowRuns:async()=>({data:{workflow_runs:[run]}}),listJobsForWorkflowRun:()=>{},listWorkflowRunArtifacts:()=>{}},repos:{getReleaseByTag:async()=>{throw {status:404};}}}};
+ const github={rest:{actions:{getWorkflowRun:async()=>({data:run}),listWorkflowRuns:async()=>({data:{workflow_runs:[run]}}),listJobsForWorkflowRun:()=>{},listWorkflowRunArtifacts:()=>{}},repos:{getContent:async()=>({data:{type:'file',encoding:'base64',content:Buffer.from('1.0.0\n').toString('base64')}}),getReleaseByTag:async()=>{throw {status:404};}}}};
  github.paginate=async fn=>fn===github.rest.actions.listJobsForWorkflowRun?jobs:artifacts;
  const context={repo:{owner:'owner',repo:'repo'},eventName:'workflow_run',payload:{workflow_run:{id:123}}};
  const core={getInput:()=>'',setOutput:(name,value)=>outputs[name]=value,notice:()=>{}};
@@ -21,18 +21,20 @@ async function rejection(value,message){await assert.rejects(select(value),messa
  f=fixture();f.jobs[1].conclusion='skipped';await rejection(f,/both pass/);
  f=fixture();f.artifacts[0].workflow_run.head_sha=other;await rejection(f,/selected commit/);
  f=fixture();f.artifacts[0].expired=true;await rejection(f,/unexpired/);
- f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:false}});await rejection(f,/different commit/);
- f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await select(f);assert.equal(f.outputs.already,'true');checks++;
- f=fixture();f.artifacts[0].expired=true;f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await select(f);assert.equal(f.outputs.already,'true');checks++;
+ f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:false}});await select(f);assert.equal(f.outputs.publish,'false');assert.equal(f.outputs.already,'false');checks++;
+ f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await select(f);assert.equal(f.outputs.publish,'false');checks++;
+ f=fixture();f.artifacts[0].expired=true;f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await rejection(f,/unexpired/);
+ f=fixture();f.github.rest.repos.getContent=async()=>({data:{type:'file',encoding:'base64',content:Buffer.from('../bad').toString('base64')}});await rejection(f,/semantic VERSION/);
+ f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:true}});await rejection(f,/different commit/);
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'homenas-release-'));
  try{
   const hash=data=>crypto.createHash('sha256').update(data).digest('hex');
-  const manifest={commit:sha,androidRunNumber:13,serverVersion:'0.4.0-dev',package:'lw.HomeNAS-ci13.zip',apk:'lw.HomeNAS-ci13.apk',packageSha256:hash('zip'),apkSha256:hash('apk')};
+  const manifest={commit:sha,androidRunNumber:13,serverVersion:'1.0.0',package:'lw.HomeNAS-ci13.zip',apk:'lw.HomeNAS-ci13.apk',packageSha256:hash('zip'),apkSha256:hash('apk')};
   for(const [name,data] of [[manifest.package,'zip'],[manifest.apk,'apk']]){fs.writeFileSync(path.join(directory,name),data);fs.writeFileSync(path.join(directory,name+'.sha256'),`${hash(data)}  ${name}\n`);}
   fs.writeFileSync(path.join(directory,'release-manifest.json'),JSON.stringify(manifest));const notes=path.join(directory,'..',path.basename(directory)+'-notes.md');fs.writeFileSync(notes,'test release');
   function publishing(fail=false,existing){
    const calls=[];let publicRelease=false;
-   const github={rest:{repos:{getReleaseByTag:async()=>{if(existing)return {data:existing};throw {status:404};},createRelease:async input=>{assert.equal(input.draft,true);calls.push('draft');return {data:{id:1,draft:true}};},listReleaseAssets:()=>{},deleteReleaseAsset:async()=>{throw Error('unexpected delete');},uploadReleaseAsset:async input=>{if(fail)throw Error('upload failed');calls.push(input.name);},updateRelease:async input=>{assert.equal(calls.length,existing?5:6);assert.equal(input.draft,false);publicRelease=true;return {data:{html_url:'published'}};}},git:{getRef:async()=>{throw {status:404};}}},paginate:async()=>[]};
+   const github={rest:{repos:{getReleaseByTag:async()=>{if(existing)return {data:existing};throw {status:404};},createRelease:async input=>{assert.equal(input.draft,true);assert.equal(input.prerelease,false);assert.equal(input.tag_name,'v1.0.0');calls.push('draft');return {data:{id:1,draft:true}};},listReleaseAssets:()=>{},deleteReleaseAsset:async()=>{throw Error('unexpected delete');},uploadReleaseAsset:async input=>{if(fail)throw Error('upload failed');calls.push(input.name);},updateRelease:async input=>{assert.equal(calls.length,existing?5:6);assert.equal(input.draft,false);assert.equal(input.prerelease,false);publicRelease=true;return {data:{html_url:'published'}};}},git:{getRef:async()=>{throw {status:404};}}},paginate:async()=>[]};
    const core={notice:()=>{},summary:{addHeading(){return this;},addLink(){return this;},async write(){}}};
    return {github,core,context:{repo:{owner:'owner',repo:'repo'}},directory,notes,sha,number:'13',calls,isPublic:()=>publicRelease};
   }

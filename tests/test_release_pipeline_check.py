@@ -71,6 +71,9 @@ class ReleaseChecks(unittest.TestCase):
             file.write_bytes(b'other\n')
             with self.assertRaisesRegex(ValueError,'differs'):ffmpeg.verified(file,pin)
 
+    def test_version_and_native_protocol_sources_agree(self):
+        subprocess.run([sys.executable,str(ROOT/'tools/check-version.py')],check=True,cwd=ROOT)
+
     def test_selection_and_draft_publishing_with_fake_api(self):
         node=shutil.which('node');self.assertIsNotNone(node,'Node is required for release-workflow checks')
         subprocess.run([node,str(ROOT/'tests/release_workflow.test.cjs')],check=True,cwd=ROOT)

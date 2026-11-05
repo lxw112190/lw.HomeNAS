@@ -1,143 +1,119 @@
 # lw.HomeNAS
 
-轻量家庭 NAS，使用 C++17 / cpp-httplib 提供服务，通过 Web 管理与浏览自己的照片、视频、文档和录音。项目主页：[lxw112190/lw.HomeNAS](https://github.com/lxw112190/lw.HomeNAS)。
+自己的电脑做服务器，手机照片和视频备份到家里。
 
-当前开发源码：电脑服务 **0.5.0-dev**，Android **0.8.0-dev / code13 / nativeApi7**。APK可选择备份目标文件夹，Web/APK支持时间线、文件夹、图集三种浏览；旧文件和未选择目录的备份归入默认文件夹。保留重命名、选图排除和图片缩放。新 APK 等待 CI，沿用固定签名。[备份文件夹说明](docs/20261105-备份文件夹.md)。
+lw.HomeNAS 使用 **C++17 + cpp-httplib** 开发 Windows 后台，提供浏览器管理页面和 Android 客户端。除了照片、视频，也支持文档、录音及其他文件。当前版本源代码为 **1.0.0**，目标平台为 Windows 10/11 x64 和 Android 10 及以上。
 
-当前完整部署版本：电脑服务 **0.4.0-dev**，默认安卓 **CI12 Release 0.7.0-dev / code10 / nativeApi4**，签名页面资源 **r7** 与 FFmpeg 视频封面依赖。APK签名、内容摘要、版本、内置页面和资源公钥均已核验；GitHub Actions构建、单元测试及Android15模拟器7项测试通过，用户已反馈本轮全部测试无问题。[部署及签名说明](docs/20261105-CI12安卓安装包发布.md)。
+[下载发布包](https://github.com/lxw112190/lw.HomeNAS/releases) · [构建与 APK](https://github.com/lxw112190/lw.HomeNAS/actions) · [部署脚本](deploy/README.md) · [接口说明](docs/API.md) · [v1.0 更新说明](docs/20261106-v1.0发布说明.md)
 
-已增加 **Full package and GitHub Release** 自动工作流：Android CI成功后，验证同提交APK、构建和验收Windows完整包，再发布GitHub预发布版；也可手动仅打包。沿用现有固定签名，无需新建APK密钥。[启用与使用说明](docs/20261105-自动打包与发布CI.md)。
+## 可以做什么
 
-包含图集管理、时间线/图集切换、输入去焦点外框及分层返回键，详见[使用说明](docs/20261105-图集与手机返回键.md)。历史CI9/r6包不含这些新功能。
+- **手机备份**：按天选照片/视频，整天全选后排除单张，标记已备份项目；支持选择相册、目标文件夹和系统调度的定时备份。
+- **大文件上传**：分块上传、确认偏移持久化、暂停/继续、失败重试、SHA256 完整校验和同内容去重。文件大小与偏移按64位处理。
+- **整理资料**：按文件时间浏览时间线，或按文件夹、图集浏览，均支持分页。重命名保留扩展名，图片可在文件夹之间移动。
+- **回收站**：Web支持单项或批量移入回收站、分页浏览和恢复；保留原件及目录/图集关联。回收站不会自动清空，**移入回收站不释放磁盘空间**，手机自动备份不会将其悄悄恢复。
+- **预览**：Web/APK图片缩放、拖动、原始大小和上一张/下一张；元数据默认折叠，展开后读取文件及可用的EXIF信息。视频支持封面与浏览器/手机可解码格式的在线播放。
+- **多账号**：admin/member/viewer 三种角色。管理员管理全部内容，普通用户管理自己上传的文件和自己创建的分类，只读用户浏览下载。
+- **部署维护**：Windows服务、开机启动、异常恢复、HTTP/HTTPS、7个BAT入口、独立安装日志、运行日志、手机日志轮转和诊断ZIP。
+- **客户端维护**：固定签名APK覆盖升级与已签名网页资源更新；原生功能变化需要升级APK。
 
-![用户名密码登录](docs/images/login-accounts.png)
+**资料库目前共享浏览，文件夹是逻辑分类，不是每个用户独立的私有空间。** 同一原件可被多个目录或图集引用，移动只改变指定目录关联。
 
-![用户管理，使用独立测试账号](docs/images/users-desktop.png)
+![Web回收站](docs/images/v1-web-trash.png)
 
-新增APK网页下载/发布、签名资源更新、诊断日志上传与防火墙批处理，详见[客户端维护使用说明](docs/20261104-客户端更新与日志反馈.md)。新版APK需先通过CI编译安装，才能使用原生维护功能。
+## 五分钟开始使用
 
-已收到 CI9 APK，含 APK 部署包可用导入脚本发布网页下载。CI9 Debug 签名与 CI7 不同，不能直接覆盖旧版；请先阅读[升级与数据说明](docs/20261105-CI9安卓安装包发布.md)。
-
-## 已实现
-
-- 本机 HTTP 管理口与局域网 HTTPS，首次生成独立服务器证书。
-- 用户名/密码登录、管理员创建账号、角色调整、禁用账号、重置密码与本人修改密码。
-- 共享家庭资料库，支持管理员/普通用户/只读用户；上传任务按账号归属，暂不提供个人文件隔离。
-- 多文件前台上传、Web Worker 分段 SHA256、服务端流式写盘、有界并发。
-- 上传会话持久化、重选文件续传、块摘要及整文件校验、完整校验后台执行。
-- 临时文件尾部回退与 COMMITTING 中间状态恢复；原件丢失不会误报去重成功。
-- 精确内容去重、同名不同文件分别保留、文件名搜索与游标分页。
-- 一级备份文件夹：共享浏览、按创建者管理；APK按服务器与账号记住目标，入队时固定目录。重复内容添加目录关联，删除目录保留原件并归入默认文件夹。
-- Web / Android 文件预览内重命名，扩展名保留、权限与并发校验；原件内容、摘要和已备份状态保持不变（Android 需0.7.1/code11新 APK）。
-- Web / Android 时间线按文件时间分组，与图集双按钮切换；支持图集创建、说明、批量加入/移出、封面及分页。图集共享浏览、按创建者管理，删除图集保留原件（Android 需新 APK）。
-- Android 按天选图、服务器核实已备份状态、照片和视频预览及紧凑保存按钮。
-- Windows WIC 图片缩略图与8种 EXIF方向处理；原件下载、视频/音频的浏览器原生播放与单段 Range 读取。
-- 手机删除或禁用账号不删除电脑原件，本版没有自动删除原件的功能。
-
-HEIC/RAW等文件可以按原件保存，预览由本机WIC/浏览器实际支持决定；视频封面使用随包 FFmpeg 生成，未做整段兼容转码。超过4GiB长度的协议字段已检查，但完整超4GiB上传仍需后续真机测试。
-
-旧版Windows CMD中文输出修复及验证范围见[控制台兼容记录](docs/20261104-控制台中文输出兼容.md)。
-
-## 编译与运行
-
-Windows 10/11 x64，安装 VS2022 的“使用 C++ 的桌面开发”和 Windows SDK。
-
-1. 打开根目录 `lw.HomeNAS.sln`，选择 `Release | x64`，生成解决方案。
-2. 运行根目录 `Run.cmd`，或直接运行 `out/Release/NasServer.exe`。
-3. 电脑打开 `http://127.0.0.1:8787/`。
-4. 用户名为 `admin`。默认首次随机密码见控制台及该运行目录的 `data/initial-admin-password.txt`。测试时可以先关闭前台程序、停止服务，再运行 `deploy/set_admin_password.bat` 输入自己的密码（至少6位，无需大小写/符号组合），然后启动服务；也可在首次启动前设置。自选密码不写入初始密码文件。
-
-依赖源码已包含，直接打开 VS 方案编译不需要 Python、CMake、NuGet 或在线下载。首次运行会创建数据目录和证书，源码默认配置使用首次随机密码。部署包按用户要求默认 admin / admin123，登录后修改；已有账号不会重置。
-
-也可使用 CMake 3.24+：
+1. 下载并完整解压Windows发布ZIP，保持 `NasServer.exe`、`web`、`config`、`deploy` 等目录结构。
+2. 首次可双击根目录 `启动服务.cmd` 前台运行，浏览器打开 `http://127.0.0.1:8787/`。运行期间保持窗口打开。
+3. 发布包全新资料库默认 **admin / admin123**，登录后修改密码；已有账号不会被覆盖。源码默认配置使用随机初始密码，见控制台或 `data/initial-admin-password.txt`。
+4. 包内APK可先通过PowerShell导入，再从Web首页或登录页下载；后续也可在Web设置页发布APK。导入时停止NAS：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
-.\build\app\Release\NasServer.exe
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
 ```
 
-服务器需要保持运行；关闭浏览器不影响服务，关闭服务器控制台会停止服务。也可以通过 [deploy](deploy/README.md) 内的批处理安装为 Windows 自动启动服务。服务模式的首次密码只保存在初始密码文件，不写入服务日志。
+5. 手机填写电脑IP和端口、登录账号，选择文件/相册和备份目标，再开始备份。手机与电脑先在可互访的家庭局域网使用。
 
-## 手机局域网访问
+### 安装为 Windows 服务
 
-服务控制台及“存储与设置”显示当前 IPv4 HTTPS 地址，默认端口9443。手机与电脑连接可互访的局域网，并由用户按需要允许 Windows 防火墙的专用网络入站访问；程序不自动更改防火墙或开放外网。手机使用管理员创建的账号和密码登录，不使用配对码。
+先退出前台NAS，再右键 `deploy/install-service.bat`，选择“以管理员身份运行”。安装后自动启动，并设置开机启动。只保留以下7个BAT：
 
-首次连接使用自签名证书，需要核对服务器证书摘要并配置可信证书。IP变化后，旧证书中的IP名称可能不匹配；不要通过关闭证书验证解决。现有 Web2Android 的远程网址模式要求证书受 WebView 信任，具体系统/WebView行为要在真机验证。
+| 文件 | 用途 |
+| --- | --- |
+| install-service.bat | 按配置安装并启动 |
+| start-service.bat | 启动 |
+| stop-service.bat | 停止 |
+| restart-service.bat | 重启 |
+| uninstall-service.bat | 卸载服务，保留数据 |
+| open_firewall.bat | 开放配置端口对应的受管规则 |
+| remove_firewall.bat | 删除本工具的受管规则 |
 
-局域网 HTTP 现在默认开启：`config/server.json` 的 `allow_insecure_lan` 默认为 true，直接启动 EXE 或普通服务即可。设为 false 可改为 HTTP 仅本机；显式命令行开/关覆盖配置，见[HTTP 配置说明](docs/20261105-局域网HTTP配置.md)。原有命令仍兼容：
+不覆盖已存在的同名服务。安装失败看 `deploy/logs/service-install.log`，程序启动后的错误看 `data/logs/service.log`。更多命令、1783诊断与权限处理见[部署说明](deploy/README.md)。
 
-```powershell
-.\out\Release\NasServer.exe --allow-insecure-lan
-```
+### 地址、端口与相对路径
 
-此参数把8787端口从仅本机改为局域网 HTTP，页面会显示“传输未加密”。服务模式新安装用 `deploy/install_http_service.bat`；已安装的服务用 `deploy/configure_http_service.bat` 切换，运行中的服务会停止并重新启动。HTTPS仍保留。手机填写电脑IP即可，端口单独输入，HTTP默认8787。HTTP中密码和文件不加密，仅用于你信任的家庭内网。Android打包步骤见 [android/README.md](android/README.md)。
-
-## 账号与权限
-
-公网IP/云服务器NAT测试见[公网地址测试说明](docs/20261104-公网地址测试.md)。0.2.2新增 `allow_external_hosts` 开关，无需逐个维护IP或域名白名单。
-
-| 角色 | 浏览、下载共享资料 | 上传与管理自己的任务 | 管理账号、服务信息 |
-| --- | --- | --- | --- |
-| 管理员 admin | 是 | 是，可管理全部任务 | 是 |
-| 普通用户 member | 是 | 是 | 否 |
-| 只读用户 viewer | 是 | 否 | 否 |
-
-管理员在“用户管理”中创建账号、修改显示名称/角色、禁用或启用、重置密码；每位用户可在设置中修改自己的密码。用户名3至32位英文字母/数字/下划线/点/短横线，显示名称支持中文。至少保留一个启用的管理员。
-
-禁用、角色调整和重置密码会撤销该账号已有会话，下次请求需重新登录。数据不会因账号禁用被删除。当前为共享资料库，角色限制操作能力，不代表个人照片隔离。
-
-从0.1升级时：停服务并保留资料库备份，新版自动升级到数据库schema 2；原管理员用户名为admin、密码保持原值，原件与未完成进度保留。旧配对会话全部失效，旧版设备来源仍保留，旧上传任务归管理员管理。升级后不要直接用0.1程序打开新版数据库。
-
-## Windows 服务批处理
-
-`deploy`提供安装、启动、停止、重启、状态和卸载入口；新增 `install_http_service.bat`、`configure_http_service.bat`、`configure_https_service.bat`、`start_console_http.bat`、`set_admin_password.bat`，详细步骤见[服务说明](deploy/README.md)。
-
-安装与启停管理请右键“以管理员身份运行”；安装后服务自动启动，停止/重启等待真实状态。卸载保留数据、配置和证书。运行身份为独立虚拟服务账号，数据目录授予修改权限，程序目录只授予读取执行。
-
-启动错误可查看 `data/logs/service.log` 及Windows事件查看器；请求状态和手机关联ID见 `data/logs/requests.log`（轮转保留约10MiB，不记录请求正文/密码/令牌）。脚本及两种模式安装计划已做非安装检查；SCM实际安装/启停仍需在目标机执行验证。
-
-## 配置与数据
-
-默认配置为 exe 旁的 `config/server.json`。`data_dir` / `web_dir` 相对于该配置文件所在目录解析。可用 `--config 绝对或当前目录相对路径` 指定另一配置文件。
+配置位于EXE旁 `config/server.json`。路径相对于**配置文件目录**解析，不依赖启动时所在目录：
 
 ```json
 {
-  "schema_version": 1,
-  "name": "我的家庭 NAS",
-  "http_port": 8787,
-  "https_port": 9443,
-  "https_host": "0.0.0.0",
-  "allow_external_hosts": false,
-  "allow_insecure_lan": true,
   "data_dir": "../data",
   "web_dir": "../web",
   "ffmpeg_path": "../tools/ffmpeg/ffmpeg.exe",
-  "chunk_bytes": 8388608,
-  "minimum_free_bytes": 268435456,
-  "maximum_file_bytes": 137438953472
+  "http_port": 8787,
+  "https_port": 9443,
+  "allow_insecure_lan": true
 }
 ```
 
-支持选择其他数据盘。修改配置后重启；移动已有资料库时需整体迁移原件和数据库，并在停止服务后操作，不能只改路径后指望旧库自动出现。
+以上仅为配置片段，修改发布包现有配置中的相应字段即可。改端口后重启服务，防火墙规则按新配置重新开放。服务模式和前台模式共用配置。
 
-原件与临时上传位于同一数据根目录；缓存可重建。`data/catalog.db` 是 SQLite WAL 数据库，运行时不要只复制 `.db` 文件作为备份；当前可停止服务后整体备份数据目录。第二硬盘自动副本与在线数据库备份后续加入。
+局域网HTTP按使用要求默认开启；发布包 `allow_external_hosts` 也默认true。HTTP传输不加密，公网部署需自行配置HTTPS、访问范围和云安全组。HTTPS自签名证书需核对并信任，不能关闭证书验证。
 
-## 验证
+## 文件操作
+
+- **移动**：打开图片预览，点“移动文件夹”，选择目标；文件属于多个目录时可选择来源。也可进入文件夹，选择多项后批量移动。目标目录需有写入权限，原件不会在磁盘上重新复制。
+- **删除/恢复**：图片预览中点“移入回收站”，或在资料库选择多项后删除。所有成员的普通列表都会隐藏这些项目。普通用户仅能删除自己上传过的文件、恢复自己删除的文件，管理员管理全部。回收站目前从Web操作。
+- **预览**：上一张/下一张作用于当前已加载的一页。Web可用左右方向键，图片可滚轮/双指缩放；“文件与拍摄信息”按需展开。缺失EXIF不推测。
+- **视频**：FFmpeg用于生成封面，不代表自动转码所有视频。HEVC、MKV等能否播放取决于浏览器/手机的封装及编码支持，原件可下载后用播放器打开。
+
+手机删除本地文件不会删除电脑原件。回收站是恢复机制，不能代替独立备份；重要内容建议另存第二份。
+
+## 从旧版更新
+
+1. 停止服务，备份原 `config` 和 `data`。
+2. 替换EXE、web、deploy及工具文件，保留原配置和资料库。
+3. 新版自动补充数据库表，保留原件、账号、目录及上传进度。移动安装位置时，先在旧位置卸载服务，再在新位置安装。
+4. Android v1.0.0 的 versionCode 为14，继续使用仓库既有签名。新原生协议为8；升级后使用新内置页面，旧签名资源不会遮住新增功能。不要用旧程序回开已经升级的资料库。
+
+## 编译源码
+
+Windows安装VS2022的“使用C++的桌面开发”和Windows SDK，使用 `lw.HomeNAS.sln` 的 Release/x64，或使用CMake入口：
 
 ```powershell
-python tests/smoke.py
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/build.ps1
+python tools/check-version.py
+python tests/smoke.py --exe build/app/Release/NasServer.exe
+python tests/recycle.py
 ```
 
-测试依赖 Python、requests、Pillow，使用独立 `test-results` 目录并只终止自己启动的测试进程。覆盖账号密码、角色权限、禁用/改密/改角色后的会话失效、TLS证书/主机名、错误块、续传、强制重启、去重、原件下载、Range、零字节文件、WIC缩略图、8种EXIF方向对照、入库崩溃恢复及原件缺失识别。
+SQLite、Mbed TLS、cpp-httplib等依赖已锁定；不要随意改变文件换行或跳过哈希校验。Android源码位于 `android`，使用Java及本地可信WebView页面，构建说明见[Android README](android/README.md)。本项目通过CI编译APK，不要求Windows后台运行Python、.NET或Android SDK。
 
-网页已实际测试批量上传与预览，桌面1366px和手机390px宽度无横向溢出。未在真实Android设备验证后台行为或达到任何吞吐指标。
+## CI与正式发布
 
-## 后续重点
+- 推送 `main`：构建固定签名Debug/Release APK、Lint/JVM测试与模拟器检查；通过后构建同一提交的Windows后台及完整ZIP。
+- **版本未发布**：读取该提交的 `VERSION`，如 `1.0.0`，全部检查通过后自动创建并公开正式 `v1.0.0` Release；带预发布后缀的版本标记为prerelease。
+- **版本已发布**：继续生成Actions中的完整包与APK，保留原有Release和标签，不重复发布、不覆盖旧附件。
+- 手动工作流可关闭publish，只生成构建产物。失败草稿不会当作正式版发布。
+- 升版时同步 `VERSION`、`src/core.hpp`、`CMakeLists.txt`、Android versionName；修改APK原生/内置功能时递增versionCode。CI会检查版本一致性。
 
-先推送源码，通过[Android APK工作流](.github/workflows/android.yml)编译、运行测试并取得APK，再验证手机相册授权、锁屏/省电、断网、大视频续传与下载恢复。源码已提供相应原生模块，编写完成不等于真机验收。其后完善视频封面、成员隔离、第二份副本。外网接入另行设计。
+仓库Secrets继续使用 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。`UI_SIGNING_KEY_BASE64` 可选，未配置时完整包使用APK内置页面。密钥、数据、真实日志和签名私钥不提交Git。
 
-当前传输 API 草案见 [docs/API.md](docs/API.md)，开发与验证记录见 [docs/开发记录.md](docs/开发记录.md)。
+## 验证范围与限制
 
-## 许可
+每轮Windows测试使用独立合成数据，验证分块恢复、去重、权限、分类、回收站及原件一致性。Android编译/JVM/模拟器通过情况以对应CI为准，语法或页面检查不等于真机通过。Windows服务实际兼容以目标机实测为准；本次Win10教育版的1783故障在系统文件修复并重启后，用户已反馈安装成功。
 
-自有代码 MIT，第三方组件保留各自许可，见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
+当前不包含iOS客户端、RAID、端到端加密、每用户私有空间或全格式视频转码。Android后台备份受系统调度、省电策略、网络和权限限制；网页上传需保持页面打开。
+
+## 项目与许可
+
+Android方案参考 [lw.Web2Android](https://github.com/lxw112190/lw.Web2Android)，部署脚本参考 [lw.PPOCR.OpenCVDNN](https://github.com/lxw112190/lw.PPOCR.OpenCVDNN)。项目许可见[LICENSE](LICENSE)，第三方组件和FFmpeg许可、来源及源码归档见[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)与包内licenses/tools目录。

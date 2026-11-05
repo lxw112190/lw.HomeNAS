@@ -5,7 +5,7 @@ namespace nas {
 namespace {
 bool albumId(const std::string& id){return id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos;}
 void writer(const Identity& who){if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能修改图集");}
-const std::string albumFields="SELECT a.id,a.name,a.description,a.owner_id,a.created,a.updated,a.cover_id,(SELECT count(*) FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' WHERE i.album_id=a.id) AS item_count FROM albums a ";
+const std::string albumFields="SELECT a.id,a.name,a.description,a.owner_id,a.created,a.updated,a.cover_id,(SELECT count(*) FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) WHERE i.album_id=a.id) AS item_count FROM albums a ";
 }
 json Store::album(const std::string& id,const Identity& who,bool edit){
     if(edit)writer(who);
@@ -14,7 +14,7 @@ json Store::album(const std::string& id,const Identity& who,bool edit){
     auto row=rows[0];bool allowed=who.canUpload()&&(who.admin||row["owner_id"]==who.userId);
     if(edit&&!allowed)throw Error(403,"ALBUM_OWNER_REQUIRED","只能管理自己创建的图集");
     row["can_edit"]=allowed;
-    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' ORDER BY (s.id=?) DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
+    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) ORDER BY (s.id=?) DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
     row["cover"]=covers.empty()?json(nullptr):covers[0];return row;
 }
 json Store::albums(const std::string& before,const Identity& who){
@@ -26,7 +26,7 @@ json Store::albums(const std::string& before,const Identity& who){
 json Store::albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     auto info=album(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
     if(!before.empty()&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
-    Params params{id};std::string sql="SELECT s.id,s.sha256,s.size,s.name,s.mime,s.category,s.created,s.modified,s.preview FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY'";
+    Params params{id};std::string sql="SELECT s.id,s.sha256,s.size,s.name,s.mime,s.category,s.created,s.modified,s.preview FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id)";
     if(!before.empty()){sql+=" AND i.asset_id<?";params.push_back(before);}
     if(type=="image"||type=="video"||type=="file"){sql+=" AND s.category=?";params.push_back(type);}
     if(!search.empty()){sql+=" AND s.name LIKE ?";params.push_back("%"+search+"%");}
@@ -51,7 +51,7 @@ json Store::changeAlbum(const std::string& id,const std::string& action,const js
             db.exec("UPDATE albums SET name=?,description=?,updated=? WHERE id=?",{name,description,now,id});
         }else if(action=="cover"){
             auto assetId=text(input,"asset_id",48);
-            if(db.query("SELECT i.asset_id FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' WHERE i.album_id=? AND i.asset_id=?",{id,assetId}).empty())throw Error(400,"NOT_ALBUM_MEMBER","请从图集内选择封面");
+            if(db.query("SELECT i.asset_id FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) WHERE i.album_id=? AND i.asset_id=?",{id,assetId}).empty())throw Error(400,"NOT_ALBUM_MEMBER","请从图集内选择封面");
             db.exec("UPDATE albums SET cover_id=?,updated=? WHERE id=?",{assetId,now,id});
         }else if(action=="add"||action=="remove"){
             if(!input.contains("asset_ids")||!input["asset_ids"].is_array()||input["asset_ids"].empty()||input["asset_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次选择1至100个文件");

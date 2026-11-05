@@ -19,10 +19,11 @@ if($LASTEXITCODE -ne 0 -or $httpsPlan.AllowInsecureLan -or -not $httpsPlan.Binar
 $config = Get-Content -LiteralPath $plan.Config -Raw -Encoding UTF8 | ConvertFrom-Json
 $expectedHttp=if($config.PSObject.Properties.Name -contains 'allow_insecure_lan'){[bool]$config.allow_insecure_lan}else{$true}
 if($plan.AllowInsecureLan -ne $expectedHttp){throw 'Default service plan must follow config, defaulting to true'}
-$entries = @('install_service.bat','start_service.bat','stop_service.bat','restart_service.bat','status_service.bat','uninstall_service.bat','start_console.bat','install_http_service.bat','configure_http_service.bat','configure_https_service.bat','start_console_http.bat','set_admin_password.bat','open_firewall.bat','remove_firewall.bat','status_firewall.bat','import_android.bat')
+$entries = @('install-service.bat','start-service.bat','stop-service.bat','restart-service.bat','uninstall-service.bat','open_firewall.bat','remove_firewall.bat')
 foreach ($file in $entries) {
     if (-not (Test-Path -LiteralPath (Join-Path $root ('deploy/'+$file)))) { throw ('Missing script '+$file) }
 }
+if(@(Get-ChildItem -LiteralPath (Join-Path $root 'deploy') -Filter '*.bat').Count -ne 7){throw 'Deployment must expose exactly seven batch scripts'}
 foreach ($suffix in @('', ' --allow-insecure-lan', ' --no-allow-insecure-lan')) {
 $process = [Diagnostics.Process]::new()
 $process.StartInfo.FileName = $plan.Executable

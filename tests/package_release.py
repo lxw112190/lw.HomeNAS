@@ -18,6 +18,8 @@ def run(archive):
         h=Harness(ROOT/'build/app/Release/NasServer.exe');clone=h.home/'完整部署'
         z.extractall(clone)  # Only prevalidated paths inside this test's new directory.
     stage=clone/next(iter(top));h.exe=stage/'NasServer.exe';h.config=stage/'config/server.json'
+    assert {p.name for p in (stage/'deploy').glob('*.bat')} == {'install-service.bat','start-service.bat','stop-service.bat','restart-service.bat','uninstall-service.bat','open_firewall.bat','remove_firewall.bat'}
+    assert (stage/'deploy/service-native.cs').is_file() and not (stage/'deploy/logs').exists()
     config=json.loads(h.config.read_text(encoding='utf-8'))
     assert config['allow_external_hosts'] is True and config['allow_insecure_lan'] is True and config['bootstrap_admin_password']=='admin123'
     assert all(not Path(config[k]).is_absolute() for k in ('data_dir','web_dir','ffmpeg_path'))

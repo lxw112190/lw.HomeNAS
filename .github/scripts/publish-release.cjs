@@ -13,7 +13,9 @@ function assets(directory, sha, number){
   return {manifest,wanted};
 }
 async function publish({github,context,core,directory,notes,sha,number}){
-  const {manifest,wanted}=assets(directory,sha,number),{owner,repo}=context.repo,tag=`ci-${number}`;
+  const {manifest,wanted}=assets(directory,sha,number),{owner,repo}=context.repo,tag=`v${manifest.serverVersion}`;
+  if(!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/.test(manifest.serverVersion))throw new Error('Invalid release version.');
+  const prerelease=manifest.serverVersion.includes('-');
   let release;
   try{release=(await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;}catch(error){if(error.status!==404)throw error;}
   if(release){
@@ -22,7 +24,7 @@ async function publish({github,context,core,directory,notes,sha,number}){
   }else{
     // A pre-existing unrelated tag must not silently redirect a new release.
     try{const ref=(await github.rest.git.getRef({owner,repo,ref:`tags/${tag}`})).data;if(ref.object.type!=='commit'||ref.object.sha!==sha)throw new Error('Existing tag does not match verified commit.');}catch(error){if(error.status!==404)throw error;}
-    release=(await github.rest.repos.createRelease({owner,repo,tag_name:tag,target_commitish:sha,name:`lw.HomeNAS ${manifest.serverVersion} / Android CI ${number}`,body:fs.readFileSync(notes,'utf8'),draft:true,prerelease:true})).data;
+    release=(await github.rest.repos.createRelease({owner,repo,tag_name:tag,target_commitish:sha,name:`lw.HomeNAS v${manifest.serverVersion}`,body:fs.readFileSync(notes,'utf8'),draft:true,prerelease})).data;
   }
   const existing=await github.paginate(github.rest.repos.listReleaseAssets,{owner,repo,release_id:release.id,per_page:100});
   if(existing.some(asset=>!wanted.includes(asset.name)))throw new Error('Draft contains unexpected assets; refusing to publish them.');
@@ -33,7 +35,7 @@ async function publish({github,context,core,directory,notes,sha,number}){
     const data=fs.readFileSync(path.join(directory,name));
     await github.rest.repos.uploadReleaseAsset({owner,repo,release_id:release.id,name,data,headers:{'content-type':'application/octet-stream','content-length':data.length}});
   }
-  const result=(await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,prerelease:true,body:fs.readFileSync(notes,'utf8')})).data;
+  const result=(await github.rest.repos.updateRelease({owner,repo,release_id:release.id,draft:false,prerelease,body:fs.readFileSync(notes,'utf8')})).data;
   core.notice(`Published ${result.html_url}`);await core.summary.addHeading('lw.HomeNAS release').addLink('Download full package and APK',result.html_url).write();
 }
 module.exports=publish;module.exports.assets=assets;

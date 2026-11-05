@@ -1,72 +1,74 @@
-> 最新完整包为电脑 0.3.2-dev + CI9 APK 0.6.2-dev/code9 + r6，已附带 FFmpeg。先运行 import_android.bat，再启动 NAS；[部署步骤](../docs/20261105-CI9安卓安装包发布.md)。下文历史版本说明保留。
+# Windows 服务部署
 
-# Windows 服务批处理
-
-HTTP安装脚本已在本机实际完成安装、HTTP访问、重启、停止、启动和卸载等14项隔离检查，使用中文空格路径及虚拟服务账号；[实测记录与复测命令](../docs/20261105-HTTP服务安装实测.md)。
-
-当前部署包默认 `allow_insecure_lan: true`、`allow_external_hosts: true`、`bootstrap_admin_password: "admin123"`；全新数据目录首次账号为 **admin / admin123**，登录后修改。此设置只在首次初始化生效，已有账号不会重置。源码默认配置仍使用随机初始密码和外部 Host 关闭。已接收 CI7 APK，见[部署说明](../docs/20261104-CI7安卓安装包发布.md)。
-
-参考 [lw.OpenCVDNN.PPOCR/server/deploy](https://github.com/lxw112190/lw.OpenCVDNN.PPOCR/tree/main/server/deploy) 的入口组织，提供：
+部署目录只提供 7 个 BAT，安装/启停/卸载/防火墙操作均需右键“以管理员身份运行”。已解压的旧包需使用本轮脚本才能获得新诊断功能。
 
 | 文件 | 用途 |
 | --- | --- |
-| install_service.bat | 安装为自动启动的 lw.HomeNAS 服务并启动 |
-| start_service.bat | 启动服务，等待 Running |
-| stop_service.bat | 停止服务，等待 Stopped，不强制杀进程 |
-| restart_service.bat | 停止完成后启动，避免固定延时造成竞态 |
-| status_service.bat | 查看状态、可执行路径、服务账号与退出代码 |
-| uninstall_service.bat | 停止并卸载服务，保留所有数据和程序文件 |
-| start_console.bat | 前台运行，便于查看启动错误及初始账号密码 |
-| install_http_service.bat | 新安装服务，显式启用局域网HTTP 8787，HTTPS仍保留 |
-| configure_http_service.bat | 将当前安装目录对应的已有服务切到局域网HTTP |
-| configure_https_service.bat | 显式切为局域网HTTPS，HTTP仅本机 |
-| start_console_http.bat | 显式开启局域网HTTP的前台运行方式 |
-| set_admin_password.bat | 停止程序后，自选/重置管理员admin密码 |
+| install-service.bat | 按配置安装自动启动服务并立即启动 |
+| start-service.bat | 启动服务，等待 Running |
+| stop-service.bat | 停止服务，等待 Stopped |
+| restart-service.bat | 等停止完成后再启动 |
+| uninstall-service.bat | 卸载服务，保留数据、配置和证书 |
+| open_firewall.bat | 按当前程序路径及配置端口开放防火墙 |
+| remove_firewall.bat | 删除本程序路径对应的受管防火墙规则 |
 
-安装/启动/停止/重启/卸载时右键“以管理员身份运行”；查看状态和前台运行通常不需要管理员权限。脚本不自动弹出UAC、不修改防火墙。
+旧版下划线服务脚本及单独的 HTTP/HTTPS、状态、前台、密码和 APK 导入 BAT 已合并或移除；不要再按历史文章的旧文件名查找。HTTP 开关统一由 EXE 旁 `config/server.json` 的 `allow_insecure_lan` 控制，默认 true，HTTPS 同时保留。默认 HTTP 8787、HTTPS 9443，改配置后重启服务。既有服务若带显式 `--allow-insecure-lan` 参数，可用下文 Configure 操作移除覆盖，让它跟随配置。
 
-配置来自程序旁 `config/server.json`；`data_dir`、`web_dir`按配置文件所在目录解析，不依赖服务的System32工作目录。安装包内直接找到根目录NasServer.exe；源码目录则查找out/Release或build/app/Release。
+## 安装和更新
 
-服务使用 `NT SERVICE\lw.HomeNAS` 虚拟账号，安装脚本为它授予程序/网页读取执行、数据目录修改权限，不使用LocalSystem，不给Everyone完全控制。外置盘需在开机时可用；更换数据目录后应由管理员为该服务身份配置新目录权限。
+1. 完整解压，保留程序、config、web、deploy 等相对目录。
+2. 先关闭正在前台运行的 NAS，避免端口和资料库实例锁冲突。
+3. 右键 `install-service.bat`，选择“以管理员身份运行”。首次安装后服务自动启动，以后开机启动。
+4. 网页登录后修改初始密码。部署包首次账号为 admin/admin123；已有账号不会重置。
 
-首次用户名 `admin`，初始密码保存在数据目录的 `initial-admin-password.txt`；服务日志不输出密码。日志为 `data/logs/service.log`，服务重启时超过4MiB会保留一份previous日志。
+安装器拒绝覆盖同名服务。更新时停止服务，替换程序、web 和 deploy，保留 config/data，再启动；迁移安装路径时先卸载旧服务再安装。卸载不删除原件。
 
-## 测试时使用好记的密码
+服务使用 `NT SERVICE\lw.HomeNAS` 虚拟账号，不切换为 LocalSystem。程序目录授予读取执行，数据目录授予修改。安装使用 Unicode 原生 CreateServiceW 接口，保留准确的 Win32 错误码；服务异常退出配置 5 秒、15 秒重启恢复。创建后若后续步骤失败，保留服务供排查，不自动删除。
 
-1. 已运行服务的，先执行 `stop_service.bat`；前台运行的，先正常关闭控制台程序。
-2. 运行 `set_admin_password.bat`，输入两遍自己的密码，至少6位。例如可自行输入 `nas12345678`，这是示例，不是程序内置默认密码；输入时不回显。
-3. 执行 `start_service.bat`，或使用相应前台入口。用户名为 `admin`。
+## 日志与故障排查
 
-首次启动前也可以先设置。工具只修改本机内置管理员密码、恢复其启用和管理员身份，并撤销该管理员旧会话；保留其他账号、原件和上传进度。自选密码不落明文文件；程序运行时会拒绝修改。若服务目录限制写入，可右键以管理员身份运行。命令行等价入口为 `NasServer.exe --config "配置路径" --initialize-admin`，通过交互输入密码，避免把密码放进命令参数。
+- 安装/服务管理脚本：`deploy/logs/service-install.log`，尚未启动 EXE 也会写日志，记录阶段、系统/PowerShell、账号及错误。
+- deploy 不可写时回退到 `%TEMP%/lw.HomeNAS-deploy/service-install.log`，窗口显示实际路径。
+- 安装日志达到 1 MiB 后轮转，保留当前文件和 3 份历史。不记录配置正文、密码、令牌或原生程序输出；前台运行/改密码不使用 transcript。
+- EXE 启动后：`data/logs/service.log`；请求日志为 `data/logs/requests.log`。
+- `CreateServiceW` 阶段失败表示程序尚未启动，此时没有 service.log 正常，应查看安装日志。
 
-## 家庭局域网HTTP
+旧截图的 `Win32_Service code 8` 是 WMI 通用失败，不能仅凭它判断是系统版本、账号或权限问题。新的具体错误码有助于确认根因；Windows 10 教育版失败机器仍需实际复测。本机非安装检查不等于目标电脑安装成功。
 
-0.3.2 起，config/server.json 的 allow_insecure_lan 默认 true，普通安装/启动脚本跟随配置，直接启动即可访问内网HTTP。显式关闭、旧参数优先级及生效规则见[HTTP 配置说明](../docs/20261105-局域网HTTP配置.md)。
+r2针对新反馈的 `CreateServiceW 1783` 增加一次 `sc.exe` 兼容尝试：只在确认同名服务不存在后执行，继续使用相同路径、自动启动及虚拟账号，省略密码参数。若两条路径均失败，安装退出并保留两次结果。1783是Windows的RPC数据错误，不能由此断定防火墙或某个系统组件损坏；脚本不会关闭保护功能、修改RPC服务或换成LocalSystem。请使用窗口显示的最新安装日志继续定位。
 
-首次安装用 `install_http_service.bat`；已安装到当前目录的服务用 `configure_http_service.bat`，无需卸载或清空数据。配置脚本只调整启动参数，保留服务账号和目录权限：服务原来运行则停止、修改后重新启动，原来停止则保持停止。安装和配置需要管理员权限。
-
-手机选择“HTTP 家庭内网”，填写电脑IP，端口8787。HTTP传输未加密，使用你信任的家庭网络。以后运行 `configure_https_service.bat` 可关闭局域网HTTP。脚本不会修改防火墙；电脑端还需按实际网络情况允许对应端口。
-
-公网/云服务器NAT测试（0.2.2起）：在EXE旁 `config/server.json` 设置 `allow_external_hosts: true`，并把http_port设为需要的端口（如8080），再重启HTTP服务。它接受公网IP/域名，无需维护白名单；具体示例见[公网地址测试](../docs/20261104-公网地址测试.md)。更新程序时保留原config和data。
-
-排查手机问题时，手机“连接与设置 → 导出诊断ZIP”提供版本、会话、错误编号和传输阶段日志。电脑 `data/logs/requests.log` 记录UTC时间、状态及相同的trace标识，方便关联；按约2MiB轮转，保留当前文件及4份历史。不记录请求正文、密码、令牌或查询参数。启动失败仍查看service.log；日志文件不要提交Git。
-
-先停止前台程序再启动服务，避免端口和资料库实例锁冲突。更新时停止服务，替换exe和web，保留config/data，再启动服务。已有同名服务不会被安装脚本直接删除或覆盖。程序改到其他路径时，先卸载旧服务再在新位置安装，卸载不会移动或删除数据。
-
-可以只查看安装计划，不修改SCM、目录或ACL：
+r3：用户已确认原生接口与系统sc.exe都失败1783。无需继续反复安装，先在管理员PowerShell执行以下命令；第一条只读，第二条额外执行账号对照探测：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Install -PlanOnly
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/diagnose-service.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/diagnose-service.ps1 -ProbeCreation
 ```
 
-批处理包装与PowerShell脚本随源码和运行包一起提供。Windows服务必须通过SCM启动；直接在终端运行 `NasServer.exe --service` 会明确报1063，不会伪装服务成功。
+报告位于窗口显示的 `deploy/logs/service-diagnostics-*.json`，不可写时回退临时目录。报告包含系统组件版本、RPC/防火墙服务状态与最近2小时最多12条SCM错误事件；可能含本机路径/账号，分享前按需脱敏，不提交Git。
 
-0.2.3起，EXE直接使用Unicode控制台输出，不再切换CMD代码页。Console/AdminPassword入口让原生程序直接继承控制台，避免PowerShell二次解码；更新EXE时也请更新本目录的service.ps1。重定向及service.log仍为UTF-8。详见[控制台兼容记录](../docs/20261104-控制台中文输出兼容.md)。
+ProbeCreation只创建两个GUID命名的禁用临时服务，分别使用虚拟账号、LocalService，对应无害系统命令；不启动、不调用NAS EXE、不改config/data、ACL或系统策略。仅通过本次创建成功返回的句柄请求删除，不按名称删除既有服务。报告Created/Deleted/DeleteCode显示结果；若RPC返回失败但系统实际残留了同名探测服务，报告保留随机名称供检查，不自动接管删除。
 
-新增open_firewall.bat、remove_firewall.bat、status_firewall.bat，按EXE配置的HTTP/HTTPS端口及程序路径管理Windows入站TCP规则。Open/Remove需管理员权限，仅操作本工具对应的规则；云安全组需另行配置。详见[维护说明](../docs/20261104-客户端更新与日志反馈.md)。
+虚拟账号失败而LocalService成功时，可进一步评估账号兼容；两者都失败时，需要继续排查系统SCM/RPC或系统拦截环境。这是范围判断，不能单凭错误码确定某个安全产品或系统组件故障。r3没有自动切换正式NAS服务账号。
 
-本轮0.2.5含APK部署包中的 `deploy/import_android.bat` 会同时导入默认CI5 0.5.0-dev / versionCode 6及签名资源r2。导入前停止NAS；脚本不修改账号/原件/上传进度，已有更高资源revision会保留。同revision但不同摘要会拒绝覆盖。导入后，网页首页和登录页可下载新APK；APK已内置独立登录页、底部导航及原生队列分页，不必先下载资源。CI5与CI3的Debug签名不同，请阅读[CI5升级说明](../docs/20261104-CI5安卓安装包发布.md)。
+## 进阶维护命令
 
-简约界面r3部署包：随包仍是CI5原始APK，签名资源更新为r3。导入后，手机旧界面点击“检查更新 → 下载资源更新”，重新打开即可看到新界面，无需重装；原config和data继续保留。详见[更新与预览](../docs/20261104-安卓简约界面r3.md)。
+在部署包根目录打开 PowerShell；进阶功能不再各配一个 BAT：
 
-r4热修复：最新含APK包将资源更新为r4，解决许可证TXT被现有APK拒绝的问题。仍沿用CI5原始APK；网页发布或离线导入后，手机重新下载资源并从最近任务关闭再打开即可。[修复与验证](../docs/20261104-资源解包失败与r4修复.md)。
+```powershell
+# 查询状态
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Status
+# 前台调试（输出直接继承控制台）
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Console
+# 停止 NAS 后重置管理员密码，按提示输入
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action AdminPassword
+# 让既有服务跟随配置中的 HTTP 开关（需管理员，会按原状态重启）
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Configure
+# 仅查看安装计划，不改 SCM、ACL 或防火墙
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Install -PlanOnly
+# 停止 NAS 后导入包内 APK/资源
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
+# 查看防火墙规则
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy/firewall.ps1 -Action Status
+```
+
+脚本只在用户执行 Open 时开放防火墙，不自动修改云安全组。配置的 data_dir/web_dir 相对于配置文件目录解析，不依赖 System32 工作目录。历史实测与现版本验证应分开阅读：[本轮记录](../docs/20261106-服务安装诊断与七个部署入口.md)。
