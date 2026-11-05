@@ -8,6 +8,7 @@ $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $root
 function Invoke-ReleasePython { & python.exe @args; if($LASTEXITCODE -ne 0){throw ('Python check failed: '+$args[0])} }
+Invoke-ReleasePython @('tools/check-workflows.py')
 Invoke-ReleasePython @('tools/check-version.py')
 Invoke-ReleasePython @('tools/check-dependencies.py')
 Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_release_*check.py')

@@ -25,6 +25,9 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -37,6 +40,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Validate Android source layout
         run: |
+          python3 -m pip install --disable-pip-version-check PyYAML
+          python3 tools/check-workflows.py
           python3 tools/check-version.py
           python3 tools/check-android.py
       - name: Check Android source and emulator evidence rules

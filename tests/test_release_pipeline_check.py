@@ -21,6 +21,7 @@ def module(name,file):
 import sys
 sys.path.insert(0,str(ROOT/'tools'))
 apk=module('release_apk','prepare-android-release.py');ffmpeg=module('release_ffmpeg','fetch-ffmpeg.py')
+workflows=module('release_workflows','check-workflows.py')
 
 
 def signed_fixture():
@@ -40,6 +41,23 @@ def signed_fixture():
 
 
 class ReleaseChecks(unittest.TestCase):
+    def test_all_workflows_have_unique_keys_and_valid_dependencies(self):
+        for path in (ROOT/'.github/workflows').glob('*.y*ml'):
+            with self.subTest(path=path.name):workflows.validate(path.read_text(encoding='utf-8'))
+
+    def test_duplicate_checkout_ref_is_rejected(self):
+        with self.assertRaisesRegex(ValueError,'Duplicate YAML key.*ref'):
+            workflows.validate('jobs:\n  package:\n    steps:\n      - with:\n          ref: first\n          ref: second\n')
+
+    def test_select_cannot_reference_its_own_future_output(self):
+        with self.assertRaisesRegex(ValueError,'undeclared needs reference.*select'):
+            workflows.validate('jobs:\n  select:\n    steps:\n      - with:\n          ref: ${{ needs.select.outputs.sha }}\n')
+
+    def test_job_cycles_and_missing_dependencies_are_rejected(self):
+        for source in ['jobs:\n  a:\n    needs: b\n  b:\n    needs: a\n',
+                       'jobs:\n  a:\n    needs: missing\n']:
+            with self.subTest(source=source),self.assertRaises(ValueError):workflows.validate(source)
+
     def test_actual_signature_and_content_digest(self):
         content,certificate=signed_fixture();self.assertEqual(apk.signing_certificate(content),certificate)
         tampered=bytearray(content);tampered[0]^=1
@@ -57,7 +75,7 @@ class ReleaseChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'differs'):ffmpeg.verified(file,pin)
 
     def test_workflow_keeps_manual_artifact_only_mode(self):
-        workflow=yaml.safe_load((ROOT/'.github/workflows/release.yml').read_text(encoding='utf-8'))
+        workflow=workflows.validate((ROOT/'.github/workflows/release.yml').read_text(encoding='utf-8'))
         step=next(s for s in workflow['jobs']['select']['steps'] if s.get('id')=='source')
         self.assertEqual(step['env']['INPUT_PUBLISH'],'${{ inputs.publish }}')
         self.assertEqual(workflow['permissions']['contents'],'read');self.assertEqual(workflow['jobs']['publish']['permissions']['contents'],'write')

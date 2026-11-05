@@ -36,7 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.select.outputs.sha }}
           persist-credentials: false
       - name: Validate source workflow, jobs, commit and artifact
         id: source
@@ -61,7 +60,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ needs.select.outputs.sha }}
           ref: ${{ needs.select.outputs.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5

@@ -3,6 +3,7 @@
 - 功能优先，Windows x64 / C++17 / VS2022 是当前实际目标。不要为开源预先扩展跨平台、插件框架或复杂 CI。
 - 用户自己执行提交和推送。可以初始化与配置 remote；后续只给命令，不自动 git add/commit/push/tag 或修改远程。
 - 正式版本由根VERSION标识，并与core.hpp、CMake、Android versionName一致；APK生产变更另递增versionCode。main每次推送均构建包，只有尚未公开的vVERSION发布正式Release，已有公开标签附件不可改写。版本门禁不替代Windows/固定签名APK/模拟器/完整ZIP验收，不把本机准备称为已在线发布。
+- 修改Actions工作流须运行tools/check-workflows.py及test_release_*check.py；SafeLoader解析成功不代表GitHub接受，重复YAML键可能被静默覆盖。checkout ref按具体job修改，不做跨整文件的模糊批量替换；select不可引用自身未来输出，package/publish仅引用已声明needs。校验工具的新Python依赖须在使用它的每个CI任务显式安装；本地结构检查仍不等于云端工作流执行通过。
 - 默认相对路径按配置文件目录解析。默认配置位于 exe/config/server.json，不依赖进程工作目录。文档图片使用相对路径。
 - 原件入库前必须校验大小和完整 SHA256；确认偏移只在文件刷新与数据库持久化后前移。保留提交中间状态和崩溃恢复。
 - 上传采用有界流式读取，禁止 req.body / base64 承载整个大视频。所有文件长度/偏移保持64位，传到网页时使用十进制字符串。
