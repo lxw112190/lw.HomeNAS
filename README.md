@@ -83,7 +83,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
 1. 停止服务，备份原 `config` 和 `data`。
 2. 替换EXE、web、deploy及工具文件，保留原配置和资料库。
 3. 新版自动补充数据库表，保留原件、账号、目录及上传进度。移动安装位置时，先在旧位置卸载服务，再在新位置安装。
-4. Android v1.0.1 的 versionCode 为16，继续使用仓库既有签名。新原生协议为9；升级后使用新内置页面，旧签名资源不会遮住新增功能。不要用旧程序回开已经升级的资料库。
+4. Android v1.0.1 的 versionCode 为17，继续使用仓库既有签名。新原生协议为9；升级后使用新内置页面，旧签名资源不会遮住新增功能。不要用旧程序回开已经升级的资料库。
 
 ## 编译源码
 

@@ -6,6 +6,25 @@ import json
 import re
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
+
+
+def test_failure_summary(root):
+    failures = []
+    seen = set()
+    for path in (root / 'android/app/build/outputs/androidTest-results/connected').rglob('*.xml'):
+        try:
+            tree = ET.parse(path)
+        except (OSError, ET.ParseError):
+            continue
+        for case in tree.iter('testcase'):
+            for issue in list(case.findall('failure')) + list(case.findall('error')):
+                name = case.get('classname', '') + '.' + case.get('name', '')
+                if name in seen:
+                    continue
+                seen.add(name)
+                failures.append(name + '\n' + issue.get('message', '') + '\n' + (issue.text or '')[:6000])
+    return ('\n\n'.join(failures)[:16000] if failures else 'No failing JUnit XML was available; inspect connected-tests.txt and logcat.txt.')
 
 
 def command(argv, *, binary=False):
@@ -29,7 +48,7 @@ def execute(root, runner=command):
     package = 'com.lxw.homenas'
     failure = 0
 
-    def saved(name, argv, *, required=False, binary=False):
+    def saved(name, argv, *, required=False, binary=False, echo=True):
         result = runner(argv, binary=binary)
         if binary:
             if result.returncode == 0:
@@ -37,7 +56,8 @@ def execute(root, runner=command):
         else:
             content = result.stdout + '\n' + result.stderr
             (evidence / name).write_text(content[-2_000_000:], encoding='utf-8')
-            print(content[-20000:], flush=True)
+            if echo:
+                print(content[-20000:], flush=True)
         if required and result.returncode:
             raise RuntimeError(f'{name}: command exited {result.returncode}')
         return result
@@ -71,19 +91,27 @@ def execute(root, runner=command):
     except Exception as error:
         (evidence / 'capture-error.txt').write_text(str(error) + '\n', encoding='utf-8')
         print('Emulator evidence error:', error, file=sys.stderr)
-        return failure or 1
+        failure = failure or 1
+        return failure
     finally:
         # The emulator is terminated by the action immediately afterwards, so collect here.
         for name, argv, binary in [
-            ('logcat.txt', ['adb', 'logcat', '-d', '-s', 'lw.HomeNAS', 'AndroidRuntime'], False),
+            ('logcat.txt', ['adb', 'logcat', '-d', '-s', 'lw.HomeNAS', 'AndroidRuntime', 'ExoPlayerImplInternal', 'ExoPlayerImpl', 'MediaCodecRenderer'], False),
             ('package.txt', ['adb', 'shell', 'dumpsys', 'package', package], False),
             ('activities.txt', ['adb', 'shell', 'dumpsys', 'activity', 'activities'], False),
             ('app-logs.tar', ['adb', 'exec-out', 'run-as', package, 'tar', '-cf', '-', 'files/logs'], True),
         ]:
             try:
-                saved(name, argv, binary=binary)
+                saved(name, argv, binary=binary, echo=name=='logcat.txt')
             except Exception as error:
                 print('Evidence collection unavailable:', name, type(error).__name__)
+        if failure:
+            try:
+                summary = test_failure_summary(root)
+                (evidence / 'test-failures.txt').write_text(summary + '\n', encoding='utf-8')
+                print('\nPRIMARY FAILURE SUMMARY (original exit code ' + str(failure) + '):\n' + summary, flush=True)
+            except Exception as error:
+                print('Test summary unavailable:', type(error).__name__, '; original exit code:', failure, flush=True)
 
 
 if __name__ == '__main__':

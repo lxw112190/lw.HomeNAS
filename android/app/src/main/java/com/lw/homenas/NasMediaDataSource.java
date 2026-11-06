@@ -24,7 +24,11 @@ final class NasMediaDataSource extends BaseDataSource {
     private void checkSession() throws IOException {if(!settings.current(session))throw new IOException("登录已改变，请重新打开播放");}
     @Override public long open(DataSpec spec) throws IOException {
         close();checkSession();
-        if(!Protocol.assetId(id)||!mediaUri(id).equals(spec.uri)||spec.httpMethod!=DataSpec.HTTP_METHOD_GET||!spec.httpRequestHeaders.isEmpty()||spec.position>size)throw new IOException("无效播放请求");
+        if(!Protocol.assetId(id)||!mediaUri(id).equals(spec.uri)||spec.httpMethod!=DataSpec.HTTP_METHOD_GET||spec.httpBody!=null||spec.position>size)throw new IOException("无效播放请求");
+        // ProgressiveMediaPeriod adds Icy-MetaData: 1 even for ordinary MP3/MP4 files.
+        // Accept that local hint but never forward caller-supplied headers to the NAS.
+        // NativeApi alone supplies Authorization and the range calculated below.
+        for(java.util.Map.Entry<String,String> header:spec.httpRequestHeaders.entrySet())if(!"Icy-MetaData".equalsIgnoreCase(header.getKey())||!"1".equals(header.getValue()))throw new IOException("不支持的播放请求头");
         uri=spec.uri;remaining=Math.min(size-spec.position,spec.length==C.LENGTH_UNSET?Long.MAX_VALUE:spec.length);
         transferInitializing(spec);
         try {

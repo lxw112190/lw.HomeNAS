@@ -25,7 +25,7 @@ public class NasMediaDataSourceTest {
         settings=new Settings(RuntimeEnvironment.getApplication());settings.prefs.edit().clear().putLong("revision",123).putString("token","fixture-only").commit();
         session=new Settings.Session("http://127.0.0.1:8787","","fixture-only","test-player",new JSONObject(),true,123);
     }
-    private DataSpec spec(long position,long length){return new DataSpec.Builder().setUri(NasMediaDataSource.mediaUri(ID)).setPosition(position).setLength(length).build();}
+    private DataSpec spec(long position,long length){return new DataSpec.Builder().setUri(NasMediaDataSource.mediaUri(ID)).setPosition(position).setLength(length).setHttpRequestHeaders(java.util.Collections.singletonMap("Icy-MetaData","1")).build();}
     @Test public void nativePlayerSeeksWithAuthenticationAndStopsAfterSessionChange() throws Exception {
         try(MockWebServer server=new MockWebServer()){
             server.start();NativeApi api=new NativeApi(server.url("/").toString(),"",true,"native-test-token");
@@ -35,7 +35,7 @@ public class NasMediaDataSourceTest {
             try{
                 assertEquals(8,source.open(spec(0,C.LENGTH_UNSET)));byte[] data=new byte[4];assertEquals(4,source.read(data,0,4));assertArrayEquals(new byte[]{'a','b','c','d'},data);
                 assertEquals(4,source.open(spec(2,4)));assertEquals(4,source.read(data,0,4));assertArrayEquals(new byte[]{'c','d','e','f'},data);assertEquals(C.RESULT_END_OF_INPUT,source.read(data,0,4));
-                okhttp3.mockwebserver.RecordedRequest first=server.takeRequest();assertEquals("Bearer native-test-token",first.getHeader("Authorization"));assertEquals("bytes=0-7",first.getHeader("Range"));assertEquals("bytes=2-5",server.takeRequest().getHeader("Range"));
+                okhttp3.mockwebserver.RecordedRequest first=server.takeRequest();assertEquals("Bearer native-test-token",first.getHeader("Authorization"));assertEquals("bytes=0-7",first.getHeader("Range"));assertNull(first.getHeader("Icy-MetaData"));assertEquals("bytes=2-5",server.takeRequest().getHeader("Range"));
                 settings.clear();assertThrows(IOException.class,()->source.read(data,0,4));assertThrows(IOException.class,()->source.open(spec(0,4)));assertEquals(2,server.getRequestCount());
             }finally{source.close();}
         }
@@ -45,6 +45,11 @@ public class NasMediaDataSourceTest {
             server.start();NativeApi api=new NativeApi(server.url("/").toString(),"",true,"native-test-token");NasMediaDataSource source=new NasMediaDataSource(settings,session,api,ID,8);
             try{
                 assertThrows(IOException.class,()->source.open(new DataSpec(Uri.parse("https://example.org/track.mp3"))));assertEquals(0,server.getRequestCount());
+                for(String header:new String[]{"Authorization","Cookie","Range","Host","Icy-MetaData"}){
+                    DataSpec injected=new DataSpec.Builder().setUri(NasMediaDataSource.mediaUri(ID)).setHttpRequestHeaders(java.util.Collections.singletonMap(header,"unexpected")).build();
+                    assertThrows(IOException.class,()->source.open(injected));
+                }
+                assertEquals(0,server.getRequestCount());
                 server.enqueue(new MockResponse().setBody("abcdefgh"));assertThrows(IOException.class,()->source.open(spec(2,4)));
                 server.enqueue(new MockResponse().setResponseCode(206).setHeader("Content-Range","bytes 0-3/8").setBody("abcd"));assertThrows(IOException.class,()->source.open(spec(2,4)));
                 assertEquals(2,server.getRequestCount());

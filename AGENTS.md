@@ -7,6 +7,7 @@
 - Windows发布脚本要按CI实际的pwsh与部署现场Windows PowerShell 5.1分别验证；Add-Type自PowerShell 7.1起不支持ConsoleApplication/WindowsApplication。需要真实argv回显EXE时，用Windows自带.NET Framework csc.exe生成，不通过跳过执行断言或只换旧Shell掩盖问题。
 - APK媒体预览按可用视口分配固定头部/操作区及可收缩媒体区，不把多个vh高度与固定按钮高度相加。至少检查320px窄屏与横屏、长文件名、元数据展开、缩放及关闭；元数据可独立滚动，外层不能靠overflow:hidden裁掉仍需使用的按钮。资源布局验证不等于Android真机通过。
 - 媒体错误码4不等同于已确定编码不支持，先核对请求路由/MIME/Range和真实编码。旧MP3可能category=file，应按audio MIME识别。元数据桥与NativeApi固定路由白名单同步修改并执行真实MockWebServer断言。原生播放仅接受已加载资料库ID，复用认证/证书校验，禁止把任意URL或令牌发给JS/外部播放器；关闭/换账号释放流，测试精确Range、拒绝错误206及注销。真实HEVC设备支持只能由新APK真机验证，不能拿浏览器或语法检查代替。
+- Media3 ProgressiveMediaPeriod默认在DataSpec添加Icy-MetaData: 1，包括普通MP3/MP4；自定义数据源不能一概拒绝非空请求头。可接受并忽略这个提示，但不转发外来头，认证与Range仍由NativeApi生成，继续拒绝任意URI、方法、正文和其他头。Robolectric夹具应包含真实播放器默认头；保留真实ExoPlayer的READY、时长、跳转断言，捕获onPlayerError因果链。模拟器失败先看JUnit和对应UTP单用例logcat，清理阶段dumpsys/run-as输出不代表首因；诊断收集失败不能覆盖原始退出码，控制台末尾输出具体用例摘要。
 - 默认相对路径按配置文件目录解析。默认配置位于 exe/config/server.json，不依赖进程工作目录。文档图片使用相对路径。
 - 原件入库前必须校验大小和完整 SHA256；确认偏移只在文件刷新与数据库持久化后前移。保留提交中间状态和崩溃恢复。
 - 上传采用有界流式读取，禁止 req.body / base64 承载整个大视频。所有文件长度/偏移保持64位，传到网页时使用十进制字符串。
