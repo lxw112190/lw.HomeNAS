@@ -57,6 +57,7 @@ jobs:
         run: |
           npm ci --prefix tests/dom --ignore-scripts --no-audit --no-fund
           node tests/collections-dom.cjs tests/dom/node_modules/jsdom
+          node tests/backup-picker-dom.cjs tests/dom/node_modules/jsdom
       - name: Restore persistent Debug signing identity
         if: github.event_name != 'pull_request'
         env:

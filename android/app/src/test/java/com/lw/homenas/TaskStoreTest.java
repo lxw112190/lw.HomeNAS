@@ -50,4 +50,14 @@ public class TaskStoreTest {
         store.state(id,"READY","");store.retry("server:alice");assertNull(store.next("server:alice"));
         assertEquals(1,store.summary("server:alice").getJSONObject("counts").getInt("READY"));
     }
+    @Test public void parallelClaimCannotLeaseTheSameTaskTwiceAndReleaseAllowsResume() throws Exception {
+        TaskStore store=TaskStore.get(RuntimeEnvironment.getApplication());String scope="claim-test";
+        for(int i=0;i<40;i++)store.enqueue(scope,"source"+i,"content://fixture/"+i,"sample.jpg","CI",5000000,1);
+        java.util.Set<Long> seen=java.util.concurrent.ConcurrentHashMap.newKeySet();java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(3);
+        java.util.List<java.util.concurrent.Future<?>> futures=new java.util.ArrayList<>();
+        try{for(int i=0;i<3;i++)futures.add(pool.submit(()->{TaskStore.Task task;while((task=store.claim(scope))!=null){try{assertTrue("duplicate lease",seen.add(task.id));store.state(task.id,"READY","");}finally{store.release(task.id);}}}));for(java.util.concurrent.Future<?> future:futures)future.get();assertEquals(40,seen.size());assertNull(store.claim(scope));}
+        finally{pool.shutdownNow();}
+        long id=store.enqueue(scope,"resume","content://fixture/resume","resume.jpg","CI",5000000,1);TaskStore.Task task=store.claim(scope);assertEquals(id,task.id);assertNull(store.claim(scope));store.hashed(id,5000000,"f".repeat(64));store.release(id);assertEquals(id,store.claim(scope).id);store.release(id);
+    }
+
 }

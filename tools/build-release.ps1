@@ -19,10 +19,13 @@ Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_androi
 if($LASTEXITCODE -ne 0){throw 'DOM test dependencies failed'}
 & node (Join-Path $root 'tests/collections-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
 if($LASTEXITCODE -ne 0){throw 'Collection DOM checks failed'}
+& node (Join-Path $root 'tests/backup-picker-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
+if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')
 if($LASTEXITCODE -ne 0){throw 'Windows Release build failed'}
 $exe=Join-Path $root 'build/app/Release/NasServer.exe'
 Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
+Invoke-ReleasePython @('tests/parallel_uploads.py')
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
 Invoke-ReleasePython @('tests/recycle.py')
@@ -41,7 +44,7 @@ $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','10','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','11','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare

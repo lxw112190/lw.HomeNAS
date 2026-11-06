@@ -2,6 +2,10 @@
   <p id="picker-target" class="caption">备份到：默认文件夹</p>
   <div class="picker-toolbar"><span>最新日期在前</span><button id="picker-refresh" class="text-button" type="button">刷新</button><button id="picker-permission" class="text-button" type="button">相册权限</button></div>
   <div class="picker-access"><p id="picker-access" class="caption"></p><button id="picker-settings" class="text-button" type="button" hidden>允许全部 / 系统设置</button></div>
+  <div class="picker-selection-tools"><button id="picker-all" type="button">全选</button><button id="picker-clear" type="button">清除选择</button><select id="picker-kind" aria-label="选择媒体类型"><option value="all">照片与视频</option><option value="image">仅照片</option><option value="video">仅视频</option></select></div>
+  <label class="picker-pending"><input id="picker-pending" type="checkbox" checked>仅选未备份 / 未入队</label>
+  <div id="picker-months" class="picker-months" aria-label="按月选择"></div>
+  <div id="picker-enqueue" class="enqueue-panel" hidden><span id="picker-enqueue-info"></span><button id="picker-enqueue-cancel" type="button">停止加入</button></div>
   <p id="picker-info" class="caption"></p><div id="picker-days"></div>
   <button id="picker-more" class="secondary full" type="button" hidden>更早日期</button>
   <div class="picker-footer"><span id="picker-selected">未选择</span><button id="picker-confirm" class="primary" type="button" disabled>加入备份队列</button></div>

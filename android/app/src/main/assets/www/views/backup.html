@@ -10,11 +10,13 @@
     <button id="choose-media" class="primary full" type="button" hidden>选择照片 / 视频</button>
     <button id="choose" class="text-button full" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-plus"></use></svg>选择其他文件</button>
     <div class="backup-controls"><button id="start" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg><span>开始备份</span></button><button id="pause" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-pause"></use></svg>暂停</button></div>
+    <label class="upload-parallel"><span>同时上传</span><select id="upload-parallel" aria-label="同时上传文件数"><option value="1">1 项</option><option value="2" selected>2 项</option><option value="3">3 项</option></select><small>下次开始生效</small></label>
   </div>
   <section id="transfer-live" class="transfer-live" hidden aria-label="当前传输">
     <div class="transfer-top"><strong id="transfer-phase">准备备份</strong><span id="transfer-speed"></span></div>
     <p id="transfer-name"></p><progress id="transfer-progress" max="100" value="0" aria-label="当前文件进度"></progress>
     <div class="transfer-bottom"><span id="transfer-bytes"></span><span id="transfer-eta"></span></div><p id="transfer-note" class="caption"></p>
+    <div id="transfer-files" class="transfer-files"></div>
   </section>
   <div class="section-title"><h2>传输任务</h2><button id="refresh" class="icon-button" type="button" aria-label="刷新任务"><svg class="icon" aria-hidden="true"><use href="#icon-refresh"></use></svg></button></div>
   <div class="task-toolbar"><select id="queue-filter" aria-label="备份任务筛选"><option value="active">进行中</option><option value="failed">未完成</option><option value="ready">已完成</option><option value="all">全部</option></select><button id="retry" class="text-button upload-only" type="button" hidden>重试未完成</button></div>

@@ -54,6 +54,7 @@ public final class MainActivity extends Activity {
     private JSONObject pendingDownload;
     private Settings.Session downloadSession;
     private volatile boolean visible;
+    private final EnqueueJob enqueueJob=new EnqueueJob();
     private final java.util.concurrent.atomic.AtomicLong mediaRevision=new java.util.concurrent.atomic.AtomicLong();
     private boolean requestingMedia;
     private NativeApi cachedApi;
@@ -64,7 +65,7 @@ public final class MainActivity extends Activity {
     private synchronized void resetApi(){cachedApi=null;cachedRevision=-1;if(previews!=null)previews.closeAll();if(mediaPicker!=null)mediaPicker.clear();}
     private void checkAuthentication(Settings.Session session,Exception error) {
         if(error instanceof NativeApi.Failure&&((NativeApi.Failure)error).status==401&&settings.invalidate(session)){
-            BackupEngine.stopActive();BackupScheduler.cancel(this);settings.message("登录已过期或权限被调整，请重新登录；本机队列保留");resetApi();assets.clear();
+            enqueueJob.cancel();BackupEngine.stopActive();BackupScheduler.cancel(this);settings.message("登录已过期或权限被调整，请重新登录；本机队列保留");resetApi();assets.clear();
         }
     }
     private JSONObject authenticatedGet(Settings.Session session,String path) throws Exception {
@@ -149,9 +150,11 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",10).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",11).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
-        result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true).put("nativeMediaPlayback",true);
+        JSONObject transfer=TransferProgress.snapshot(session==null?"":session.scope);long[] totals=TaskStore.get(this).pendingTotals(session==null?"":session.scope);
+        transfer.put("remaining_items",totals[0]).put("remaining_bytes",Long.toString(totals[1]));result.put("enqueue",enqueueJob.snapshot(session==null?"":session.scope));
+        result.put("transfer",transfer).put("playbackDiagnostics",true).put("nativeMediaPlayback",true);
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
         return result;
@@ -167,7 +170,7 @@ public final class MainActivity extends Activity {
             case "backupFolder": {
                 Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");
                 JSONObject folder=authenticatedGet(session,"folders/"+id);if(!folder.optBoolean("can_write"))throw new SecurityException("不能备份到其他用户的文件夹");
-                if(!settings.current(session))throw new SecurityException("登录身份已改变");settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();return snapshot();
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");enqueueJob.cancel();settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();return snapshot();
             }
             case "folderList": case "folderItems": case "folderChange": {
                 boolean write=action.equals("folderChange");Settings.Session session=requireSession(write);String folderId=data.optString("folderId","");
@@ -224,8 +227,12 @@ public final class MainActivity extends Activity {
                 ui(()->{if(settings.current(session)){previews.closeAll();startActivity(intent);}});return new JSONObject();
             }
             case "playbackError": {requireSession(false);JSONObject item=assets.get(data.optString("id"));if(item==null)throw new IllegalArgumentException("请重新打开预览");Diagnostics.event("preview.playback_error","code="+Math.max(0,Math.min(4,data.optInt("code")))+" network="+Math.max(0,Math.min(3,data.optInt("network")))+" ready="+Math.max(0,Math.min(4,data.optInt("ready")))+" mime="+item.optString("mime").replaceAll("[^A-Za-z0-9/+-]","")+" sdk="+Build.VERSION.SDK_INT);return new JSONObject();}
-            case "mediaDays": {Settings.Session session=requireSession(true);if(data.optBoolean("reset"))ensureDestination(session);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
-            case "mediaItems": {Settings.Session session=requireSession(true);return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000));}
+            case "uploadConcurrency": {requireSession(true);int count=data.getInt("count");if(count<1||count>3)throw new IllegalArgumentException("同时上传数量需1至3");settings.prefs.edit().putInt("upload_parallel",count).commit();return snapshot();}
+            case "mediaMonths": {Settings.Session session=requireSession(true);if(enqueueJob.snapshot(session.scope).optString("state").equals("RUNNING"))throw new java.io.IOException("正在加入队列，请等待或取消");return mediaPicker.months(session,data.optString("kind","all"),new RunControl(90000));}
+            case "mediaEnqueueStart": {Settings.Session session=requireSession(true);return enqueueJob.start(settings,session,mediaPicker,api(session),data);}
+            case "mediaEnqueueCancel": {Settings.Session session=requireSession(true);if(enqueueJob.snapshot(session.scope).optString("state").equals("RUNNING"))enqueueJob.cancel();return enqueueJob.snapshot(session.scope);}
+            case "mediaDays": {Settings.Session session=requireSession(true);if(enqueueJob.snapshot(session.scope).optString("state").equals("RUNNING"))throw new java.io.IOException("正在加入队列，请等待或取消");if(data.optBoolean("reset"))ensureDestination(session);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000),data.optString("kind","all"));}
+            case "mediaItems": {Settings.Session session=requireSession(true);if(enqueueJob.snapshot(session.scope).optString("state").equals("RUNNING"))throw new java.io.IOException("正在加入队列，请等待或取消");return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000),data.optString("kind","all"));}
             case "mediaEnqueue": {Settings.Session session=requireSession(true);JSONObject result=mediaPicker.enqueue(session,data,api(session),new RunControl(90000));settings.message("已加入 "+result.getInt("added")+" 项，跳过已完成或已入队 "+result.getInt("skipped")+" 项");return result;}
             case "snapshot": return snapshot();
             case "diagnostics": return Diagnostics.view(this);
@@ -242,7 +249,7 @@ public final class MainActivity extends Activity {
                 settings.message("连接成功：电脑服务 "+server.optString("version")+"；可继续输入账号密码登录");return new JSONObject().put("endpoint",endpoint).put("version",server.optString("version"));
             }
             case "login": {
-                settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));
+                enqueueJob.cancel();settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));
                 String endpoint=connection(data);boolean http=endpoint.startsWith("http:");
                 String pem=!http&&data.optBoolean("trustCertificate")?settings.prefs.getString("pending_cert",""):"";
                 NativeApi probe=new NativeApi(endpoint,pem,http,"");RunControl control=new RunControl(60000);
@@ -256,7 +263,7 @@ public final class MainActivity extends Activity {
                 Diagnostics.event("login.saved","role="+me.optString("role")+" can_upload="+me.optBoolean("can_upload")+" encrypted_session=true");
                 settings.message("登录成功；请选择文件或相册，点击立即备份");return snapshot();
             }
-            case "logout": {queueBefore="";queueFilter="active";
+            case "logout": {enqueueJob.cancel();queueBefore="";queueFilter="active";
                 Settings.Session old=settings.session();settings.clear();BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));BackupScheduler.cancel(this);assets.clear();resetApi();
                 if(old!=null)try{new NativeApi(old).post("logout",new JSONObject(),new RunControl(12000));}catch(Exception ignored){}
                 return snapshot();
@@ -389,5 +396,5 @@ public final class MainActivity extends Activity {
     @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null){web.onResume();mediaChanged();}}
     @Override protected void onPause(){visible=false;Diagnostics.event("activity.pause","");if(web!=null)web.onPause();super.onPause();}
     @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null){Uri page=Uri.parse(web.getUrl()==null?"":web.getUrl());if(local(page)&&!page.getPath().endsWith("/index.html")){if(web.canGoBack())web.goBack();else web.loadUrl(ORIGIN+"/assets/www/index.html");return;}}if(web!=null&&local(Uri.parse(web.getUrl()==null?"":web.getUrl())))web.evaluateJavascript("typeof window.homeNasBack==='function' ? (window.homeNasBack(),true) : false",handled->{if(!"true".equals(handled)&&!isFinishing())finish();});else super.onBackPressed();}
-    @Override protected void onDestroy(){if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){enqueueJob.cancel();if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
 }

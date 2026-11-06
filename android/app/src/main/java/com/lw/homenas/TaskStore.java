@@ -10,6 +10,7 @@ import org.json.JSONObject;
 import java.util.UUID;
 
 final class TaskStore extends SQLiteOpenHelper {
+    private final java.util.Set<Long> leased=new java.util.HashSet<>();
     private static TaskStore instance;
     static synchronized TaskStore get(Context context) { if(instance==null)instance=new TaskStore(context.getApplicationContext());return instance; }
     private TaskStore(Context context) { super(context,"backup-queue.db",null,2);setWriteAheadLoggingEnabled(true); }
@@ -42,27 +43,37 @@ final class TaskStore extends SQLiteOpenHelper {
         return getWritableDatabase().insertWithOnConflict("tasks",null,v,SQLiteDatabase.CONFLICT_IGNORE);
     }
     Task next(String scope) {
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,scope,uri,name,album,size,modified,client,sha,remote,offset,state,folder_id FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING') ORDER BY id LIMIT 1",new String[]{scope})) { return c.moveToFirst()?new Task(c):null; }
+        return next(scope,java.util.Collections.emptySet());
     }
+    private Task next(String scope,java.util.Set<Long> excluded) {
+        String where="";for(long id:excluded)where+=(where.isEmpty()?" AND id NOT IN (":",")+id;if(!where.isEmpty())where+=")";
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,scope,uri,name,album,size,modified,client,sha,remote,offset,state,folder_id FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING')"+where+" ORDER BY id LIMIT 1",new String[]{scope})){return c.moveToFirst()?new Task(c):null;}
+    }
+    synchronized Task claim(String scope){Task task=next(scope,leased);if(task!=null)leased.add(task.id);return task;}
+    synchronized void release(long id){leased.remove(id);}
+    synchronized boolean isLeased(long id){return leased.contains(id);}
+    long[] pendingTotals(String scope){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*),COALESCE(SUM(MAX(size-offset,0)),0) FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING')",new String[]{scope})){c.moveToFirst();return new long[]{c.getLong(0),c.getLong(1)};}}
+    boolean ready(long id){try(Cursor c=getReadableDatabase().rawQuery("SELECT state FROM tasks WHERE id=?",new String[]{Long.toString(id)})){return c.moveToFirst()&&c.getString(0).equals("READY");}}
     void state(long id,String state,String message) { ContentValues v=new ContentValues();v.put("state",state);v.put("error",message);getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)});Diagnostics.event("task.state","task="+id+" state="+state); }
     void hashed(long id,long size,String sha) { ContentValues v=new ContentValues();v.put("size",size);v.put("sha",sha);v.put("state","UPLOADING");getWritableDatabase().update("tasks",v,"id=?",new String[]{Long.toString(id)}); }
     boolean confirmed(long id,JSONObject remote) throws Exception {
         String ident=remote.getString("id"),offset=remote.getString("offset"),state=remote.getString("state"),error=remote.optString("error","");
         ContentValues v=new ContentValues();v.put("remote",ident);v.put("offset",offset);v.put("state",state);v.put("error",error);if(remote.has("folder_name"))v.put("folder_name",remote.optString("folder_name","默认文件夹"));return getWritableDatabase().update("tasks",v,"id=? AND (remote<>? OR offset<>? OR state<>? OR error<>?)",new String[]{Long.toString(id),ident,offset,state,error})>0;
     }
-    void retry(String scope) {
+    synchronized void retry(String scope) {
         // Explicit user retry uses a new idempotency key; an ERROR server task is terminal.
         SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
         try(Cursor c=db.rawQuery("SELECT id FROM tasks WHERE scope=? AND state IN ('ERROR','SOURCE_MISSING')",new String[]{scope})) {
-            while(c.moveToNext()) {ContentValues v=new ContentValues();v.put("client",UUID.randomUUID().toString());v.put("state","QUEUED");v.put("error","");v.put("remote","");v.put("sha","");v.put("offset",0);db.update("tasks",v,"id=?",new String[]{c.getString(0)});}
+            while(c.moveToNext()) {if(isLeased(c.getLong(0)))continue;ContentValues v=new ContentValues();v.put("client",UUID.randomUUID().toString());v.put("state","QUEUED");v.put("error","");v.put("remote","");v.put("sha","");v.put("offset",0);db.update("tasks",v,"id=?",new String[]{c.getString(0)});}
             db.setTransactionSuccessful();
         }finally{db.endTransaction();}
     }
-    boolean requeue(long id,String uri) {
+    synchronized boolean requeue(long id,String uri) {
+        if(isLeased(id))return false;
         ContentValues value=new ContentValues();value.put("uri",uri);value.put("client",UUID.randomUUID().toString());value.put("remote","");value.put("sha","");value.put("offset",0);value.put("state","QUEUED");value.put("error","");
         return getWritableDatabase().update("tasks",value,"id=? AND state IN ('READY','ERROR','SOURCE_MISSING')",new String[]{Long.toString(id)})>0;
     }
-    boolean relink(long id){ContentValues v=new ContentValues();v.put("client",UUID.randomUUID().toString());v.put("remote","");v.put("offset",0);v.put("state","QUEUED");v.put("error","");return getWritableDatabase().update("tasks",v,"id=? AND state='READY'",new String[]{Long.toString(id)})>0;}
+    synchronized boolean relink(long id){if(isLeased(id))return false;ContentValues v=new ContentValues();v.put("client",UUID.randomUUID().toString());v.put("remote","");v.put("offset",0);v.put("state","QUEUED");v.put("error","");return getWritableDatabase().update("tasks",v,"id=? AND state='READY'",new String[]{Long.toString(id)})>0;}
     JSONObject summary(String scope) throws Exception {return summary(scope,"","active");}
     JSONObject summary(String scope,String before,String filter) throws Exception {
         SQLiteDatabase db=getReadableDatabase();String where="scope=?";java.util.ArrayList<String> args=new java.util.ArrayList<>();args.add(scope);

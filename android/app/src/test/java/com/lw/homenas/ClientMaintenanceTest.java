@@ -29,7 +29,7 @@ public class ClientMaintenanceTest {
     }
     @Test public void nativeUpgradeUsesBuiltinUiAndPreservesOtherState() throws Exception {
         File old=ui("r6"),staged=ui("r7");
-        prefs.edit().putInt("builtinNative",9).putString("active","r6").putString("previous","r5").putString("staged","r7").putBoolean("unconfirmed",true).putString("unrelated-setting","retained").commit();
+        prefs.edit().putInt("builtinNative",10).putString("active","r6").putString("previous","r5").putString("staged","r7").putBoolean("unconfirmed",true).putString("unrelated-setting","retained").commit();
         ClientMaintenance manager=new ClientMaintenance(context);assertNull(manager.beginLaunch());assertEquals("builtin",manager.version());
         for(String key:new String[]{"active","previous","staged"})assertFalse(prefs.contains(key));
         assertFalse(prefs.getBoolean("unconfirmed",true));assertEquals("retained",prefs.getString("unrelated-setting",""));

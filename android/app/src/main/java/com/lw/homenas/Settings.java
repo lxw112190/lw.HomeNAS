@@ -85,7 +85,7 @@ final class Settings {
     void message(String value) { prefs.edit().putString("message",value).apply(); }
     JSONObject publicState() throws Exception {
         JSONObject result=new JSONObject().put("endpoint",prefs.getString("endpoint","")).put("allowHttp",prefs.getBoolean("http",false))
-            .put("auto",prefs.getBoolean("auto",false)).put("wifiOnly",prefs.getBoolean("wifi",true)).put("charging",prefs.getBoolean("charging",false))
+            .put("uploadParallel",Math.max(1,Math.min(3,prefs.getInt("upload_parallel",2)))).put("auto",prefs.getBoolean("auto",false)).put("wifiOnly",prefs.getBoolean("wifi",true)).put("charging",prefs.getBoolean("charging",false))
             .put("paused",paused()).put("message",prefs.getString("message","欢迎使用家庭备份"));
         result.put("lastUsername",new JSONObject(prefs.getString("me","{}")).optString("username","admin"));
         result.put("connectionAddress",prefs.getString("draft_endpoint",prefs.getString("endpoint",Protocol.DEFAULT_CONNECTION)))

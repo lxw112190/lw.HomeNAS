@@ -22,7 +22,7 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class) @Config(sdk=34)
 public class MediaPickerQueryTest {
     public static class Provider extends ContentProvider {
-        final List<long[]> rows=new ArrayList<>();boolean ignoreOrder;String requestedSort="";
+        final List<long[]> rows=new ArrayList<>();Runnable onCollectionQuery;boolean ignoreOrder;String requestedSort="";
         @Override public boolean onCreate(){return true;}
         private static boolean isItem(Uri uri){return uri.getPath()!=null&&uri.getPath().matches(".*/(images|video)/media/[0-9]+$");}
         private static Object value(long[] row,String column){switch(column){case "_id":return row[0];case "date_modified":return row[1];case "_display_name":return "fixture.jpg";case "_size":return 123L;case "volume_name":return "external_primary";case "bucket_display_name":return "CI";default:return 32L;}}
@@ -34,10 +34,19 @@ public class MediaPickerQueryTest {
         }
         @Override public Cursor query(Uri uri,String[] projection,Bundle options,CancellationSignal cancel) {
             if(isItem(uri))return itemMetadata(uri,projection);
+            if(onCollectionQuery!=null)onCollectionQuery.run();
             requestedSort=options.getString(ContentResolver.QUERY_ARG_SQL_SORT_ORDER,"");
             String selection=options.getString(ContentResolver.QUERY_ARG_SQL_SELECTION,"");String[] args=options.getStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS);
             List<long[]> matches=new ArrayList<>();
-            for(long[] row:rows){if(selection.contains("date_modified>=?")){if(row[1]<Long.parseLong(args[0])||row[1]>=Long.parseLong(args[1]))continue;}else if(selection.contains("date_modified<?")&&row[1]>=Long.parseLong(args[0]))continue;matches.add(row);}
+            for(long[] row:rows){
+                int arg=0;boolean match=true;
+                if(selection.contains("date_modified>=?")){long from=Long.parseLong(args[arg++]),to=Long.parseLong(args[arg++]);if(row[1]<from||row[1]>=to)match=false;}
+                else if(selection.contains("date_modified<=0")&&row[1]>0)match=false;
+                if(selection.contains("_id<=?")){if(row[0]>Long.parseLong(args[arg++]))match=false;}
+                if(selection.contains("OR (date_modified=?")){long time=Long.parseLong(args[arg++]);arg++;long id=Long.parseLong(args[arg++]);boolean inclusive=selection.contains("date_modified=? AND _id<=?");if(!(row[1]<time||row[1]==time&&(inclusive?row[0]<=id:row[0]<id)))match=false;}
+                else if(selection.contains("date_modified<?")&&!selection.contains("date_modified>=?")){if(row[1]>=Long.parseLong(args[arg++]))match=false;}
+                if(match)matches.add(row);
+            }
             if(!ignoreOrder&&requestedSort.equals("date_modified DESC, _id DESC"))matches.sort((a,b)->{int order=Long.compare(b[1],a[1]);return order!=0?order:Long.compare(b[0],a[0]);});
             int limit=options.getInt(ContentResolver.QUERY_ARG_LIMIT,Integer.MAX_VALUE);MatrixCursor result=new MatrixCursor(projection);
             for(long[] row:matches.subList(0,Math.min(limit,matches.size()))){Object[] values=new Object[projection.length];for(int i=0;i<projection.length;i++)values[i]=value(row,projection[i]);result.addRow(values);}return result;
@@ -104,4 +113,52 @@ public class MediaPickerQueryTest {
         assertThrows(java.io.IOException.class,()->picker.enqueue(session,input,null,new RunControl(30000)));
         try(Cursor queued=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id FROM tasks WHERE scope=?",new String[]{session.scope})){assertEquals(0,queued.getCount());}
     }
+    @Test public void monthlyAndAllSelectionCrossPagesAndKeepDayExceptions() throws Exception {
+        picker.days(session,"",true,new RunControl(30000));
+        JSONObject months=picker.months(session,"image",new RunControl(30000));assertEquals(3,months.getJSONArray("items").length());
+        JSONObject input=new JSONObject().put("months",new JSONArray().put("2026-08")).put("exclude_days",new JSONArray().put("2026-08-02")).put("kind","image");
+        JSONObject result=picker.enqueue(session,input,null,new RunControl(30000));assertEquals(30,result.getInt("added"));
+        JSONObject all=picker.enqueue(session,new JSONObject().put("all",true).put("kind","image"),null,new RunControl(30000));assertEquals(50,all.getInt("added"));assertEquals(30,all.getInt("skipped"));
+    }
+    @Test public void allSelectionOverFiveThousandUsesBoundedPagesAndCanCancel() throws Exception {
+        long when=provider.rows.get(0)[1];provider.rows.clear();for(int i=1;i<=5101;i++)provider.rows.add(new long[]{i,when+i});
+        picker.days(session,"",true,new RunControl(30000));java.util.concurrent.atomic.AtomicLong batches=new java.util.concurrent.atomic.AtomicLong();
+        JSONObject result=picker.enqueue(session,new JSONObject().put("all",true).put("kind","image"),null,new RunControl(120000),(n,a,skip,bytes)->batches.set(n));
+        assertEquals(5101,result.getInt("added"));assertEquals(5101,batches.get());assertEquals(5101,TaskStore.get(context).counts(session.scope).getLong("QUEUED"));
+    }
+    @Test public void cancellationKeepsOnlyAlreadyQueuedFiles() throws Exception {
+        picker.days(session,"",true,new RunControl(30000));RunControl control=new RunControl(30000);
+        assertThrows(java.io.InterruptedIOException.class,()->picker.enqueue(session,new JSONObject().put("all",true),null,control,(n,a,skip,bytes)->{if(n==7)control.cancel();}));
+        assertEquals(7,TaskStore.get(context).counts(session.scope).getLong("QUEUED"));
+    }
+    @Test public void targetChangeStopsFurtherEnqueueWithoutRetargeting() throws Exception {
+        picker.days(session,"",true,new RunControl(30000));RunControl control=new RunControl(30000);
+        assertThrows(java.io.IOException.class,()->picker.enqueue(session,new JSONObject().put("all",true),null,control,(n,a,skip,bytes)->{if(n==5)settings.prefs.edit().putString("backup_folder_"+Protocol.key(session.scope),"b".repeat(48)).commit();}));
+        try(Cursor rows=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT folder_id FROM tasks",null)){assertEquals(5,rows.getCount());while(rows.moveToNext())assertEquals("default",rows.getString(0));}
+    }
+
+    @Test public void asyncEnqueueRejectsDuplicateStartAndCancelLeavesQueueIntact() throws Exception {
+        picker.days(session,"",true,new RunControl(30000));EnqueueJob job=new EnqueueJob();
+        java.util.concurrent.CountDownLatch entered=new java.util.concurrent.CountDownLatch(1),release=new java.util.concurrent.CountDownLatch(1);
+        provider.onCollectionQuery=()->{entered.countDown();try{if(!release.await(10,java.util.concurrent.TimeUnit.SECONDS))throw new AssertionError("Fixture gate timed out");}catch(InterruptedException e){Thread.currentThread().interrupt();throw new AssertionError(e);}};
+        try{
+            assertEquals("RUNNING",job.start(settings,session,picker,null,new JSONObject().put("all",true)).getString("state"));assertTrue(entered.await(5,java.util.concurrent.TimeUnit.SECONDS));
+            assertThrows(java.io.IOException.class,()->job.start(settings,session,picker,null,new JSONObject().put("all",true)));
+            job.cancel();release.countDown();long deadline=System.nanoTime()+10_000_000_000L;while(job.snapshot(session.scope).getString("state").equals("RUNNING")&&System.nanoTime()<deadline)Thread.sleep(10);
+            assertEquals("STOPPED",job.snapshot(session.scope).getString("state"));assertFalse(TaskStore.get(context).counts(session.scope).has("QUEUED"));
+            assertEquals("IDLE",job.snapshot("another-user").getString("state"));
+        }finally{job.cancel();release.countDown();provider.onCollectionQuery=null;}
+    }
+    @Test public void photosCreatedDuringSelectionAreNotAddedToTheFixedRange() throws Exception {
+        long when=provider.rows.get(0)[1];provider.rows.clear();for(int i=1;i<=120;i++)provider.rows.add(new long[]{i,when+i});picker.days(session,"",true,new RunControl(30000));
+        JSONObject result=picker.enqueue(session,new JSONObject().put("all",true),null,new RunControl(30000),(n,a,skip,bytes)->{if(n==1)provider.rows.add(new long[]{9000,when});});
+        assertEquals(120,result.getInt("added"));try(Cursor rows=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT uri FROM tasks",null)){while(rows.moveToNext())assertFalse(rows.getString(0).endsWith("/9000"));}
+    }
+
+    @Test public void combinedImageAndVideoPagesKeepEqualMediaIdsDistinct() throws Exception {
+        Shadows.shadowOf((Application)context).grantPermissions(Manifest.permission.READ_MEDIA_VIDEO);
+        picker.days(session,"",true,new RunControl(30000));JSONObject result=picker.enqueue(session,new JSONObject().put("all",true),null,new RunControl(60000));
+        assertEquals(160,result.getInt("added"));assertEquals(160,TaskStore.get(context).counts(session.scope).getLong("QUEUED"));
+    }
+
 }
