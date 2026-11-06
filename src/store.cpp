@@ -216,7 +216,7 @@ json Store::createUpload(const json& input,const Identity& who) {
             if(row["state"]=="READY"){
                 auto originals=db.query("SELECT * FROM assets WHERE id=? AND state='READY'",{row["asset_id"]});std::error_code ec;
                 if(originals.empty() || !fs::is_regular_file(originalPath(originals[0]),ec) || fs::file_size(originalPath(originals[0]),ec)!=size){
-                    db.exec("UPDATE assets SET state='MISSING' WHERE id=?",{row["asset_id"]});
+                    db.exec("UPDATE assets SET state='MISSING' WHERE id=? AND state='READY'",{row["asset_id"]});
                     db.exec("UPDATE uploads SET state='ERROR',error='ORIGINAL_MISSING' WHERE id=?",{row["id"]});
                     row=taskRow(row["id"]);
                 }
@@ -228,7 +228,7 @@ json Store::createUpload(const json& input,const Identity& who) {
         if(!assets.empty()) {
             auto path=originalPath(assets[0]);std::error_code error;
             if(fs::is_regular_file(path,error)&&fs::file_size(path,error)==size) assetId=assets[0]["id"].get<std::string>();
-            else db.exec("UPDATE assets SET state='MISSING' WHERE id=?",{assets[0]["id"].get<std::string>()});
+            else db.exec("UPDATE assets SET state='MISSING' WHERE id=? AND state='READY'",{assets[0]["id"].get<std::string>()});
         }
         if(assetId.empty()) {
             if(!db.query("SELECT t.asset_id FROM asset_trash t JOIN assets a ON a.id=t.asset_id WHERE a.sha256=? AND a.size=?",{hash,std::to_string(size)}).empty())throw Error(409,"ASSET_TRASHED","该文件在回收站且原件需要检查，请在电脑处理后再备份");
@@ -294,6 +294,7 @@ json Store::cancel(const std::string& id,const Identity& who) {
 void Store::finishCommit(const json& task,const json& assetRow) {
     db.transaction([&]{
         auto id=task["id"].get<std::string>(),assetId=assetRow["id"].get<std::string>();
+        if(db.query("SELECT id FROM assets WHERE id=? AND state<>'PURGING'",{assetId}).empty())throw Error(409,"ASSET_PURGING","文件正在彻底删除，未将备份标记为成功");
         db.exec("UPDATE assets SET state='READY' WHERE id=?",{assetId});
         db.exec("UPDATE uploads SET state='READY',asset_id=?,offset=size,error='',updated=? WHERE id=?",{assetId,std::to_string(millis()),id});
         db.exec("INSERT OR IGNORE INTO sources(device_id,source_key,asset_id,name,album,modified) VALUES(?,?,?,?,?,?)",{task["device_id"],task["source_key"],assetId,task["name"],task["album"],task["modified"]});
@@ -314,7 +315,7 @@ void Store::process(const std::string& id) {
         if(!duplicates.empty() && fs::exists(originalPath(duplicates[0])) && fs::file_size(originalPath(duplicates[0]))==size) {
             row=duplicates[0];finishCommit(task,row);std::error_code error;fs::remove(part(id),error);return;
         }
-        if(!duplicates.empty())db.exec("UPDATE assets SET state='MISSING' WHERE id=?",{duplicates[0]["id"]});
+        if(!duplicates.empty())db.exec("UPDATE assets SET state='MISSING' WHERE id=? AND state='READY'",{duplicates[0]["id"]});
         auto assetId=randomHex();std::time_t t=static_cast<std::time_t>(number(task,"created")/1000);std::tm tm{};gmtime_s(&tm,&t);char folder[16];std::strftime(folder,sizeof(folder),"%Y/%m",&tm);
         auto relative=fs::path("storage/originals")/folder/(assetId+extension(task["name"]));
         db.transaction([&]{
@@ -326,6 +327,8 @@ void Store::process(const std::string& id) {
     makePreview(row);
 }
 void Store::makePreview(const json& row) {
+    auto mutex=sessionMutex("asset:"+row["id"].get<std::string>());std::lock_guard<std::mutex> guard(*mutex);
+    if(db.query("SELECT id FROM assets WHERE id=? AND state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)",{row["id"]}).empty())return;
     if(row["category"]=="image") {
         try{generateThumbnail(originalPath(row),config.data/"cache"/(row["id"].get<std::string>()+".jpg"));db.exec("UPDATE assets SET preview='READY' WHERE id=?",{row["id"]});}
         catch(...){db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});}
@@ -334,8 +337,10 @@ void Store::makePreview(const json& row) {
 void Store::videoWorker() {
     while(!stopping){
         try {
-            auto rows=db.query("SELECT * FROM assets WHERE state='READY' AND category='video' AND preview='PENDING' ORDER BY created,id LIMIT 1");
+            auto rows=db.query("SELECT * FROM assets WHERE state='READY' AND category='video' AND preview='PENDING' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id) ORDER BY created,id LIMIT 1");
             if(!rows.empty()){
+                auto mutex=sessionMutex("asset:"+rows[0]["id"].get<std::string>());std::lock_guard<std::mutex> guard(*mutex);
+                if(db.query("SELECT id FROM assets WHERE id=? AND state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)",{rows[0]["id"]}).empty())continue;
                 auto row=rows[0];try{generateVideoThumbnail(config.ffmpeg,originalPath(row),config.data/"cache"/(row["id"].get<std::string>()+".jpg"),stopping);db.exec("UPDATE assets SET preview='READY' WHERE id=?",{row["id"]});}
                 catch(...){if(stopping)return;db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});}continue;
             }
@@ -351,6 +356,7 @@ void Store::worker() {
     }
 }
 void Store::recover() {
+    for(auto& row:db.query("SELECT id FROM assets WHERE state='PURGING'")){try{finishPurge(row["id"]);}catch(...){/* Retain the durable intent for an administrator retry. */}}
     for(auto& row:db.query("SELECT id,name FROM assets WHERE state='READY' AND category='video' AND mime='application/octet-stream'")){auto type=mime(row["name"]);if(type!="application/octet-stream")db.exec("UPDATE assets SET mime=? WHERE id=?",{type,row["id"]});}
     if(videoToolAvailable(config))db.exec("UPDATE assets SET preview='PENDING' WHERE state='READY' AND category='video' AND preview='UNAVAILABLE'");
     for(auto& task:db.query("SELECT id FROM uploads WHERE state='CANCELLED'")){std::error_code ec;fs::remove(part(task["id"]),ec);}
@@ -363,7 +369,7 @@ void Store::recover() {
         }catch(...){db.exec("UPDATE uploads SET state='ERROR',error='RECOVERY_PART_MISSING_OR_SHORT' WHERE id=?",{id});}
     }
     for(auto& row:db.query("SELECT id,path,size,preview FROM assets WHERE state='READY'")){
-        std::error_code e;auto path=originalPath(row);if(!fs::is_regular_file(path,e)||fs::file_size(path,e)!=number(row,"size"))db.exec("UPDATE assets SET state='MISSING' WHERE id=?",{row["id"]});
+        std::error_code e;auto path=originalPath(row);if(!fs::is_regular_file(path,e)||fs::file_size(path,e)!=number(row,"size"))db.exec("UPDATE assets SET state='MISSING' WHERE id=? AND state='READY'",{row["id"]});
         else if(row["preview"]=="PENDING")enqueue("preview:"+row["id"].get<std::string>());
     }
 }

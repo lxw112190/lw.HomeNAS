@@ -22,6 +22,8 @@ Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
 Invoke-ReleasePython @('tests/recycle.py')
+& node (Join-Path $root 'tests/purge-ui.cjs')
+if($LASTEXITCODE -ne 0){throw 'Permanent deletion UI confirmation checks failed'}
 Invoke-ReleasePython @('tests/rename.py')
 Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
 & (Join-Path $root 'tests/check-service-scripts.ps1')

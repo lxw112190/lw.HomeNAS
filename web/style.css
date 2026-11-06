@@ -37,3 +37,6 @@
 
 /* v1.0: media first, details only on demand. */
 .preview-body{display:block!important}.preview-footer{flex-wrap:wrap;gap:8px}#preview-metadata{max-height:none;margin-top:12px}#preview-info{font-size:12px}#preview-title,#media-title{overflow-wrap:anywhere}#preview-content video{width:100%;max-height:70vh}.media-dialog{width:min(980px,96vw);max-height:94vh}.media-dialog .photo-stage{height:clamp(260px,61vh,720px)}#media-metadata{padding:12px 0;border-top:1px solid #e3e8e5}#media-metadata summary{cursor:pointer;font-size:14px}#media-metadata dl{overflow-wrap:anywhere}.media-navigation{display:flex;gap:8px;justify-content:center;margin:10px 0}.media-navigation button{width:auto;min-width:100px}.trash-card{padding:18px;background:white;border:1px solid #e3e8e5;border-radius:10px;overflow-wrap:anywhere}.trash-card p{font-size:12px;color:#718077}#trash-file{color:#b33535}
+.trash-card button{margin:8px 8px 0 0}
+.danger{background:#fff0ef;color:#b3261e;border:1px solid #e9b7b3}
+.danger:disabled{opacity:.45}

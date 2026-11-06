@@ -26,7 +26,8 @@ public final class MediaPreviewActivity extends Activity {
     private TextView status; private String id,mime; private long size,position; private boolean playing=true;
     private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
     @Override protected void onCreate(Bundle state){
-        super.onCreate(state);settings=new Settings(this);session=settings.session();
+        super.onCreate(state);settings=new Settings(this);
+        try{session=settings.session();}catch(Exception error){Diagnostics.error("player.session",error);android.widget.Toast.makeText(this,"无法读取登录状态，请返回重新登录",android.widget.Toast.LENGTH_LONG).show();finish();return;}
         id=getIntent().getStringExtra("asset_id");mime=getIntent().getStringExtra("mime");size=getIntent().getLongExtra("size",-1);
         if(session==null||!Protocol.assetId(id==null?"":id)||mime==null||!(mime.startsWith("audio/")||mime.startsWith("video/"))||size<=0||session.revision!=getIntent().getLongExtra("revision",-1)){finish();return;}
         if(state!=null){position=state.getLong("position");playing=state.getBoolean("playing",true);}

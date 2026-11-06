@@ -125,6 +125,7 @@ public:
     json renameAsset(const std::string& id,const json& input,const Identity& who);
     json recycle(const json& input,const Identity& who,bool restore);
     json recycled(const std::string& before,const std::string& type,const std::string& search,const Identity& who);
+    json purgeAsset(const std::string& id,const json& input,const Identity& who);
     json tasks(const Identity& who);
     json taskPage(const Identity& who, const std::string& before, const std::string& filter);
     json overview(const Identity& caller);
@@ -142,6 +143,7 @@ private:
     void setting(const std::string& key, const std::string& value);
     void enqueue(const std::string& id);
     void recover();
+    void finishPurge(const std::string& id);
     void process(const std::string& id);
     void makePreview(const json& asset);
     void finishCommit(const json& task, const json& asset);
