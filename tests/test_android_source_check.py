@@ -3,6 +3,7 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
 import tempfile
 import unittest
 
@@ -13,6 +14,9 @@ spec.loader.exec_module(checker)
 
 
 class AndroidSourceCheckTest(unittest.TestCase):
+    def test_production_preview_audio_and_native_playback_flow(self):
+        subprocess.run(['node', str(ROOT / 'tests/media-preview-ui.cjs')], cwd=ROOT, check=True)
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

@@ -18,7 +18,7 @@ $ui=$null;$uiManifest=$null;$uiArchive=$null
 if(Test-Path -LiteralPath (Join-Path $source 'ui.json')){
     $ui=Get-Content -LiteralPath (Join-Path $source 'ui.json') -Raw -Encoding UTF8 | ConvertFrom-Json
     $uiManifest=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($ui.payload)) | ConvertFrom-Json
-    if([string]$uiManifest.sha256 -notmatch '^[a-f0-9]{64}$' -or [long]$uiManifest.revision -lt 1 -or [long]$uiManifest.minNative -lt 1 -or [long]$uiManifest.minNative -gt 8){throw 'Invalid UI release metadata'}
+    if([string]$uiManifest.sha256 -notmatch '^[a-f0-9]{64}$' -or [long]$uiManifest.revision -lt 1 -or [long]$uiManifest.minNative -lt 1 -or [long]$uiManifest.minNative -gt 9){throw 'Invalid UI release metadata'}
     $uiArchive=Join-Path $source ([string]$uiManifest.sha256+'.zip')
     if((Get-ApkHash $uiArchive) -ne $uiManifest.sha256 -or (Get-Item -LiteralPath $uiArchive).Length -ne [long]$uiManifest.size){throw 'UI checksum or size does not match release metadata'}
 }

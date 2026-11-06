@@ -18,6 +18,10 @@ try:
  video=h.home/'合成视频.mp4';subprocess.run([str(args.ffmpeg.resolve()),'-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=orange:s=480x270:r=12','-t','1','-c:v','mpeg4','-threads','1','-y',str(video)],check=True,timeout=30)
  payload=video.read_bytes();task,_=h.create(payload,name='合成视频.mp4');task=h.chunk(task,payload,0);task=h.finish(task);vid=task['asset_id'];time.sleep(.6)
  h.check(h.admin.get(h.url+f'assets/{vid}/original').content==payload,'video backup succeeds without FFmpeg')
+ ranged=h.admin.get(h.url+f'assets/{vid}/original',headers={'Range':f'bytes=0-{len(payload)-1}'})
+ h.check(ranged.status_code==206 and ranged.headers.get('Content-Range')==f'bytes 0-{len(payload)-1}/{len(payload)}' and ranged.content==payload,'native player full-range request has exact 206 bounds')
+ ranged=h.admin.get(h.url+f'assets/{vid}/original',headers={'Range':'bytes=2-5'})
+ h.check(ranged.status_code==206 and ranged.headers.get('Content-Range')==f'bytes 2-5/{len(payload)}' and ranged.content==payload[2:6],'native seek range returns only the requested bytes')
  h.stop();config['ffmpeg_path']=str(args.ffmpeg.resolve());h.config.write_text(json.dumps(config),encoding='utf-8');h.start()
  for _ in range(300):
   response=h.admin.get(h.url+f'assets/{vid}/thumbnail')

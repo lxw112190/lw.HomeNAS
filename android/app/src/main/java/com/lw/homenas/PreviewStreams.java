@@ -33,7 +33,7 @@ final class PreviewStreams {
         if(type.equals("application/octet-stream")&&asset.optString("category").equals("video")){
             String name=asset.optString("name").toLowerCase(Locale.ROOT);if(name.endsWith(".mkv"))type="video/x-matroska";else if(name.endsWith(".avi"))type="video/x-msvideo";
         }
-        if(!type.matches("image/(jpeg|png|webp|gif|bmp)|video/(mp4|webm|quicktime|x-matroska|x-msvideo|3gpp|mpeg|mp2t)"))throw new IOException("该格式请保存后打开");return type;
+        if(!type.matches("image/(jpeg|png|webp|gif|bmp)|video/(mp4|webm|quicktime|x-matroska|x-msvideo|3gpp|mpeg|mp2t)|audio/(mpeg|mp4|aac|wav|x-wav|ogg|flac|webm|3gpp)"))throw new IOException("该格式请保存后打开");return type;
     }
     private final class OwnedStream extends FilterInputStream {
         final okhttp3.Response response;final RunControl control;final Settings.Session session;boolean closed;

@@ -149,9 +149,9 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",8).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",9).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
-        result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true);
+        result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true).put("nativeMediaPlayback",true);
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
         return result;
@@ -215,6 +215,14 @@ public final class MainActivity extends Activity {
             }
             case "queuePage": {Settings.Session session=requireSession(false);String before=data.optString("before",""),filter=data.optString("filter","active");TaskStore.get(this).summary(session.scope,before,filter);synchronized(this){queueBefore=before;queueFilter=filter;return snapshot();}}
             case "previewClose": previews.closeAll();return new JSONObject();
+            case "playMedia": {
+                Settings.Session session=requireSession(false);String id=data.getString("id");JSONObject item=assets.get(id);
+                if(!Protocol.assetId(id)||item==null)throw new IllegalArgumentException("请刷新文件列表后重新播放");
+                String mime=PreviewStreams.previewType(item);long size=Long.parseLong(item.getString("size"));
+                if(!(mime.startsWith("video/")||mime.startsWith("audio/"))||size<=0)throw new IllegalArgumentException("该文件不能播放");
+                Intent intent=new Intent(this,MediaPreviewActivity.class).putExtra("asset_id",id).putExtra("mime",mime).putExtra("name",item.optString("name")).putExtra("size",size).putExtra("revision",session.revision);
+                ui(()->{if(settings.current(session)){previews.closeAll();startActivity(intent);}});return new JSONObject();
+            }
             case "playbackError": {requireSession(false);JSONObject item=assets.get(data.optString("id"));if(item==null)throw new IllegalArgumentException("请重新打开预览");Diagnostics.event("preview.playback_error","code="+Math.max(0,Math.min(4,data.optInt("code")))+" network="+Math.max(0,Math.min(3,data.optInt("network")))+" ready="+Math.max(0,Math.min(4,data.optInt("ready")))+" mime="+item.optString("mime").replaceAll("[^A-Za-z0-9/+-]","")+" sdk="+Build.VERSION.SDK_INT);return new JSONObject();}
             case "mediaDays": {Settings.Session session=requireSession(true);if(data.optBoolean("reset"))ensureDestination(session);return mediaPicker.days(session,data.optString("before",""),data.optBoolean("reset"),new RunControl(90000));}
             case "mediaItems": {Settings.Session session=requireSession(true);return mediaPicker.items(session,data.getString("day"),data.optString("before",""),api(session),new RunControl(90000));}

@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.0.0";
+constexpr const char* Version = "1.0.1";
 
 struct Error : std::runtime_error {
     int status;

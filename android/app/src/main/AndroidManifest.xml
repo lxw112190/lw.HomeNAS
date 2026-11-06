@@ -28,6 +28,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".MediaPreviewActivity" android:exported="false" android:enableOnBackInvokedCallback="false" />
         <service android:name=".BackupService" android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

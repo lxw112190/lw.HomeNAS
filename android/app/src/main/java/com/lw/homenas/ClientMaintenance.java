@@ -15,7 +15,7 @@ final class ClientMaintenance {
     private File root(){File f=new File(context.getFilesDir(),"ui-bundles");f.mkdirs();return f;}
     synchronized File beginLaunch(){
         // An older downloaded UI must not hide features bundled in a new native protocol.
-        if(prefs.getInt("builtinNative",0)<8)prefs.edit().putInt("builtinNative",8).remove("active").remove("previous").remove("staged").putBoolean("unconfirmed",false).commit();
+        if(prefs.getInt("builtinNative",0)<9)prefs.edit().putInt("builtinNative",9).remove("active").remove("previous").remove("staged").putBoolean("unconfirmed",false).commit();
         String active=prefs.getString("active","");
         if(prefs.getBoolean("unconfirmed",false)){active=prefs.getString("previous","");prefs.edit().putString("active",active).remove("staged").putBoolean("unconfirmed",false).commit();}
         String staged=prefs.getString("staged","");if(!staged.isEmpty()){prefs.edit().putString("previous",active).putString("active",staged).remove("staged").commit();active=staged;}
@@ -26,7 +26,7 @@ final class ClientMaintenance {
     synchronized void ready(){prefs.edit().putBoolean("unconfirmed",false).commit();String active=prefs.getString("active",""),previous=prefs.getString("previous",""),staged=prefs.getString("staged","");File[] folders=root().listFiles();if(folders!=null)for(File f:folders)if(!f.getName().equals(active)&&!f.getName().equals(previous)&&!f.getName().equals(staged))deleteTree(f);}
     String version(){String value=prefs.getString("active","");return value.isEmpty()?"builtin":value;}
     private NativeApi api() throws Exception {Settings.Session s=new Settings(context).session();if(s==null)throw new IOException("请先登录服务器");return new NativeApi(s);}
-    JSONObject check() throws Exception {JSONObject catalog=api().get("client/latest",new RunControl(20000));prefs.edit().putString("catalog",catalog.toString()).apply();return catalog.put("resourceVersion",version()).put("nativeApi",8);}
+    JSONObject check() throws Exception {JSONObject catalog=api().get("client/latest",new RunControl(20000));prefs.edit().putString("catalog",catalog.toString()).apply();return catalog.put("resourceVersion",version()).put("nativeApi",9);}
     private File download(String hash,String ext,long expected) throws Exception {
         if(!hash.matches("[a-f0-9]{64}")||expected<=0||expected>128L*1024*1024)throw new IOException("更新包信息无效");
         File dir=new File(context.getCacheDir(),"updates");dir.mkdirs();File file=new File(dir,hash+ext);boolean complete=false;
@@ -43,8 +43,8 @@ final class ClientMaintenance {
         Signature verifier=Signature.getInstance("SHA256withRSA");verifier.initVerify(KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(android.util.Base64.decode(ResourceTrust.KEY,0))));verifier.update(payload);
         if(!verifier.verify(android.util.Base64.decode(envelope.getString("signature"),0)))throw new IOException("资源发布签名不匹配");
         JSONObject manifest=new JSONObject(new String(payload,java.nio.charset.StandardCharsets.UTF_8));long revision=manifest.getLong("revision");
-        if(manifest.getInt("minNative")>8||revision<=0)throw new IOException("资源需要更新的APK");
-        if(manifest.getInt("minNative")<8)throw new IOException("此资源早于当前APK内置界面，请使用适配新版APK的资源");
+        if(manifest.getInt("minNative")>9||revision<=0)throw new IOException("资源需要更新的APK");
+        if(manifest.getInt("minNative")<9)throw new IOException("此资源早于当前APK内置界面，请使用适配新版APK的资源");
         if(revision<7)throw new IOException("APK已内置新版界面，请使用r7或更新的界面资源");String name="r"+revision;
         if(name.equals(version()))return "当前已使用此资源版本";
         File archive=download(manifest.getString("sha256"),".zip",manifest.getLong("size"));File temporary=new File(root(),"tmp-"+java.util.UUID.randomUUID());temporary.mkdirs();boolean retained=false;

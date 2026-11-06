@@ -14,6 +14,17 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class) @Config(sdk=35)
 public class NativeApiTest {
     private static final String ID="0123456789abcdef0123456789abcdef0123456789abcdef";
+    @Test public void metadataUsesAuthenticatedFixedRoute() throws Exception {
+        try(MockWebServer server=new MockWebServer()){
+            server.start();server.enqueue(new MockResponse().setBody("{\"image\":{\"exif\":{}}}"));
+            NativeApi api=new NativeApi(server.url("/").toString(),"",true,"test-token");
+            assertNotNull(api.get("assets/"+ID+"/metadata",new RunControl(3000)).getJSONObject("image"));
+            RecordedRequest request=server.takeRequest(2,TimeUnit.SECONDS);assertNotNull(request);
+            assertEquals("/api/v1/assets/"+ID+"/metadata",request.getPath());assertEquals("Bearer test-token",request.getHeader("Authorization"));
+            assertThrows(java.io.IOException.class,()->api.get("assets/../../metadata",new RunControl(3000)));
+            assertEquals(1,server.getRequestCount());
+        }
+    }
     @Test public void deletedPreferenceFallsBackOnlyAfterDefaultIsValidated() throws Exception {
         android.content.Context context=org.robolectric.RuntimeEnvironment.getApplication();Settings settings=new Settings(context);settings.prefs.edit().putLong("revision",77).putString("token","fixture-only").commit();
         Settings.Session session=new Settings.Session("http://127.0.0.1:8787","","fixture-only","folder-fallback-test",new JSONObject().put("user_id","alice"),true,77);settings.folder(session.scope,ID,"Deleted");

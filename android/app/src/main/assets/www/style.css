@@ -232,4 +232,8 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible,select:foc
 #media-metadata .caption{margin:6px 0;font-size:11px}
 .media-actions{display:flex;align-items:stretch;gap:5px;border-top:1px solid #edf0ed;padding-top:4px;min-width:0}
 .media-actions button{flex:1;min-width:0;min-height:36px;padding:5px 3px;gap:0;font-size:12px;white-space:nowrap}
+.native-media-preview{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.native-media-preview img{position:absolute;inset:0;width:100%;height:100%;max-height:none;object-fit:contain;opacity:.7}
+.native-play-button{position:relative;z-index:1;min-height:48px;padding:12px 24px;border-radius:24px;border:1px solid #ffffff66;background:#000a;color:white}
+#media-content>audio{width:calc(100% - 24px)}
 @media(max-height:440px){.media-dialog{padding:6px 10px}.media-dialog[open]{grid-template-rows:48px minmax(0,1fr) auto auto 36px;gap:3px}#media-metadata summary{min-height:28px}.media-metadata-body{max-height:22vh;max-height:22dvh}.media-dialog .photo-controls{padding:2px 3px}.media-dialog .photo-controls button{min-height:28px}}
