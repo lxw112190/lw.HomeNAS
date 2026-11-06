@@ -25,7 +25,7 @@ void maintenanceRoutes(httplib::Server& server,Store& store){
     server.Post("/api/v1/admin/client/(apk|ui)/publish",[&store](const auto& request,auto& response){
         admin(store.authenticate(token(request)));auto input=body(request);bool apk=request.matches[1]=="apk";auto root=maintenanceRoot(store);std::string hash;
         if(apk){hash=text(input,"sha256",64);auto code=number(input,"versionCode");if(!code||code>2147483647)throw Error(400,"INVALID_VERSION","versionCode无效");text(input,"versionName",64);text(input,"notes",4096,true);}
-        else{auto envelope=input;auto encoded=text(envelope,"payload",12000);text(envelope,"signature",2048);auto decoded=decodeEnvelope(encoded);auto manifest=json::parse(decoded);hash=text(manifest,"sha256",64);if(number(manifest,"revision")==0||number(manifest,"minNative")==0||number(manifest,"minNative")>9)throw Error(400,"INVALID_VERSION","资源包协议或版本不支持");}
+        else{auto envelope=input;auto encoded=text(envelope,"payload",12000);text(envelope,"signature",2048);auto decoded=decodeEnvelope(encoded);auto manifest=json::parse(decoded);hash=text(manifest,"sha256",64);if(number(manifest,"revision")==0||number(manifest,"minNative")==0||number(manifest,"minNative")>10)throw Error(400,"INVALID_VERSION","资源包协议或版本不支持");}
         if(hash.size()!=64||hash.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_HASH","更新包摘要无效");
         auto file=root/"packages"/(hash+(apk?".apk":".zip"));if(!fs::exists(file))throw Error(404,"PACKAGE_MISSING","先上传对应安装包或资源包");
         if(apk)input["size"]=std::to_string(fs::file_size(file));

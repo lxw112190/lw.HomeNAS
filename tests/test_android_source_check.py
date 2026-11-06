@@ -17,6 +17,10 @@ class AndroidSourceCheckTest(unittest.TestCase):
     def test_production_preview_audio_and_native_playback_flow(self):
         subprocess.run(['node', str(ROOT / 'tests/media-preview-ui.cjs')], cwd=ROOT, check=True)
 
+    def test_shared_collection_controller_stays_in_sync(self):
+        self.assertEqual((ROOT / 'web/library-collections.js').read_bytes(),
+                         (ROOT / 'android/app/src/main/assets/www/library-collections.js').read_bytes())
+
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)

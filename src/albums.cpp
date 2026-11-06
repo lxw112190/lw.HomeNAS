@@ -2,6 +2,10 @@
 #include <set>
 
 namespace nas {
+void Store::albumMembership(json& items,const std::string& id,const Identity& who){
+    album(id,who);if(items.empty())return;Params params{id};std::string slots;for(auto& item:items){if(!slots.empty())slots+=",";slots+="?";params.push_back(item["id"]);}auto rows=db.query("SELECT asset_id FROM album_items WHERE album_id=? AND asset_id IN ("+slots+")",params);std::set<std::string> members;for(auto& row:rows)members.insert(row["asset_id"]);
+    for(auto& item:items)item["in_album"]=members.count(item["id"].get<std::string>())!=0;
+}
 namespace {
 bool albumId(const std::string& id){return id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos;}
 void writer(const Identity& who){if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能修改图集");}

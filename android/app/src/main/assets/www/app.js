@@ -107,7 +107,7 @@ async function loadLibrary(append,previous=false){
  if(libraryLoading)return;libraryLoading=true;closeMedia();for(const id of ['library-type','library-search-button','library-search','library-prev','more','library-order'])$(id).disabled=true;
  const b=$('load-library'),target=previous?libraryPosition-1:append?libraryPosition+1:0,before=previous?libraryHistory[target]:append?cursor:'';
  try{
-  $('library-page').textContent='正在加载…';const r=await run(b,'assets',{before:before||'',type:$('library-type').value,search:$('library-search').value,order:$('library-order').value,pageMode:true});
+  $('library-page').textContent='正在加载…';const r=await run(b,'assets',{before:before||'',type:$('library-type').value,search:$('library-search').value,order:$('library-order').value,...collectionView.query(),pageMode:true});
   if(collectionView.active())return;if(!append&&!previous)libraryHistory=[''];libraryPosition=target;libraryHistory[target]=before||'';$('library').replaceChildren();$('library').classList.add('timeline');let previousDay='',grid;
   for(const item of r.items){const date=fileDay($('library-order').value==='timeline'?(item.timeline_time||item.modified||item.created):item.created);if(date!==previousDay){const group=element('section','','timeline-day');group.append(element('h2',date,'timeline-heading'));grid=element('div','','timeline-grid');group.append(grid);$('library').append(group);previousDay=date;}grid.append(libraryCard(item));}
   cursor=r.next||'';$('more').hidden=false;$('library-page').textContent=`第 ${libraryPosition+1} 页 · ${r.items.length} 项`;if(!r.items.length)$('library').append(element('p','当前筛选没有文件','empty'));if(append||previous)$('library').scrollIntoView({block:'start'});

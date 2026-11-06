@@ -40,3 +40,18 @@
 .trash-card button{margin:8px 8px 0 0}
 .danger{background:#fff0ef;color:#b3261e;border:1px solid #e9b7b3}
 .danger:disabled{opacity:.45}
+
+/* Semantic collection actions and cross-page selection. */
+.collection-tools{position:relative}.collection-selection{position:sticky;top:65px;z-index:3;box-shadow:0 4px 12px #193b2712;align-items:center}
+.collection-tools button.action-primary,.collection-dialog button.action-primary{background:#168357;color:white;border-color:#168357}
+.collection-tools button.action-edit{background:#edf4ff;color:#275eaa;border-color:#c6d9f1}
+.collection-tools button.action-danger,.collection-dialog button.action-danger,.trash-card button.action-danger{background:#fff0ee;color:#b0332b;border-color:#ecc5bf}
+.collection-tools button.action-restore,.trash-card button.action-restore{background:#e5f6f2;color:#137567;border-color:#b5e2d8}
+.collection-tools button.action-export{background:#f0eaff;color:#674aa5;border-color:#d9cbef}
+.timeline-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}.timeline-heading .day-select{min-height:32px;padding:4px 10px;font-size:12px;white-space:nowrap}
+.collection-added{position:relative;opacity:.7}.already-added{position:absolute;top:12px;left:12px;z-index:2;padding:4px 9px;background:#146847ed;color:white;border-radius:12px;font-size:12px;pointer-events:none}
+.collection-selectable .trash-actions{display:none}.trash-preview{display:block;width:100%;height:150px;padding:0;border:0;background:#f0f3f1;border-radius:8px;overflow:hidden;margin-bottom:12px}.trash-preview img{width:100%;height:100%;object-fit:cover}.trash-preview-dialog img{display:block;width:100%;max-height:70vh;object-fit:contain;background:#f2f4f3}.trash-card strong{display:block;overflow-wrap:anywhere}.trash-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+.collection-tools button.action-warning{background:#fff5df;color:#875b13;border-color:#edd7a3}
+
+.trash-preview-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:min(82vh,720px);width:min(800px,95vw);overflow:hidden}.trash-preview-dialog img{height:100%;max-height:100%;min-height:0;object-fit:contain}

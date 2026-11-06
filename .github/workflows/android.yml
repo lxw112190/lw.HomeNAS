@@ -28,6 +28,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/dom/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -48,6 +53,10 @@ jobs:
         run: python3 -m unittest discover -s tests -p 'test_android_*check.py'
       - name: Check day selection with exclusions
         run: node tests/picker-selection.cjs
+      - name: Check collection and batch-selection DOM flows
+        run: |
+          npm ci --prefix tests/dom --ignore-scripts --no-audit --no-fund
+          node tests/collections-dom.cjs tests/dom/node_modules/jsdom
       - name: Restore persistent Debug signing identity
         if: github.event_name != 'pull_request'
         env:

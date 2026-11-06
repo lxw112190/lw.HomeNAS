@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(lw_HomeNAS VERSION 1.0.1 LANGUAGES C CXX)
+project(lw_HomeNAS VERSION 1.0.2 LANGUAGES C CXX)
 if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
   message(FATAL_ERROR "The first release targets Windows 10/11 x64")
 endif()
@@ -11,12 +11,15 @@ add_library(nas_dependencies STATIC ${TLS_SOURCES} third_party/sqlite/sqlite3.c)
 target_include_directories(nas_dependencies PUBLIC src third_party/mbedtls/include third_party/sqlite)
 target_compile_definitions(nas_dependencies PUBLIC MBEDTLS_THREADING_C MBEDTLS_THREADING_ALT WIN32_LEAN_AND_MEAN NOMINMAX)
 target_compile_definitions(nas_dependencies PRIVATE _CRT_SECURE_NO_WARNINGS SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION SQLITE_DQS=0)
-add_executable(NasServer src/main.cpp src/windows.cpp src/store.cpp src/albums.cpp src/rename.cpp src/recycle.cpp src/folders.cpp src/thumbnail.cpp src/server.cpp src/service.cpp src/app.manifest)
+add_executable(NasServer src/main.cpp src/windows.cpp src/store.cpp src/albums.cpp src/rename.cpp src/recycle.cpp src/folders.cpp src/thumbnail.cpp src/server.cpp src/export.cpp src/service.cpp src/app.manifest)
 target_include_directories(NasServer PRIVATE src third_party/httplib third_party/json)
 target_compile_definitions(NasServer PRIVATE CPPHTTPLIB_MBEDTLS_SUPPORT NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE _WIN32_WINNT=0x0A00 _CRT_SECURE_NO_WARNINGS)
 target_compile_options(NasServer PRIVATE /utf-8 /W4 /EHsc /bigobj)
 target_compile_options(nas_dependencies PRIVATE /utf-8 /W0)
 target_link_libraries(NasServer PRIVATE nas_dependencies ws2_32 bcrypt crypt32 iphlpapi ole32 windowscodecs advapi32)
 set_target_properties(NasServer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/app")
+add_custom_target(sync_web ALL
+  COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/web" "$<TARGET_FILE_DIR:NasServer>/web"
+  DEPENDS NasServer)
 add_custom_command(TARGET NasServer POST_BUILD
   COMMAND ${CMAKE_COMMAND} -DAPP=$<TARGET_FILE_DIR:NasServer> -DSOURCE=${CMAKE_SOURCE_DIR} -P ${CMAKE_SOURCE_DIR}/tools/copy-runtime.cmake)

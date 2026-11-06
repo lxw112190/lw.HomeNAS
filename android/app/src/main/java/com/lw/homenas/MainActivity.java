@@ -149,7 +149,7 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",9).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",10).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         result.put("transfer",TransferProgress.snapshot(session==null?"":session.scope)).put("playbackDiagnostics",true).put("nativeMediaPlayback",true);
         String pem=settings.prefs.getString("pending_cert","");
@@ -292,9 +292,10 @@ public final class MainActivity extends Activity {
             case "assets": {
                 Settings.Session session=requireSession(false);String cursor=data.optString("before","");if(cursor.length()>100)throw new IllegalArgumentException("分页游标无效");
                 String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8")+"&order="+java.net.URLEncoder.encode(data.optString("order","created"),"UTF-8");
+                for(String key:new String[]{"from","to","album_id"})if(data.has(key))query+="&"+key+"="+java.net.URLEncoder.encode(data.getString(key),"UTF-8");
                 String path="assets?"+query;
-                JSONObject result=authenticatedGet(session,path);if(data.optString("order").equals("timeline")&&!result.optString("order").equals("timeline"))throw new java.io.IOException("按文件时间需升级电脑服务至0.3；可先选择入库时间");if(!settings.current(session))throw new SecurityException("登录身份已改变");
-                if(data.optBoolean("pageMode")||assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}return result;
+                JSONObject result=authenticatedGet(session,path);for(String key:new String[]{"from","to"})if(data.has(key)&&!result.optString(key).equals(data.getString(key)))throw new java.io.IOException("按天选择需要升级电脑端至1.0.2");if(data.has("album_id")&&!result.optString("membership_album_id").equals(data.getString("album_id")))throw new java.io.IOException("图集标记需要升级电脑端至1.0.2");if(data.optString("order").equals("timeline")&&!result.optString("order").equals("timeline"))throw new java.io.IOException("按文件时间需升级电脑服务至0.3；可先选择入库时间");if(!settings.current(session))throw new SecurityException("登录身份已改变");
+                if(!data.optBoolean("selectionOnly")){if(data.optBoolean("pageMode")||assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}}return result;
             }
             case "download": {
                 Settings.Session session=requireSession(false);JSONObject item=assets.get(data.getString("id"));if(item==null)throw new IllegalArgumentException("请刷新文件列表后重试");
@@ -387,6 +388,6 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();visible=true;Diagnostics.event("activity.resume",Diagnostics.network(this));if(web!=null){web.onResume();mediaChanged();}}
     @Override protected void onPause(){visible=false;Diagnostics.event("activity.pause","");if(web!=null)web.onPause();super.onPause();}
-    @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null&&local(Uri.parse(web.getUrl()==null?"":web.getUrl())))web.evaluateJavascript("typeof window.homeNasBack==='function' ? (window.homeNasBack(),true) : false",handled->{if(!"true".equals(handled)&&!isFinishing())finish();});else super.onBackPressed();}
+    @SuppressWarnings("deprecation") @Override public void onBackPressed(){if(web!=null){Uri page=Uri.parse(web.getUrl()==null?"":web.getUrl());if(local(page)&&!page.getPath().endsWith("/index.html")){if(web.canGoBack())web.goBack();else web.loadUrl(ORIGIN+"/assets/www/index.html");return;}}if(web!=null&&local(Uri.parse(web.getUrl()==null?"":web.getUrl())))web.evaluateJavascript("typeof window.homeNasBack==='function' ? (window.homeNasBack(),true) : false",handled->{if(!"true".equals(handled)&&!isFinishing())finish();});else super.onBackPressed();}
     @Override protected void onDestroy(){if(previews!=null)previews.closeAll();if(web!=null){WebViewCompat.removeWebMessageListener(web,"HomeNasNative");web.destroy();web=null;}io.shutdownNow();super.onDestroy();}
 }

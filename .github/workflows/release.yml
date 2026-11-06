@@ -67,6 +67,11 @@ jobs:
           python-version: '3.12'
       - name: Install verification dependencies
         run: python -m pip install requests pillow cryptography PyYAML
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/dom/package-lock.json
       - uses: actions/download-artifact@v4
         with:
           name: ${{ needs.select.outputs.artifact_name }}

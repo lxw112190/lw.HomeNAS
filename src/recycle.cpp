@@ -2,6 +2,17 @@
 #include <set>
 
 namespace nas {
+void generateThumbnail(const fs::path& input,const fs::path& output);
+fs::path Store::recycledThumbnail(const std::string& id,const Identity& who){
+    auto mutex=sessionMutex("asset:"+id);std::lock_guard<std::mutex> guard(*mutex);auto row=recycledAsset(id,who);auto path=config.data/"cache"/(id+".jpg");
+    if(!fs::is_regular_file(path)&&row["category"]=="image"&&fs::is_regular_file(originalPath(row))){try{generateThumbnail(originalPath(row),path);db.exec("UPDATE assets SET preview='READY' WHERE id=? AND state='READY'",{id});}catch(...){throw Error(404,"PREVIEW_UNAVAILABLE","原件无法生成缩略图");}}
+    if(!fs::is_regular_file(path))throw Error(404,"PREVIEW_UNAVAILABLE","暂无缩略图");return path;
+}
+json Store::recycledAsset(const std::string& id,const Identity& who){
+    if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能查看回收站");
+    auto rows=db.query("SELECT a.*,t.deleted_by FROM assets a JOIN asset_trash t ON t.asset_id=a.id WHERE a.id=? AND a.state IN ('READY','MISSING')",{id});
+    if(rows.empty()||(!who.admin&&rows[0]["deleted_by"]!=who.userId))throw Error(404,"TRASH_NOT_FOUND","回收站文件不存在或无权访问");return rows[0];
+}
 json Store::recycle(const json& input,const Identity& who,bool restore){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能删除或恢复文件");
     if(!input.contains("asset_ids")||!input["asset_ids"].is_array()||input["asset_ids"].empty()||input["asset_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次选择1至100个文件");

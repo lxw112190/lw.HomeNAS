@@ -376,7 +376,7 @@ void Store::recover() {
 json Store::asset(const std::string& id) {
     auto rows=db.query("SELECT * FROM assets WHERE id=? AND state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)",{id});if(rows.empty())throw Error(404,"ASSET_NOT_FOUND","文件不存在或原件需要恢复检查");return rows[0];
 }
-json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit,const std::string& order) {
+json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit,const std::string& order,const std::string& from,const std::string& to) {
     if(limit<1||limit>100)throw Error(400,"INVALID_LIMIT","每页数量需1至100");
     if(order!="created"&&order!="timeline")throw Error(400,"INVALID_ORDER","排序方式无效");
     const bool timeline=order=="timeline",filtered=type=="image"||type=="video"||type=="file";
@@ -389,12 +389,17 @@ json Store::assets(const std::string& before,const std::string& type,const std::
         sql+=" AND ("+clock+",id)<(CAST(? AS INTEGER),?)";params.insert(params.end(),{time,id});
     }
     if(type=="image"||type=="video"||type=="file"){sql+=" AND category=?";params.push_back(type);}
+    if(!from.empty()||!to.empty()){
+        auto valid=[](const std::string& value){return !value.empty()&&value.size()<=19&&value.find_first_not_of("0123456789")==std::string::npos&&number(json{{"v",value}},"v")<=static_cast<uint64_t>(INT64_MAX);};
+        if(!valid(from)||!valid(to)||number(json{{"v",from}},"v")>=number(json{{"v",to}},"v"))throw Error(400,"INVALID_TIME_RANGE","日期范围无效");
+        sql+=" AND "+clock+">=CAST(? AS INTEGER) AND "+clock+"<CAST(? AS INTEGER)";params.insert(params.end(),{from,to});
+    }
     if(!search.empty()){sql+=" AND name LIKE ?";params.push_back("%"+search+"%");}
     sql+=" ORDER BY "+clock+" DESC,id DESC LIMIT "+std::to_string(limit+1);auto rows=db.query(sql,params);std::string next;
     if(rows.size()>static_cast<size_t>(limit)){rows.erase(rows.end()-1);}
     else limit=0;
     if(limit>0){auto last=rows.back();next=last[timeline?"timeline_time":"created"].get<std::string>()+":"+last["id"].get<std::string>();}
-    return {{"items",rows},{"next",next},{"order",order}};
+    json result={{"items",rows},{"next",next},{"order",order}};if(!from.empty()){result["from"]=from;result["to"]=to;}return result;
 }
 json Store::sourceStatus(const json& input,const Identity& who) {
     if(!input.contains("task_ids")||!input["task_ids"].is_array()||input["task_ids"].empty()||input["task_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次核对1至100项");

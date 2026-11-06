@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.0.1";
+constexpr const char* Version = "1.0.2";
 
 struct Error : std::runtime_error {
     int status;
@@ -108,7 +108,10 @@ public:
                     const std::function<bool(const std::function<bool(const char*, size_t)>&)>& reader);
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
-    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created");
+    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="");
+    void albumMembership(json& items,const std::string& id,const Identity& who);
+    json recycledAsset(const std::string& id,const Identity& who);
+    fs::path recycledThumbnail(const std::string& id,const Identity& who);
     json albums(const std::string& before,const Identity& who);
     json album(const std::string& id,const Identity& who,bool edit=false);
     json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);

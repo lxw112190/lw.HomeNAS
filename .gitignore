@@ -5,6 +5,7 @@
 /deploy/logs/
 /deliveries/
 /test-results/
+/tests/dom/node_modules/
 /incoming-android/
 /.vs/
 *.user
