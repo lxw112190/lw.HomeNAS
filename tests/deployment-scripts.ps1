@@ -47,7 +47,15 @@ $description=[HomeNas.Deployment.NativeService]::DescribeError('CreateServiceW',
 Check ($description.Contains('CreateServiceW') -and $description.Contains('Win32 error 1057')) 'Native helper compiles and preserves operation and precise Win32 error code'
 # Exercise the actual Windows argument parser through a harmless argv echo executable.
 $probe=Join-Path $fixture 'argument probe.exe'
-Add-Type -TypeDefinition 'using System; using System.Text; public class ArgumentProbe { public static void Main(string[] args) { foreach(string value in args) Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(value))); } }' -OutputAssembly $probe -OutputType ConsoleApplication
+$probeSource=Join-Path $fixture 'argument probe.cs'
+[IO.File]::WriteAllText($probeSource,'using System; using System.Text; public class ArgumentProbe { public static void Main(string[] args) { foreach(string value in args) Console.WriteLine(Convert.ToBase64String(Encoding.UTF8.GetBytes(value))); } }',$utf8)
+# PowerShell 7.1+ cannot emit console EXEs with Add-Type. The inbox .NET Framework
+# compiler creates a normal Windows executable for both the 5.1 and pwsh test hosts.
+$framework=if([Environment]::Is64BitProcess){'Framework64'}else{'Framework'}
+$compiler=Join-Path ([Environment]::GetFolderPath('Windows')) ('Microsoft.NET/'+$framework+'/v4.0.30319/csc.exe')
+if(-not (Test-Path -LiteralPath $compiler)){throw 'The Windows .NET Framework C# compiler is required for the argument probe.'}
+& $compiler /nologo /target:exe ('/out:'+$probe) $probeSource
+if($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $probe)){throw 'Argument probe compilation failed.'}
 $binary='"G:\space ('+[char]0x6D4B+[char]0x8BD5+') & %test%\NasServer.exe" --service --config "G:\space\config\server.json"'
 $name='test"quoted\'
 $arguments=[HomeNas.Deployment.NativeService]::BuildScCreateArguments($name,$binary,'NT SERVICE\lw.HomeNAS')

@@ -28,6 +28,8 @@ Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
 if($LASTEXITCODE -ne 0){throw 'Service/firewall plans failed'}
 & (Join-Path $root 'tests/deployment-scripts.ps1')
 if($LASTEXITCODE -ne 0){throw 'Deployment/logging checks failed'}
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/deployment-scripts.ps1')
+if($LASTEXITCODE -ne 0){throw 'Windows PowerShell 5.1 deployment/logging checks failed'}
 $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
