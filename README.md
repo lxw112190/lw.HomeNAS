@@ -2,7 +2,9 @@
 
 自己的电脑做服务器，手机照片和视频备份到家里。
 
-lw.HomeNAS 使用 **C++17 + cpp-httplib** 开发 Windows 后台，提供浏览器管理页面和 Android 客户端。除了照片、视频，也支持文档、录音及其他文件。当前版本源代码为 **1.1.0**，目标平台为 Windows 10/11 x64 和 Android 10 及以上。
+lw.HomeNAS 使用 **C++17 + cpp-httplib** 开发 Windows 后台，提供浏览器管理页面和 Android 客户端。除了照片、视频，也支持文档、录音及其他文件。当前版本源代码为 **1.1.1**，目标平台为 Windows 10/11 x64 和 Android 10 及以上。
+
+本轮优化：资料库跨页选择保留勾选，显示“本页 / 其他页”数量，支持查看并取消其他页选择；移动自动核对共同来源，部分失败保留未完成项，删空末页后正确回退。手机新目录选图不再被其他目录的待上传记录误跳过，上传进度显示各任务实际目标。[使用与验证记录](docs/20261107-跨页整理与手机目标目录修复.md)。
 
 [下载发布包](https://github.com/lxw112190/lw.HomeNAS/releases) · [构建与 APK](https://github.com/lxw112190/lw.HomeNAS/actions) · [部署脚本](deploy/README.md) · [接口说明](docs/API.md) · [v1.0 更新说明](docs/20261106-v1.0发布说明.md)
 
@@ -91,7 +93,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
 1. 停止服务，备份原 `config` 和 `data`。
 2. 替换EXE、web、deploy及工具文件，保留原配置和资料库。
 3. 新版自动补充数据库表，保留原件、账号、目录及上传进度。移动安装位置时，先在旧位置卸载服务，再在新位置安装。
-4. Android v1.1.0 的 versionCode 为19，继续使用仓库既有签名。新原生协议为11；升级后使用新内置页面，旧签名资源不会遮住新增功能。不要用旧程序回开已经升级的资料库。
+4. Android v1.1.1 的 versionCode 为20，继续使用仓库既有签名。新原生协议为12；升级后使用新内置页面，旧签名资源不会遮住目录修复及新交互。手机原生修复需要安装新 APK，Android 完整编译和真机验证由 CI 与后续测试完成。不要用旧程序回开已经升级的资料库。
 
 ## 编译源码
 

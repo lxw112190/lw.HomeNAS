@@ -101,17 +101,21 @@ final class MediaPicker {
         for(int start=0;start<all.size();start+=100){control.check();JSONArray batch=new JSONArray(all.subList(start,Math.min(start+100,all.size())));JSONObject response=api.post("sources/status",new JSONObject().put("task_ids",batch).put("folder_id",settings.folder(session.scope)),control);JSONArray rows=response.getJSONArray("items");for(int i=0;i<rows.length();i++){JSONObject row=rows.getJSONObject(i);checked.put(row.getString("id"),row);}for(int i=0;i<batch.length();i++){String id=batch.getString(i);if(!checked.containsKey(id))checked.put(id,new JSONObject().put("state","MISSING"));}}
         if(!settings.current(session))throw new SecurityException("登录已改变");return checked;
     }
-    private String status(Item item,Map<String,JSONObject> checked){
-        Stamp stamp=stamps.get(item.identity);if(stamp==null)return "NEW";if(!stamp.state.equals("READY"))return stamp.state;
+    private String status(Item item,Map<String,JSONObject> checked,String destination){
+        Stamp stamp=stamps.get(item.identity);if(stamp==null)return "NEW";
+        // A queue entry for a different folder must not suppress a NEW selection here.
+        if(!stamp.state.equals("READY"))return destination.equals(stamp.folder)?stamp.state:"OTHER_FOLDER";
         JSONObject remote=checked.get(stamp.remote);if(remote==null)return "UNCONFIRMED";
         if(remote.optString("state").equals("TRASHED"))return "TRASHED";
         return remote.optString("state").equals("READY")&&remote.optString("sha256").equals(stamp.sha)&&remote.optString("size").equals(Long.toString(item.size))?(remote.optBoolean("in_folder")?"READY":"BACKED_UP"):"MISSING";
     }
     synchronized JSONObject items(Settings.Session session,String date,String before,NativeApi api,RunControl control) throws Exception {return items(session,date,before,api,control,"all");}
     synchronized JSONObject items(Settings.Session session,String date,String before,NativeApi api,RunControl control,String kind) throws Exception {
+        String destination=settings.folder(session.scope);
         if(!scope.equals(session.scope))index(session,control);List<Item> items=records(date,before,50,control,kind,null);boolean more=items.size()>50;if(more)items=new ArrayList<>(items.subList(0,50));Map<String,JSONObject> checked;for(Item item:items)lookup(session,item,control);
         try{checked=verify(session,items,api,control);}catch(Exception error){Diagnostics.error("picker.status",error);checked=new HashMap<>();}
-        JSONArray rows=new JSONArray();for(Item item:items){item.handle=identities.get(item.identity);if(item.handle==null){if(handles.size()>=5000)throw new IOException("请先完成本次选择再刷新");item.handle=UUID.randomUUID().toString().replace("-","");identities.put(item.identity,item.handle);}handles.put(item.handle,item);rows.put(new JSONObject().put("id",item.handle).put("name",item.name).put("size",Long.toString(item.size)).put("modified",Long.toString(item.modified)).put("width",item.width).put("height",item.height).put("kind",item.kind).put("status",status(item,checked)));}
+        if(!destination.equals(settings.folder(session.scope)))throw new IOException("目标文件夹已改变，请刷新照片列表");
+        JSONArray rows=new JSONArray();for(Item item:items){item.handle=identities.get(item.identity);if(item.handle==null){if(handles.size()>=5000)throw new IOException("请先完成本次选择再刷新");item.handle=UUID.randomUUID().toString().replace("-","");identities.put(item.identity,item.handle);}handles.put(item.handle,item);rows.put(new JSONObject().put("id",item.handle).put("name",item.name).put("size",Long.toString(item.size)).put("modified",Long.toString(item.modified)).put("width",item.width).put("height",item.height).put("kind",item.kind).put("status",status(item,checked,destination)));}
         String next="";if(more){Item last=items.get(items.size()-1);next=(last.modified/1000)+":"+last.id+":"+(last.kind.equals("video")?"1":"0");}
         return new JSONObject().put("items",rows).put("next",next).put("day",date);
     }
@@ -144,6 +148,7 @@ final class MediaPicker {
         if(ids.length()>5000||exclude.length()>5000)throw new IllegalArgumentException("单张选择或排除过多，请改用日期选择");
         String destination=settings.folder(session.scope),folderName=settings.folderName(session.scope);
         if(!selection.optString("folder_id",destination).equals(destination))throw new IOException("目标文件夹已改变，请刷新后重新选择");
+        Diagnostics.event("picker.destination","folder="+destination+" only_pending="+rules.onlyPending);
         // Resolve every explicit/excluded handle before committing the first batch.
         Map<String,Item> explicit=new LinkedHashMap<>();Set<String> excluded=new HashSet<>();
         for(int i=0;i<ids.length();i++){Item item=handles.get(ids.getString(i));if(item==null)throw new IOException("照片选择已过期，请刷新");if(!rules.kind.equals("all")&&!rules.kind.equals(item.kind))throw new IOException("媒体筛选已改变，请重新选择");explicit.put(item.identity,item);}
@@ -175,7 +180,7 @@ final class MediaPicker {
         for(Item item:items){
             control.check();if(!settings.current(session))throw new SecurityException("登录已改变");if(!folder.equals(settings.folder(session.scope)))throw new IOException("目标文件夹已改变，已加入的任务保留原目标");
             MediaCatalog.Info info=MediaCatalog.describe(context.getContentResolver(),item.uri);if(info.size!=item.size||info.modified!=item.modified)throw new IOException("部分文件已变化，请刷新；已入队项目保留");
-            String state=status(item,checked);Stamp stamp=stamps.get(item.identity);boolean added=false;
+            String state=status(item,checked,folder);Stamp stamp=stamps.get(item.identity);boolean added=false;
             if(state.equals("UNCONFIRMED"))throw new IOException("无法核实已备份记录，请检查电脑连接后重试");
             if(!state.equals("READY")&&!state.equals("TRASHED")&&!(onlyPending&&java.util.Arrays.asList("QUEUED","HASHING","UPLOADING","VERIFYING","COMMITTING").contains(state))){
                 if(state.equals("BACKED_UP")&&stamp!=null&&folder.equals(stamp.folder))added=tasks.relink(stamp.id);

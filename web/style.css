@@ -55,3 +55,15 @@
 .collection-tools button.action-warning{background:#fff5df;color:#875b13;border-color:#edd7a3}
 
 .trash-preview-dialog[open]{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:min(82vh,720px);width:min(800px,95vw);overflow:hidden}.trash-preview-dialog img{height:100%;max-height:100%;min-height:0;object-fit:contain}
+
+/* Selection belongs to the current filter, spans pages, and stays beside the files. */
+.collection-selection{position:sticky;top:12px;z-index:8;margin:12px 0;padding:12px 14px;border:1px solid #cfe4d7;background:#f4faf6;box-shadow:0 5px 18px #183c2812}
+.collection-selection>strong{font-size:15px;white-space:nowrap}.selection-info{color:#61766b;font-size:12px;margin-right:auto}
+.collection-selection button{min-height:34px;padding:7px 11px;font-size:12px;border-radius:7px}
+.collection-selection button.action-primary{background:#168357;color:white;border-color:#168357}.collection-selection button.action-edit{background:#edf4ff;color:#275eaa;border-color:#c6d9f1}
+.collection-selection button.action-warning{background:#fff5df;color:#875b13;border-color:#edd7a3}.collection-selection button.action-danger{background:#fff0ee;color:#b0332b;border-color:#ecc5bf}
+.collection-selection button.action-restore{background:#e5f6f2;color:#137567;border-color:#b5e2d8}.collection-selection button.action-export{background:#f0eaff;color:#674aa5;border-color:#d9cbef}
+.selection-review{display:flex;flex-direction:column;gap:6px;max-height:45vh;overflow:auto}.selection-review-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid #e5ece7}
+.selection-review-row>span{flex:1;min-width:0;overflow-wrap:anywhere}.selection-review-row>button{flex-shrink:0;padding:6px 10px;font-size:12px}
+#library[aria-busy=true]{opacity:.55;pointer-events:none}.collection-picked{outline:2px solid #168357;outline-offset:-2px}
+@media(max-width:760px){.collection-selection{top:6px}.selection-info{flex-basis:60%}.collection-selection button{padding:7px 9px}}

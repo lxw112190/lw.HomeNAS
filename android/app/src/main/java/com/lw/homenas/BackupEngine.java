@@ -61,7 +61,7 @@ final class BackupEngine {
                     while(true){
                         check(session,control);task=tasks.claim(session.scope);if(task==null)return null;
                         try{
-                            Diagnostics.event("task.start","task="+task.id+" state="+task.state+" size="+task.size+" confirmed="+task.offset);
+                            Diagnostics.event("task.start","task="+task.id+" state="+task.state+" size="+task.size+" confirmed="+task.offset+" folder="+(Protocol.folderId(task.folderId)?task.folderId:"invalid"));
                             try{send(task,session,api,block,control,progress);}
                             catch(InterruptedIOException error){throw error;}
                             catch(SecurityException|java.io.FileNotFoundException error){Diagnostics.error("task.source task="+task.id,error);tasks.state(task.id,"SOURCE_MISSING","文件不存在或读取授权失效，请重新选择/授权");}

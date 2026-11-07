@@ -4,7 +4,7 @@ import argparse,base64,json,hashlib,zipfile,re
 from android_ui_policy import validate_ui_entries
 from cryptography.hazmat.primitives import serialization,hashes
 from cryptography.hazmat.primitives.asymmetric import padding
-p=argparse.ArgumentParser();p.add_argument('--revision',type=int,required=True);p.add_argument('--min-native',type=int,default=11,choices=range(1,12));p.add_argument('--key',type=Path,default=Path('local-signing/resources-private.pem'));p.add_argument('--output',type=Path,default=Path('deliveries/ui'));a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--revision',type=int,required=True);p.add_argument('--min-native',type=int,default=12,choices=range(1,13));p.add_argument('--key',type=Path,default=Path('local-signing/resources-private.pem'));p.add_argument('--output',type=Path,default=Path('deliveries/ui'));a=p.parse_args()
 assert a.revision>0
 root=Path(__file__).resolve().parents[1];a.output.mkdir(parents=True,exist_ok=True);archive=a.output/('ui-r'+str(a.revision)+'.zip')
 assets=root/'android/app/src/main/assets/www'

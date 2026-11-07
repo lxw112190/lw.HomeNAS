@@ -56,8 +56,8 @@ std::string token(const httplib::Request& request) {
     auto cookie=request.get_header_value("Cookie");if(cookie.size()>8192)return {};
     size_t start=0;while(start<cookie.size()){auto end=cookie.find(';',start);auto part=cookie.substr(start,end==std::string::npos?end:end-start);auto begin=part.find_first_not_of(' ');if(begin!=std::string::npos)part.erase(0,begin);if(part.rfind("nas_session=",0)==0)return part.substr(12);if(end==std::string::npos)break;start=end+1;}return {};
 }
-json body(const httplib::Request& request) {
-    if(request.body.size()>16384)throw Error(413,"JSON_TOO_LARGE","请求信息过长");
+json body(const httplib::Request& request,size_t maximum=16384) {
+    if(request.body.size()>maximum)throw Error(413,"JSON_TOO_LARGE","请求信息过长");
     if(request.get_header_value("Content-Type").rfind("application/json",0)!=0)throw Error(415,"JSON_REQUIRED","此接口需要 JSON 请求");
     try{auto value=json::parse(request.body);if(!value.is_object())throw std::runtime_error("object expected");return value;}catch(...){throw Error(400,"INVALID_JSON","JSON 请求格式不正确");}
 }
@@ -139,6 +139,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Get("/api/v1/albums",[&store](const auto& request,auto& response){reply(response,store.albums(request.get_param_value("before"),store.authenticate(token(request))));});
     server.Get("/api/v1/folders",[&store](const auto& request,auto& response){reply(response,store.folders(request.get_param_value("before"),store.authenticate(token(request))));});
     server.Post("/api/v1/folders",[&store](const auto& request,auto& response){reply(response,store.changeFolder("","create",body(request),store.authenticate(token(request))),201);});
+    server.Post("/api/v1/folders/move-options",[&store](const auto& request,auto& response){reply(response,store.folderMoveOptions(body(request,65536),store.authenticate(token(request))));});
     server.Get("/api/v1/folders/(default|[a-f0-9]{48})",[&store](const auto& request,auto& response){reply(response,store.folder(request.matches[1],store.authenticate(token(request))));});
     server.Get("/api/v1/folders/(default|[a-f0-9]{48})/items",[&store](const auto& request,auto& response){reply(response,store.folderItems(request.matches[1],request.get_param_value("before"),request.get_param_value("type"),request.get_param_value("q"),store.authenticate(token(request))));});
     server.Post("/api/v1/folders/(default|[a-f0-9]{48})/(edit|delete|add|remove|move)",[&store](const auto& request,auto& response){reply(response,store.changeFolder(request.matches[1],request.matches[2],body(request),store.authenticate(token(request))));});

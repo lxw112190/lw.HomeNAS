@@ -20,7 +20,7 @@ public class TaskStoreTest {
         long first=store.enqueue(scope,"same-source","content://photos/1","fixture.jpg","Camera",100,200);
         store.hashed(first,100,"f".repeat(64));store.state(first,"READY","");
         long second=store.enqueue(scope,"same-source","content://photos/1","fixture.jpg","Camera",100,200,folder,"旅行");assertTrue(second>first);
-        TaskStore.Task next=store.next(scope);assertEquals(folder,next.folderId);assertEquals("f".repeat(64),next.sha);
+        TaskStore.Task next=store.next(scope);assertEquals(folder,next.folderId);assertEquals("旅行",next.folderName);assertEquals("f".repeat(64),next.sha);
         assertEquals(-1,store.enqueue(scope,"same-source","content://photos/1","fixture.jpg","Camera",100,200,folder,"旅行"));
         try(android.database.Cursor row=store.getReadableDatabase().rawQuery("SELECT folder_id,state FROM tasks WHERE id=?",new String[]{Long.toString(first)})){assertTrue(row.moveToFirst());assertEquals("default",row.getString(0));assertEquals("READY",row.getString(1));}
     }

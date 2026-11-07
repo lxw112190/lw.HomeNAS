@@ -113,6 +113,29 @@ public class MediaPickerQueryTest {
         assertThrows(java.io.IOException.class,()->picker.enqueue(session,input,null,new RunControl(30000)));
         try(Cursor queued=TaskStore.get(context).getReadableDatabase().rawQuery("SELECT id FROM tasks WHERE scope=?",new String[]{session.scope})){assertEquals(0,queued.getCount());}
     }
+    @Test public void newDestinationDoesNotSkipPhotosQueuedInAnotherFolder() throws Exception {
+        String destination="a".repeat(48);settings.folder(session.scope,destination,"旅行");TaskStore tasks=TaskStore.get(context);
+        String[] states={"QUEUED","HASHING","UPLOADING","VERIFYING","COMMITTING"};
+        for(int i=0;i<states.length;i++){
+            long id=provider.rows.get(i)[0],modified=provider.rows.get(i)[1]*1000L;String uri="content://media/external_primary/images/media/"+id;
+            long old=tasks.enqueue(session.scope,Protocol.key(uri+":"+123+":"+modified),uri,"fixture.jpg","CI",123,modified,"default","默认文件夹");tasks.state(old,states[i],"");
+            picker.days(session,"",true,new RunControl(30000));String day=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date(modified));
+            JSONObject item=picker.items(session,day,"",null,new RunControl(30000)).getJSONArray("items").getJSONObject(0);
+            assertEquals("OTHER_FOLDER",item.getString("status"));
+            JSONObject added=picker.enqueue(session,new JSONObject().put("ids",new JSONArray().put(item.getString("id"))).put("folder_id",destination).put("only_pending",true),null,new RunControl(30000));
+            assertEquals(1,added.getInt("added"));
+            try(Cursor rows=tasks.getReadableDatabase().rawQuery("SELECT folder_id,state,client FROM tasks WHERE scope=? AND uri=? ORDER BY id",new String[]{session.scope,uri})){
+                assertEquals(2,rows.getCount());assertTrue(rows.moveToFirst());assertEquals("default",rows.getString(0));assertEquals(states[i],rows.getString(1));String oldClient=rows.getString(2);
+                assertTrue(rows.moveToNext());assertEquals(destination,rows.getString(0));assertEquals("QUEUED",rows.getString(1));assertNotEquals(oldClient,rows.getString(2));
+            }
+        }
+    }
+    @Test public void sameDestinationPendingPhotoStillSkipsWithoutDuplicateTask() throws Exception {
+        String destination="b".repeat(48);settings.folder(session.scope,destination,"当前目录");long id=provider.rows.get(0)[0],modified=provider.rows.get(0)[1]*1000L;String uri="content://media/external_primary/images/media/"+id;
+        TaskStore.get(context).enqueue(session.scope,Protocol.key(uri+":"+123+":"+modified),uri,"fixture.jpg","CI",123,modified,destination,"当前目录");
+        picker.days(session,"",true,new RunControl(30000));String day=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date(modified));JSONObject item=picker.items(session,day,"",null,new RunControl(30000)).getJSONArray("items").getJSONObject(0);assertEquals("QUEUED",item.getString("status"));
+        JSONObject result=picker.enqueue(session,new JSONObject().put("ids",new JSONArray().put(item.getString("id"))).put("folder_id",destination).put("only_pending",true),null,new RunControl(30000));assertEquals(0,result.getInt("added"));assertEquals(1,result.getInt("skipped"));assertEquals(1,TaskStore.get(context).counts(session.scope).getLong("QUEUED"));
+    }
     @Test public void monthlyAndAllSelectionCrossPagesAndKeepDayExceptions() throws Exception {
         picker.days(session,"",true,new RunControl(30000));
         JSONObject months=picker.months(session,"image",new RunControl(30000));assertEquals(3,months.getJSONArray("items").length());

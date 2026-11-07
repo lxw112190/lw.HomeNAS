@@ -13,10 +13,10 @@ final class TransferProgress {
     private static final LinkedHashMap<Long,Entry> entries=new LinkedHashMap<>();
     private static final ArrayDeque<long[]> samples=new ArrayDeque<>();
     static java.util.function.LongSupplier clock=System::nanoTime;
-    private static final class Entry {String name,phase;long done,size,confirmed;}
+    private static final class Entry {String name,phase,folderId,folderName;long done,size,confirmed;}
     static synchronized void begin(String owner){scope=owner;running=true;completed=failed=0;started=clock.getAsLong();entries.clear();samples.clear();}
     static synchronized void phase(TaskStore.Task task,String phase,long processed,long size){
-        Entry item=entries.get(task.id);if(item==null){item=new Entry();item.name=task.name;item.confirmed=task.offset;entries.put(task.id,item);}
+        Entry item=entries.get(task.id);if(item==null){item=new Entry();item.name=task.name;item.folderId=task.folderId;item.folderName=task.folderName;item.confirmed=task.offset;entries.put(task.id,item);}
         item.phase=phase;item.done=processed;item.size=size;if(phase.equals("UPLOADING"))item.confirmed=processed;
     }
     static synchronized void hashed(long id,long processed,long size){Entry item=entries.get(id);if(item!=null){item.done=processed;item.size=size;}}
@@ -34,7 +34,7 @@ final class TransferProgress {
         long rate=running?Math.round(bytes*1e9/Math.max(1_000_000_000L,Math.min(5_000_000_000L,now-started))):0;
         JSONArray active=new JSONArray();for(java.util.Map.Entry<Long,Entry> row:entries.entrySet()){
             Entry item=row.getValue();active.put(new JSONObject().put("task_id",Long.toString(row.getKey())).put("name",item.name).put("phase",item.phase)
-                .put("processed",Long.toString(item.done)).put("size",Long.toString(item.size)).put("confirmed",Long.toString(item.confirmed)));
+                .put("processed",Long.toString(item.done)).put("size",Long.toString(item.size)).put("confirmed",Long.toString(item.confirmed)).put("folder_id",item.folderId).put("folder_name",item.folderName));
         }
         JSONObject first=active.length()>0?active.getJSONObject(0):new JSONObject().put("name","").put("phase",running?"PREPARING":"IDLE").put("processed","0").put("size","0").put("confirmed","0");
         return new JSONObject(first.toString()).put("running",running).put("items",active).put("completed",completed).put("failed",failed)

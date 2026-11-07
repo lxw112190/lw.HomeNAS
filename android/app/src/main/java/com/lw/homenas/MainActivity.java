@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",11).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",12).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         JSONObject transfer=TransferProgress.snapshot(session==null?"":session.scope);long[] totals=TaskStore.get(this).pendingTotals(session==null?"":session.scope);
         transfer.put("remaining_items",totals[0]).put("remaining_bytes",Long.toString(totals[1]));result.put("enqueue",enqueueJob.snapshot(session==null?"":session.scope));
@@ -170,7 +170,9 @@ public final class MainActivity extends Activity {
             case "backupFolder": {
                 Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");
                 JSONObject folder=authenticatedGet(session,"folders/"+id);if(!folder.optBoolean("can_write"))throw new SecurityException("不能备份到其他用户的文件夹");
-                if(!settings.current(session))throw new SecurityException("登录身份已改变");enqueueJob.cancel();settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();return snapshot();
+                if(!id.equals(folder.optString("id")))throw new java.io.IOException("服务器返回的目标文件夹不一致");
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");enqueueJob.cancel();settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();
+                settings.message("新加入的备份将保存到「"+folder.getString("name")+"」；已有任务保留各自目标");Diagnostics.event("backup.destination","folder="+id);return snapshot();
             }
             case "folderList": case "folderItems": case "folderChange": {
                 boolean write=action.equals("folderChange");Settings.Session session=requireSession(write);String folderId=data.optString("folderId","");
@@ -366,6 +368,8 @@ public final class MainActivity extends Activity {
                     Settings.Session session=requireSession(true);if(selectedFileSession==null||!settings.current(selectedFileSession)||!session.scope.equals(selectedFileSession.scope)||selectedFileFolder==null)throw new SecurityException("选择操作已中断或账号已改变，请重新选择文件");int count=0;ClipData clips=intent.getClipData();int total=clips==null?1:clips.getItemCount();
                     android.database.sqlite.SQLiteDatabase queueDb=TaskStore.get(this).getWritableDatabase();queueDb.beginTransaction();
                     try{for(int i=0;i<Math.min(total,5000);i++) {
+                        if(!settings.current(selectedFileSession))throw new SecurityException("登录身份已改变，停止加入队列");
+                        if(!selectedFileFolder.equals(settings.folder(session.scope)))throw new java.io.InterruptedIOException("目标文件夹已改变，请重新选择文件；已入队任务保留原目标");
                         Uri uri=clips==null?intent.getData():clips.getItemAt(i).getUri();if(uri==null||!"content".equals(uri.getScheme()))continue;
                         getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         uri=MediaCatalog.originalIfAllowed(this,uri);
@@ -374,8 +378,8 @@ public final class MainActivity extends Activity {
                         if(TaskStore.get(this).enqueue(session.scope,source,uri.toString(),info.name,"手动选择",info.size,info.modified,selectedFileFolder,selectedFileFolderName)!=-1)count++;
                         if((i+1)%100==0){queueDb.setTransactionSuccessful();queueDb.endTransaction();queueDb.beginTransaction();}
                     }queueDb.setTransactionSuccessful();}finally{queueDb.endTransaction();}
-                    settings.message("已加入 "+count+" 项，请点击立即备份"+(total>5000?"；单次最多5000项，大相册可使用相册扫描":""));
-                    Diagnostics.event("picker.enqueued","selected="+total+" added="+count);
+                    settings.message("已加入 "+count+" 项到「"+selectedFileFolderName+"」，请点击立即备份"+(total>5000?"；单次最多5000项，大相册可使用相册扫描":""));
+                    Diagnostics.event("picker.enqueued","selected="+total+" added="+count+" folder="+selectedFileFolder);
                 }
             }catch(Exception error){settings.message("选择未完成："+safeError(error)+" ["+Diagnostics.error("picker.read",error)+"]");}
         });

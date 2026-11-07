@@ -53,6 +53,25 @@ void Store::folderMembership(json& items,const std::string& folderId){
     std::set<std::string> present;if(!slots.empty())for(auto row:db.query("SELECT asset_id FROM folder_items WHERE folder_id=? AND asset_id IN ("+slots+")",args))present.insert(row["asset_id"]);
     for(auto& row:items)row["in_folder"]=row["state"]=="READY"&&present.count(row["asset_id"].get<std::string>())!=0;
 }
+json Store::folderMoveOptions(const json& input,const Identity& who){
+    if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能移动文件");
+    if(!input.contains("asset_ids")||!input["asset_ids"].is_array()||input["asset_ids"].empty()||input["asset_ids"].size()>1000)throw Error(400,"INVALID_BATCH","每次选择1至1000个文件");
+    std::set<std::string> unique;Params ids;std::string slots;
+    for(const auto& value:input["asset_ids"]){
+        if(!value.is_string())throw Error(400,"INVALID_ID","文件标识无效");auto id=value.get<std::string>();
+        if(id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos||!unique.insert(id).second)throw Error(400,"INVALID_ID","文件标识无效或重复");
+        if(!slots.empty())slots+=",";slots+="?";ids.push_back(id);
+    }
+    json result;
+    db.transaction([&]{
+        auto assets=db.query("SELECT id FROM assets a WHERE a.id IN ("+slots+") AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id)",ids);
+        if(assets.size()!=ids.size())throw Error(409,"SELECTION_CHANGED","部分所选文件已删除或不可用，请刷新后重新选择");
+        assetPermissions(assets,who);bool defaultAllowed=true;for(const auto& row:assets)if(!row["can_rename"].get<bool>())defaultAllowed=false;
+        auto common=db.query("SELECT i.folder_id FROM folder_items i JOIN folders f ON f.id=i.folder_id AND f.deleted=0 WHERE i.asset_id IN ("+slots+") GROUP BY i.folder_id HAVING COUNT(*)="+std::to_string(ids.size())+" ORDER BY (i.folder_id='default') DESC,i.folder_id",ids);
+        auto items=json::array();for(const auto& row:common){auto info=folder(row["folder_id"],who);if(info["can_write"].get<bool>()&&(info["id"]!="default"||who.admin||defaultAllowed))items.push_back(info);}
+        result={{"items",items},{"selected_count",ids.size()}};
+    });return result;
+}
 json Store::changeFolder(const std::string& id,const std::string& action,const json& input,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能修改文件夹");std::string resultId=id;
     db.transaction([&]{

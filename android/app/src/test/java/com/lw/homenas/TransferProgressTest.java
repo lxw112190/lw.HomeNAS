@@ -20,11 +20,12 @@ public class TransferProgressTest {
     }
     @Test public void parallelFilesHaveIndependentProgressAndOneAggregateSpeed() throws Exception {
         TaskStore store=TaskStore.get(RuntimeEnvironment.getApplication());String scope="parallel-test";
-        store.enqueue(scope,"one","content://fixture/1","first.jpg","CI",1000,1);store.enqueue(scope,"two","content://fixture/2","second.jpg","CI",2000,1);
+        store.enqueue(scope,"one","content://fixture/1","first.jpg","CI",1000,1);store.enqueue(scope,"two","content://fixture/2","second.jpg","CI",2000,1,"a".repeat(48),"旅行");
         TaskStore.Task first=store.claim(scope),second=store.claim(scope);java.util.concurrent.atomic.AtomicLong now=new java.util.concurrent.atomic.AtomicLong();TransferProgress.clock=now::get;TransferProgress.begin(scope);
         try{TransferProgress.phase(first,"UPLOADING",800,1000);TransferProgress.phase(second,"HASHING",0,2000);TransferProgress.hashed(second.id,700,2000);
             now.set(1_000_000_000L);TransferProgress.acknowledged(first.id,900,1000,100,1_000_000_000L);JSONObject snapshot=TransferProgress.snapshot(scope);
             assertEquals(2,snapshot.getJSONArray("items").length());assertEquals("0",snapshot.getJSONArray("items").getJSONObject(1).getString("confirmed"));assertEquals(100,snapshot.getLong("bytes_per_second"));
+            assertEquals("default",snapshot.getJSONArray("items").getJSONObject(0).getString("folder_id"));assertEquals("默认文件夹",snapshot.getJSONArray("items").getJSONObject(0).getString("folder_name"));assertEquals("a".repeat(48),snapshot.getJSONArray("items").getJSONObject(1).getString("folder_id"));assertEquals("旅行",snapshot.getJSONArray("items").getJSONObject(1).getString("folder_name"));
             TransferProgress.phase(second,"UPLOADING",0,2000);TransferProgress.acknowledged(second.id,300,2000,300,1_000_000_000L);assertEquals(400,TransferProgress.snapshot(scope).getLong("bytes_per_second"));
             TransferProgress.finished(first.id,true);assertEquals(1,TransferProgress.snapshot(scope).getLong("completed"));assertEquals(1,TransferProgress.snapshot(scope).getJSONArray("items").length());
             now.set(7_000_000_000L);assertEquals(0,TransferProgress.snapshot(scope).getLong("bytes_per_second"));

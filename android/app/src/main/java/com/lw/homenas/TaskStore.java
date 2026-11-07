@@ -29,8 +29,8 @@ final class TaskStore extends SQLiteOpenHelper {
     }
     static final class Task {
         final long id,size,modified,offset;
-        final String scope,uri,name,album,client,sha,remote,state,folderId;
-        Task(Cursor c) { id=c.getLong(0);scope=c.getString(1);uri=c.getString(2);name=c.getString(3);album=c.getString(4);size=c.getLong(5);modified=c.getLong(6);client=c.getString(7);sha=c.getString(8);remote=c.getString(9);offset=c.getLong(10);state=c.getString(11);folderId=c.getString(12); }
+        final String scope,uri,name,album,client,sha,remote,state,folderId,folderName;
+        Task(Cursor c) { id=c.getLong(0);scope=c.getString(1);uri=c.getString(2);name=c.getString(3);album=c.getString(4);size=c.getLong(5);modified=c.getLong(6);client=c.getString(7);sha=c.getString(8);remote=c.getString(9);offset=c.getLong(10);state=c.getString(11);folderId=c.getString(12);folderName=c.getString(13); }
     }
     long enqueue(String scope,String source,String uri,String name,String album,long size,long modified) {
         return enqueue(scope,source,uri,name,album,size,modified,"default","默认文件夹");
@@ -47,7 +47,7 @@ final class TaskStore extends SQLiteOpenHelper {
     }
     private Task next(String scope,java.util.Set<Long> excluded) {
         String where="";for(long id:excluded)where+=(where.isEmpty()?" AND id NOT IN (":",")+id;if(!where.isEmpty())where+=")";
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,scope,uri,name,album,size,modified,client,sha,remote,offset,state,folder_id FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING')"+where+" ORDER BY id LIMIT 1",new String[]{scope})){return c.moveToFirst()?new Task(c):null;}
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,scope,uri,name,album,size,modified,client,sha,remote,offset,state,folder_id,folder_name FROM tasks WHERE scope=? AND state IN ('QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING')"+where+" ORDER BY id LIMIT 1",new String[]{scope})){return c.moveToFirst()?new Task(c):null;}
     }
     synchronized Task claim(String scope){Task task=next(scope,leased);if(task!=null)leased.add(task.id);return task;}
     synchronized void release(long id){leased.remove(id);}

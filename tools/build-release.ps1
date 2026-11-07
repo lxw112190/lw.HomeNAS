@@ -44,7 +44,7 @@ $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','11','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','12','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare

@@ -77,6 +77,8 @@ final class MediaCatalog {
         TaskStore tasks=TaskStore.get(context);long[] added={0};int[] batch={0};
         android.database.sqlite.SQLiteDatabase db=tasks.getWritableDatabase();db.beginTransaction();
         try{visit(context,control,(key,album,uri,name,size,modified)->{
+            if(!settings.current(session))throw new java.io.InterruptedIOException("登录身份已改变，相册扫描停止");
+            if(!folder.equals(settings.folder(session.scope)))throw new java.io.InterruptedIOException("目标文件夹已改变，相册扫描停止；已入队任务保留原目标");
             if(selected.contains(key)&&size>0) {
                 String source=Protocol.key(uri+":"+size+":"+modified);
                 if(tasks.enqueue(session.scope,source,uri.toString(),name,album,size,modified,folder,folderName)!=-1)added[0]++;
