@@ -1,13 +1,13 @@
 'use strict';
 const $=id=>document.getElementById(id);
-const state={info:null,me:null,overview:null,page:'home',type:'all',cursor:'',files:[],paused:false,active:0};
+const state={info:null,me:null,overview:null,page:'home',type:'all',cursor:'',files:[],paused:false,active:0,uploadFolder:{id:'default',name:'默认文件夹'},uploadRevision:0};
 const labels={UPLOADING:'等待上传 / 可续传',VERIFYING:'完整文件校验中',COMMITTING:'正在入库',READY:'已备份到电脑',ERROR:'需要处理',CANCELLED:'已取消',HASHING:'计算文件摘要',SENDING:'正在上传',PAUSED:'已暂停'};
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 function bytes(value){let n=Number(value||0);const units=['B','KB','MB','GB','TB'];let i=0;while(n>=1024&&i<units.length-1){n/=1024;i++;}return `${n.toFixed(i?(n<10?2:1):0)} ${units[i]}`;}
 function date(value){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '未记录';const d=new Date(n);return Number.isNaN(d.getTime())?'未记录':d.toLocaleDateString('zh-CN');}
 function toast(message){$('toast').textContent=message;$('toast').classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.add('hidden'),4500);}
 function error(message){$('global-error').textContent=message;$('global-error').classList.remove('hidden');}
-function showAuth(){cancelRename();collectionView.reset();state.paused=true;state.files.forEach(t=>t.controller?.abort());state.files=[];renderLocal();$('server-tasks').replaceChildren();$('user-list').replaceChildren();state.editingUser=null;if($('preview').open)closePreview();if($('user-editor').open)$('user-editor').close();$('edit-password').value='';$('password').value='';$('create-user-form').reset();$('password-form').reset();state.me=null;$('shell').classList.add('hidden');$('auth').classList.remove('hidden');}
+function showAuth(){cancelRename();collectionView.reset();state.uploadRevision++;resetUploadDestination();state.paused=true;state.files.forEach(t=>t.controller?.abort());state.files=[];state.nextCandidate=0;state.localPage=0;renderLocal();$('server-tasks').replaceChildren();$('user-list').replaceChildren();state.editingUser=null;if($('preview').open)closePreview();if($('user-editor').open)$('user-editor').close();$('edit-password').value='';$('password').value='';$('create-user-form').reset();$('password-form').reset();state.me=null;$('shell').classList.add('hidden');$('auth').classList.remove('hidden');}
 async function api(path,options={}){
   const {signal,timeout=20000,...rest}=options,controller=new AbortController();
   const abort=()=>controller.abort();if(signal?.aborted)throw new DOMException('Paused','AbortError');signal?.addEventListener('abort',abort,{once:true});
@@ -36,6 +36,7 @@ function navigate(page){
 }
 async function entered(){
   state.me=await api('me');$('auth').classList.add('hidden');$('shell').classList.remove('hidden');
+  state.uploadRevision++;resetUploadDestination();
   document.querySelectorAll('.admin-only').forEach(n=>n.classList.toggle('hidden',!state.me.admin));
   document.querySelectorAll('.upload-only').forEach(n=>n.classList.toggle('hidden',!state.me.can_upload));
   $('account-name').textContent=`${state.me.display_name} · ${roleNames[state.me.role]}`; $('profile-summary').textContent=`${state.me.username} · ${state.me.display_name} · ${roleNames[state.me.role]}`;
@@ -115,6 +116,7 @@ function preview(item){
 function closePreview(){photoZoom?.destroy();photoZoom=null;++previewGeneration;previewController?.abort();previewController=null;for(const m of $('preview-content').querySelectorAll('audio,video')){m.pause();m.removeAttribute('src');m.load();}$('preview').close();$('preview-content').replaceChildren();}
 function taskElement(task,local){
   const row=node('div','task'),left=node('div'),right=node('div','task-state');left.append(node('strong','',local?task.file.name:task.name));
+  if(local||task.folder_name)left.append(node('small','task-destination','保存到：'+(local?task.effectiveFolderName||task.folderName||'默认文件夹':task.folder_name)+(local?task.folderWarning?' · '+task.folderWarning:'':task.folder_defaulted?' · 原目标已删除，已转存默认文件夹':'')));
   left.append(node('small','',local?`${bytes(task.offset)} / ${bytes(task.file.size)}${task.message?' · '+task.message:''}`:`${bytes(task.offset)} / ${bytes(task.size)} · ${date(task.updated)}${task.error?' · '+task.error:''}`));
   const progress=document.createElement('progress');progress.max=100;progress.value=local?task.percent:Math.min(100,100*Number(task.offset)/Math.max(1,Number(task.size)));left.append(progress);
   right.textContent=labels[task.state]||task.state;
@@ -149,11 +151,34 @@ function hashBlob(file,signal,onProgress,reusable){
     worker.postMessage({file});
   });
 }
+function renderUploadDestination(){
+ $('upload-folder-name').textContent=state.uploadFolder.name;$('reset-upload-folder').hidden=state.uploadFolder.id==='default';
+}
+function resetUploadDestination(){state.uploadFolder={id:'default',name:'默认文件夹'};renderUploadDestination();}
+async function chooseUploadDestination(){
+ if(!state.me?.can_upload)return;const revision=state.uploadRevision,owner=state.me.user_id,button=$('choose-upload-folder');button.disabled=true;
+ try{const folder=await collectionView.chooseFolder();if(revision!==state.uploadRevision||owner!==state.me?.user_id||!folder)return;state.uploadFolder={id:folder.id,name:folder.name};renderUploadDestination();}
+ catch(e){if(revision===state.uploadRevision)error(e.message);}finally{button.disabled=false;}
+}
+function openUpload(){navigate('transfers');$('choose-files').focus();}
+function uploadQueueKey(task){return JSON.stringify([task.folderId||'default',task.key]);}
+function checkUploadContext(task,signal){
+ if(signal.aborted||state.paused||!state.me?.can_upload||task.owner!==state.me.user_id||task.revision!==state.uploadRevision)throw new DOMException('Paused','AbortError');
+}
+function acceptUploadDestination(task,remote){
+ const requested=task.folderId||'default';
+ if(remote.folder_id!==undefined&&remote.folder_id!==requested||requested!=='default'&&(!remote.folder_id||!remote.effective_folder_id))throw new Error('服务器未确认此任务的目标文件夹，请升级电脑服务后重试。');
+ const actual=remote.effective_folder_id||requested;
+ if(actual!==requested&&!(actual==='default'&&remote.folder_defaulted===true))throw new Error('服务器返回的保存文件夹与任务不一致，上传已停止。');
+ task.effectiveFolderName=remote.folder_name||(actual==='default'?'默认文件夹':task.folderName);
+ task.folderWarning=remote.folder_defaulted?'原目标已删除，已转存默认文件夹':'';
+}
 async function addFiles(files){
  if(!state.me?.can_upload){toast('当前账号为只读，不能上传。');return;}if(state.importing){toast('正在整理上一批文件，请稍候再添加。');return;}
- state.importing=true;let count=0;const known=new Map(state.files.map(t=>[t.key,t]));
- try{navigate('transfers');for(let i=0;i<files.length;i++){const file=files[i],key=`${file.webkitRelativePath||file.name}|${file.size}|${file.lastModified}`,old=known.get(key);if(old&&!['ERROR','CANCELLED'].includes(old.state))continue;const task={file,key,state:'UPLOADING',offset:0,percent:0,active:false,message:'等待开始',retried:!!old};state.files.push(task);known.set(key,task);count++;if(i%200===0){renderLocal();await sleep(0);}}}
- finally{state.importing=false;}if(count){state.paused=false;renderLocal();kick();toast(`已加入 ${count} 项，后台逐项处理；本页每页最多50项。`);}
+ if(!files.length)return;const folder={...state.uploadFolder},owner=state.me.user_id,revision=state.uploadRevision;
+ state.importing=true;let count=0;const known=new Map(state.files.map(t=>[uploadQueueKey(t),t]));
+ try{navigate('transfers');for(let i=0;i<files.length;i++){if(owner!==state.me?.user_id||revision!==state.uploadRevision)break;const file=files[i],key=`${file.webkitRelativePath||file.name}|${file.size}|${file.lastModified}`,queueKey=uploadQueueKey({folderId:folder.id,key}),old=known.get(queueKey);if(old&&!['ERROR','CANCELLED'].includes(old.state))continue;const task={file,key,folderId:folder.id,folderName:folder.name,owner,revision,state:'UPLOADING',offset:0,percent:0,active:false,message:'等待开始',retried:!!old};state.files.push(task);known.set(queueKey,task);count++;if(i%200===0){renderLocal();await sleep(0);}}}
+ finally{state.importing=false;}if(owner!==state.me?.user_id||revision!==state.uploadRevision)return;if(count){state.paused=false;renderLocal();kick();toast(`已加入 ${count} 项，保存到「${folder.name}」。请保持页面打开。`);}else toast('这些文件已在当前文件夹的上传队列中。');
 }
 function pause(){state.paused=true;state.files.forEach(t=>t.controller?.abort());toast('本次前台上传已暂停，服务器已确认的进度会保留。');}
 async function resume(){if(state.paused)while(state.active)await sleep(50);state.paused=false;state.nextCandidate=0;for(const t of state.files)if(['PAUSED','ERROR'].includes(t.state)){if(t.state==='ERROR')t.taskId=null;t.state='UPLOADING';t.message='';}renderLocal();kick();}
@@ -164,19 +189,23 @@ function kick(){
 async function uploadFile(task){
   const controller=new AbortController();task.controller=controller;const signal=controller.signal;
   try{
+    checkUploadContext(task,signal);
     task.hashWorker=new Worker('./hash-worker.js');
     if(!task.digest){task.state='HASHING';task.message='分段读取，不将整个文件放入内存';renderLocal();task.digest=await hashBlob(task.file,signal,done=>{task.percent=100*done/Math.max(1,task.file.size);task.message=`正在校验 ${bytes(done)} / ${bytes(task.file.size)}`;renderLocal();},task.hashWorker);}
-    const source=new NasSha256().update(new TextEncoder().encode(task.key)).digestHex();
+    checkUploadContext(task,signal);
+    const source=new NasSha256().update(new TextEncoder().encode(task.folderId==='default'?task.key:uploadQueueKey(task))).digestHex();
     task.state='UPLOADING';task.message='查询服务器进度';renderLocal();
     if(!task.taskId){task.taskId=source;if(task.retried)task.taskId+='-'+Date.now();}
-    let remote=await post('uploads',{client_task_id:task.taskId,name:task.file.name,size:String(task.file.size),sha256:task.digest,source_key:task.key,modified:String(task.file.lastModified),album:(task.file.webkitRelativePath||'').split('/').slice(0,-1).join('/')},{signal});
+    let remote=await post('uploads',{client_task_id:task.taskId,name:task.file.name,size:String(task.file.size),sha256:task.digest,source_key:task.key,modified:String(task.file.lastModified),album:(task.file.webkitRelativePath||'').split('/').slice(0,-1).join('/'),folder_id:task.folderId},{signal});
+    checkUploadContext(task,signal);acceptUploadDestination(task,remote);
     task.uploadId=remote.id;
     if(['ERROR','CANCELLED'].includes(remote.state)){task.retried=true;throw new Error(`先前任务需要重建：${remote.error||'已取消'}。点击“继续上传”可重新建立任务。`);}
     let failures=0;
     while(remote.state==='UPLOADING'&&Number(remote.offset)<task.file.size){
-      if(state.paused)throw new DOMException('Paused','AbortError');
+      checkUploadContext(task,signal);acceptUploadDestination(task,remote);
       task.offset=Number(remote.offset);task.percent=100*task.offset/Math.max(1,task.file.size);task.state='SENDING';task.message='';renderLocal();
       const size=Number(state.overview?.chunk_bytes||8388608),chunk=task.file.slice(task.offset,task.offset+size),digest=await hashBlob(chunk,signal,null,task.hashWorker);
+      checkUploadContext(task,signal);
       try{remote=await api(`uploads/${remote.id}/data`,{method:'PUT',headers:{'Content-Type':'application/octet-stream','X-Upload-Offset':String(task.offset),'X-Chunk-SHA256':digest},body:chunk,signal,timeout:90000});failures=0;}
       catch(e){
         if(signal.aborted)throw e;
@@ -184,15 +213,17 @@ async function uploadFile(task){
         if(++failures>5)throw e;task.message=`连接中断或服务器忙，正在对账重试（${failures}/5）`;renderLocal();await sleep(Math.min(8000,1000*2**(failures-1)));remote=await api(`uploads/${remote.id}`,{signal});
       }
     }
-    if(remote.state==='UPLOADING')remote=await post(`uploads/${remote.id}/complete`,{},{signal});
+    checkUploadContext(task,signal);if(remote.state==='UPLOADING')remote=await post(`uploads/${remote.id}/complete`,{},{signal});
     task.offset=Number(remote.offset);task.percent=100;
     while(remote.state!=='READY'){
+      checkUploadContext(task,signal);acceptUploadDestination(task,remote);
       if(['ERROR','CANCELLED'].includes(remote.state)){task.retried=true;throw new Error(`服务器完整校验未完成：${remote.error||'任务已取消'}`);}
       task.state=remote.state;task.message='服务器确认后才算备份成功';renderLocal();await sleep(600);remote=await api(`uploads/${remote.id}`,{signal});
     }
+    checkUploadContext(task,signal);acceptUploadDestination(task,remote);
     task.state='READY';task.offset=task.file.size;task.percent=100;task.message='SHA256 校验通过';renderLocal();
     scheduleTransferRefresh();
-  }catch(e){task.state=task.cancelled?'CANCELLED':signal.aborted||state.paused?'PAUSED':'ERROR';task.message=task.state==='PAUSED'?'可继续上传':task.cancelled?'服务器任务取消后可重新选择文件':e.message;renderLocal();}
+  }catch(e){task.state=task.cancelled?'CANCELLED':signal.aborted||state.paused||e.name==='AbortError'?'PAUSED':'ERROR';task.message=task.state==='PAUSED'?'可继续上传':task.cancelled?'服务器任务取消后可重新选择文件':e.message;renderLocal();}
   finally{task.hashWorker?.terminate();task.hashWorker=null;task.controller=null;}
 }
 const roleNames={admin:'管理员',member:'普通用户',viewer:'只读用户'};
@@ -210,7 +241,9 @@ $('logout').onclick=async()=>{state.paused=true;state.files.forEach(t=>t.control
 $('profile-logout').onclick=$('logout').onclick;
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigate(b.dataset.page));
 for(const id of ['file-input','folder-input'])$(id).onchange=e=>{addFiles(Array.from(e.target.files));e.target.value='';};
-for(const id of ['hero-upload','choose-files'])$(id).onclick=()=>$('file-input').click();
+for(const id of ['hero-upload','open-upload'])$(id).onclick=openUpload;
+$('choose-files').onclick=()=>$('file-input').click();
+$('choose-upload-folder').onclick=chooseUploadDestination;$('reset-upload-folder').onclick=resetUploadDestination;
 $('pause').onclick=pause;$('resume').onclick=resume;$('see-all').onclick=()=>navigate('library');
 $('refresh-tasks').onclick=()=>refreshTasks().catch(e=>error(e.message));
 document.querySelectorAll('[data-type]').forEach(b=>b.onclick=()=>{state.type=b.dataset.type;document.querySelectorAll('[data-type]').forEach(x=>x.classList.toggle('selected',x===b));loadLibrary(false).catch(e=>error(e.message));});

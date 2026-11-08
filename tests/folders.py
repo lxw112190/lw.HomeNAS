@@ -25,6 +25,11 @@ try:
   if ready['state']=='READY':break
   time.sleep(.1)
  assert ready['state']=='READY';asset=ready['asset_id'];h.check([x['id'] for x in items(a['id'])]==[asset] and not items('default'),'new upload attaches only to the selected folder')
+ for route in ['tasks','tasks/page']:
+  result=owner.get(h.url+route).json();rows=result['items'] if isinstance(result,dict) else result
+  row=next(x for x in rows if x['id']==t['id']);h.check(row['folder_id']==a['id'] and row['effective_folder_id']==a['id'] and row['folder_name']==a['name'] and row['folder_defaulted'] is False,'task history returns selected folder: '+route)
+  other_result=other.get(h.url+route).json();other_rows=other_result['items'] if isinstance(other_result,dict) else other_result
+  h.check(not other_rows,'task folder metadata preserves member isolation: '+route)
  h.post('uploads',{**input,'folder_id':'default'},session=owner,status=409);h.check(True,'an existing upload id cannot change its destination')
  dup,_=h.create(payload,session=other,folder_id=b['id']);h.check(dup['state']=='READY' and dup['asset_id']==asset and len(items(b['id']))==1,'dedup immediately attaches the same original to another user folder')
  denied={**input,'client_task_id':'forbidden','folder_id':a['id']};h.post('uploads',denied,session=other,status=403)
@@ -35,6 +40,7 @@ try:
  h.post('folders/'+a['id']+'/edit',{'name':'中文新目录'},session=owner);h.check(viewer.get(h.url+'folders/'+a['id']).json()['name']=='中文新目录','folder rename is shared')
  pending,data=h.create(b'pending fixture',name='pending.txt',session=owner,folder_id=a['id']);h.chunk(pending,b'pending fixture',0,session=owner)
  h.post('folders/'+a['id']+'/delete',session=owner);h.check(len(items('default'))==1 and len(items(b['id']))==1,'delete moves references to default without removing shared originals')
+ history=owner.get(h.url+'tasks/page').json()['items'];row=next(x for x in history if x['id']==t['id']);h.check(row['folder_id']==a['id'] and row['effective_folder_id']=='default' and row['folder_name']=='默认文件夹' and row['folder_defaulted'] is True,'task history explicitly reports fallback when destination was deleted')
  h.post('uploads/'+pending['id']+'/complete',session=owner,status=202)
  for _ in range(150):
   done=owner.get(h.url+'uploads/'+pending['id']).json()

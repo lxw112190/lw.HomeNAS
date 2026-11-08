@@ -19,6 +19,8 @@ Invoke-ReleasePython @('-m','unittest','discover','-s','tests','-p','test_androi
 if($LASTEXITCODE -ne 0){throw 'DOM test dependencies failed'}
 & node (Join-Path $root 'tests/collections-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
 if($LASTEXITCODE -ne 0){throw 'Collection DOM checks failed'}
+& node (Join-Path $root 'tests/web-upload-folders.cjs')
+if($LASTEXITCODE -ne 0){throw 'Web upload destination checks failed'}
 & node (Join-Path $root 'tests/backup-picker-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
 if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')

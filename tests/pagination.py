@@ -1,7 +1,7 @@
 """Large isolated metadata fixture, cursor boundaries and account isolation. No real media."""
 import json,sqlite3,requests
 from smoke import Harness,ROOT
-h=Harness(ROOT/'out/Release/NasServer.exe')
+h=Harness(ROOT/'build/app/Release/NasServer.exe')
 try:
  h.start();password=(h.home/'数据/initial-admin-password.txt').read_text(encoding='utf-8').strip();h.post('login',{'username':'admin','password':password})
  member=h.post('users',{'username':'page_member','display_name':'pagination','role':'member','password':'PageTest12345'},status=201);h.stop()
@@ -25,6 +25,7 @@ try:
  h.check(h.admin.get(h.url+'assets',params={'type':'video','limit':48}).json()['items'][0]['category']=='video','category filtering works with bounded page')
  client=requests.Session();h.post('login',{'username':'page_member','password':'PageTest12345'},session=client)
  rows=client.get(h.url+'tasks/page').json()['items'];h.check(all(x['user_id']==member['id'] for x in rows),'member task page cannot expose other accounts')
+ h.check(all(x['folder_id']=='default' and x['effective_folder_id']=='default' and x['folder_name']=='默认文件夹' and x['folder_defaulted'] is False for x in rows),'task paging returns folder metadata without changing ownership or boundaries')
  h.check(h.admin.get(h.url+'tasks/page',params={'filter':'ready'}).json()=={'items':[],'next':''},'empty filter has no next page')
  with sqlite3.connect(h.home/'数据/catalog.db') as db:
   plan=str(db.execute("EXPLAIN QUERY PLAN SELECT id FROM assets INDEXED BY asset_ready_timeline WHERE state='READY' AND (created,id)<(1000,'ffffffffffffffffffffffffffffffffffffffffffffffff') ORDER BY created DESC,id DESC LIMIT 49").fetchall())

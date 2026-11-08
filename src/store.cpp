@@ -38,6 +38,8 @@ std::string category(const std::string& name) {
     return "file";
 }
 json cleanTask(json task) { task.erase("source_key"); return task; }
+const std::string TaskListFields="SELECT u.id,u.user_id,u.device_id,u.name,u.size,u.offset,u.state,u.asset_id,u.error,u.created,u.updated,u.folder_id,COALESCE(f.id,'default') AS effective_folder_id,COALESCE(f.name,'默认文件夹') AS folder_name FROM uploads u LEFT JOIN folders f ON f.id=u.folder_id AND f.deleted=0 ";
+void taskFolderFlags(json& rows){for(auto& row:rows)row["folder_defaulted"]=row["folder_id"]!=row["effective_folder_id"];}
 void requireAdmin(const Identity& who) { if(!who.admin)throw Error(403,"ADMIN_REQUIRED","此操作需要管理员权限"); }
 void requireUpload(const Identity& who) { if(!who.canUpload())throw Error(403,"READ_ONLY","当前账号为只读，不能上传或更改备份任务"); }
 std::string userName(const json& input) {
@@ -413,22 +415,21 @@ json Store::sourceStatus(const json& input,const Identity& who) {
     }if(input.contains("folder_id"))folderMembership(items,resolveFolder(text(input,"folder_id",48),who));return {{"items",items}};
 }
 json Store::tasks(const Identity& who) {
-    auto sql=std::string("SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,updated FROM uploads ");
-    return db.query(sql+(who.admin?"":"WHERE user_id=? ")+"ORDER BY updated DESC,id DESC LIMIT 100",who.admin?Params{}:Params{who.userId});
+    auto rows=db.query(TaskListFields+(who.admin?"":"WHERE u.user_id=? ")+"ORDER BY u.updated DESC,u.id DESC LIMIT 100",who.admin?Params{}:Params{who.userId});taskFolderFlags(rows);return rows;
 }
 json Store::taskPage(const Identity& who,const std::string& before,const std::string& filter){
-    Params values;std::string sql="SELECT id,user_id,device_id,name,size,offset,state,asset_id,error,created,updated FROM uploads WHERE 1=1";
-    if(!who.admin){sql+=" AND user_id=?";values.push_back(who.userId);}
-    if(filter=="active")sql+=" AND state IN ('UPLOADING','VERIFYING','COMMITTING')";
-    else if(filter=="failed")sql+=" AND state IN ('ERROR','CANCELLED')";
-    else if(filter=="ready")sql+=" AND state='READY'";
+    Params values;std::string sql=TaskListFields+"WHERE 1=1";
+    if(!who.admin){sql+=" AND u.user_id=?";values.push_back(who.userId);}
+    if(filter=="active")sql+=" AND u.state IN ('UPLOADING','VERIFYING','COMMITTING')";
+    else if(filter=="failed")sql+=" AND u.state IN ('ERROR','CANCELLED')";
+    else if(filter=="ready")sql+=" AND u.state='READY'";
     else if(!filter.empty()&&filter!="all")throw Error(400,"INVALID_FILTER","任务筛选无效");
     if(!before.empty()){
         auto colon=before.find(':');auto time=before.substr(0,colon),id=colon==std::string::npos?std::string{}:before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
-        sql+=" AND (created,id)<(?,?)";values.insert(values.end(),{time,id});
+        sql+=" AND (u.created,u.id)<(?,?)";values.insert(values.end(),{time,id});
     }
-    auto rows=db.query(sql+" ORDER BY created DESC,id DESC LIMIT 51",values);bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
+    auto rows=db.query(sql+" ORDER BY u.created DESC,u.id DESC LIMIT 51",values);taskFolderFlags(rows);bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
     std::string next;if(more)next=rows.back()["created"].get<std::string>()+":"+rows.back()["id"].get<std::string>();return {{"items",rows},{"next",next}};
 }
 json Store::overview(const Identity& caller){

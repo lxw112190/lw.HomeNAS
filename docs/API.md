@@ -82,6 +82,8 @@ JSON POST 需要 `Content-Type: application/json`，不带数据时发送 `{}`�
 
 上传创建新增可选 `folder_id`，省略使用default。服务端保存原始请求目标，同一个client_task_id不能改变目标。新入库和内容去重都添加目录关联，重复引用幂等；原件可同时属于多个目录。删除目录使用墓碑，现有引用归入默认目录，正在上传或未开始请求的旧目标仍能回退。任务返回 `folder_id`（原始目标）、`effective_folder_id`、`folder_name` 和布尔 `folder_defaulted`，回退时必须向用户说明。
 
+Web上传目标接入后，`GET /api/v1/tasks` 和 `GET /api/v1/tasks/page` 也返回这四个目录字段，供历史记录展示。成员仍只返回自己的任务，管理员可查看全部。删除原目标时，历史任务保留folder_id，effective_folder_id变为default，folder_name为默认文件夹，folder_defaulted为true。目录名称反映当前名称，字段表示该上传任务的目标，不列举文件后来通过移动/添加获得的全部分类。
+
 `sources/status` 可附带 `folder_id`，每项增加 `in_folder`，同时核对原件存在和目录关联。不能仅凭全局READY跳过向另一个目录添加关联。默认未指定folder_id时保持旧响应兼容。旧客户端省略目录仍使用默认目录。升级会将现有READY原件补关联到默认目录，不移动内容文件；运行旧服务程序写入升级后的库会遗漏目录关联，不支持回退运行。
 # v1.0新增：回收站与移动来源
 

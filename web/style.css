@@ -23,6 +23,10 @@
 
 .collection-mode-source{display:none}.collection-tabs{display:flex;align-self:flex-start;gap:4px;background:#eaf0ec;border-radius:9px;padding:4px}.collection-tabs button{padding:9px 25px;background:transparent;color:#64786b;border:0;border-radius:7px}.collection-tabs button.active{background:#fff;color:#16835b;font-weight:600;box-shadow:0 1px 4px #0001}
 
+.upload-destination{display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:640px;margin:20px auto 8px;padding:14px 18px;text-align:left;border:1px solid var(--line);border-radius:12px;background:#fff}
+.upload-destination-name{display:flex;align-items:center;gap:12px;min-width:0}.upload-destination-name span{color:var(--muted);white-space:nowrap;font-size:13px}.upload-destination-name strong{overflow-wrap:anywhere;min-width:0}.upload-destination-actions{display:flex;gap:6px;flex-shrink:0}.upload-destination-actions button{font-size:13px;padding:9px 12px}.drop-zone .upload-destination-hint{font-size:12px;margin-bottom:18px}
+@media(max-width:480px){.upload-destination{align-items:stretch;flex-direction:column;gap:10px;padding:12px}.upload-destination-actions{justify-content:flex-end}.upload-destination-name strong{font-size:14px}}
+
 /* Image-only viewport; videos keep their native controls and layout. */
 .photo-viewer{display:block!important;background:#edf0ed!important;min-width:0}
 .photo-stage{position:relative;width:100%;height:clamp(220px,55vh,620px);overflow:hidden;touch-action:none;background:#19201d;border-radius:7px;user-select:none}

@@ -9,11 +9,19 @@
   <p>
    拖入照片、视频或文件，也可以点击选择。原文件不会被修改。
   </p>
+  <div class="upload-destination">
+   <div class="upload-destination-name"><span>保存到</span><strong id="upload-folder-name">默认文件夹</strong></div>
+   <div class="upload-destination-actions">
+    <button class="secondary" id="choose-upload-folder" type="button">选择文件夹</button>
+    <button class="link" hidden="" id="reset-upload-folder" type="button">恢复默认</button>
+   </div>
+  </div>
+  <p class="upload-destination-hint">更换文件夹只影响新加入的文件。</p>
   <button class="primary" id="choose-files">
    选择文件
   </button>
   <label class="button secondary desktop-only">
-   选择文件夹
+   选择本地文件夹
    <input hidden="" id="folder-input" multiple="" type="file" webkitdirectory=""/>
   </label>
  </div>
