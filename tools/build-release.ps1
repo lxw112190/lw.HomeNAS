@@ -27,6 +27,7 @@ if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
 if($LASTEXITCODE -ne 0){throw 'Windows Release build failed'}
 $exe=Join-Path $root 'build/app/Release/NasServer.exe'
 Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
+Invoke-ReleasePython @('tests/bundled_clients.py')
 Invoke-ReleasePython @('tests/parallel_uploads.py')
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
@@ -72,7 +73,7 @@ v1.0 highlights: Web file moves and recoverable recycle bin; Web/APK preview nav
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 Windows package tests and upstream Android CI passed. This does not replace physical-device testing.
 
-Fresh deployment: extract the ZIP, import the bundled APK using deploy/import_android.ps1, then run deploy/install-service.bat as administrator.
+Fresh deployment: extract the ZIP, then run deploy/install-service.bat as administrator (or NasServer.exe in the foreground). Bundled client-release APK/UI files are validated and published automatically at startup; download the APK from the login page.
 Open http://127.0.0.1:8787/ and sign in with admin / admin123. Change the initial password after login.
 Defaults: allow_insecure_lan=true, allow_external_hosts=true. Preserve existing config and data during upgrades.
 Switching from an old temporary APK signing key may require a one-time reinstall; preserve pending phone backup work first.

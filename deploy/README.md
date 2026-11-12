@@ -65,7 +65,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action A
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Configure
 # 仅查看安装计划，不改 SCM、ACL 或防火墙
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/service.ps1 -Action Install -PlanOnly
-# 停止 NAS 后导入包内 APK/资源
+# 可选兼容维护入口：停止 NAS 后手动导入/重新上架包内 APK/资源（正常启动已自动发布，无需此步）
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
 # 查看防火墙规则
 powershell -NoProfile -ExecutionPolicy Bypass -File deploy/firewall.ps1 -Action Status

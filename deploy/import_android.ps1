@@ -36,6 +36,7 @@ try{
     [IO.File]::WriteAllText($temporary,($metadata | ConvertTo-Json -Depth 8),$encoding)
     $catalog=Join-Path $root 'apk.json'
     if(Test-Path -LiteralPath $catalog){$backup=Join-Path $root (([Guid]::NewGuid().ToString('N'))+'.previous');[IO.File]::Replace($temporary,$catalog,$backup);Remove-Item -LiteralPath $backup}else{[IO.File]::Move($temporary,$catalog)}
+    Remove-Item -LiteralPath (Join-Path $root 'apk-withdrawn.json') -Force -ErrorAction SilentlyContinue
     if($ui){
         $uiCatalog=Join-Path $root 'ui.json';$publish=$true
         if(Test-Path -LiteralPath $uiCatalog){
@@ -50,6 +51,7 @@ try{
             $temporary=Join-Path $root (([Guid]::NewGuid().ToString('N'))+'.json.tmp')
             [IO.File]::WriteAllText($temporary,($ui | ConvertTo-Json -Depth 8),$encoding)
             if(Test-Path -LiteralPath $uiCatalog){$backup=Join-Path $root (([Guid]::NewGuid().ToString('N'))+'.previous');[IO.File]::Replace($temporary,$uiCatalog,$backup);Remove-Item -LiteralPath $backup}else{[IO.File]::Move($temporary,$uiCatalog)}
+            Remove-Item -LiteralPath (Join-Path $root 'ui-withdrawn.json') -Force -ErrorAction SilentlyContinue
             Write-Host ('Imported signed UI revision '+$uiManifest.revision+'. On the phone, check updates and download resources, then reopen the app.')
         }
     }

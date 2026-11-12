@@ -31,6 +31,8 @@ $deploymentConfig | Add-Member -NotePropertyName allow_insecure_lan -NotePropert
 $deploymentConfig | Add-Member -NotePropertyName bootstrap_admin_password -NotePropertyValue 'admin123' -Force
 [IO.File]::WriteAllText($deploymentConfigFile,($deploymentConfig | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
 foreach ($file in @('README.md','VERSION','LICENSE','THIRD-PARTY-NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stage }
+New-Item -ItemType Directory -Path (Join-Path $stage 'assets') | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'assets/sponsor.jpg') -Destination (Join-Path $stage 'assets/sponsor.jpg')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $stage -Recurse
 # Copy source explicitly: never ship local Gradle caches, build outputs or signing/config files.
 $androidStage = Join-Path $stage 'android'
@@ -66,8 +68,8 @@ Android源码随包提供；CI配置见GitHub仓库，手机APK由CI生成，不
 '@
 if($ClientReleaseDirectory){
     $apkMetadata=Get-Content -LiteralPath (Join-Path $ClientReleaseDirectory 'apk.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-    $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。',('本包附带CI APK '+$apkMetadata.versionName+' (versionCode '+$apkMetadata.versionCode+')：先停止NAS，使用PowerShell运行deploy/import_android.ps1导入，再启动即可网页下载。'))
-    if(Test-Path -LiteralPath (Join-Path $ClientReleaseDirectory 'ui.json')){$quickStart+="`r`n附带签名页面资源，由导入脚本一起发布；手机检查更新、下载资源更新后重新打开，可使用最新界面。"}
+    $quickStart=$quickStart.Replace('手机APK由CI生成，不在此Windows包内。',('本包client-release文件夹附带CI APK '+$apkMetadata.versionName+' (versionCode '+$apkMetadata.versionCode+')：解压后直接启动NAS，程序自动校验并发布，手机访问登录页即可下载，无需手动导入。'))
+    if(Test-Path -LiteralPath (Join-Path $ClientReleaseDirectory 'ui.json')){$quickStart+="`r`n附带签名页面资源，服务启动时自动校验并发布；手机检查更新、下载资源更新后重新打开，可使用最新界面。"}
     $quickStart+="`r`n安装/升级前请阅读docs中的对应CI发布说明；不同签名的Debug APK不能覆盖安装，勿盲目卸载旧版。"
 }
 if(Test-Path -LiteralPath (Join-Path $stage 'tools/ffmpeg/ffmpeg.exe')){$quickStart+="`r`n已包含FFmpeg，视频封面开箱可用；使用config/server.json内的相对路径，不需要配置系统PATH。封面不等于整段视频兼容转码。"}

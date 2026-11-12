@@ -18,6 +18,7 @@ def run(archive):
         h=Harness(ROOT/'build/app/Release/NasServer.exe');clone=h.home/'完整部署'
         z.extractall(clone)  # Only prevalidated paths inside this test's new directory.
     stage=clone/next(iter(top));h.exe=stage/'NasServer.exe';h.config=stage/'config/server.json'
+    assert (stage/'assets/sponsor.jpg').read_bytes()==(ROOT/'assets/sponsor.jpg').read_bytes()
     assert {p.name for p in (stage/'deploy').glob('*.bat')} == {'install-service.bat','start-service.bat','stop-service.bat','restart-service.bat','uninstall-service.bat','open_firewall.bat','remove_firewall.bat'}
     assert (stage/'deploy/service-native.cs').is_file() and not (stage/'deploy/logs').exists()
     config=json.loads(h.config.read_text(encoding='utf-8'))
@@ -32,11 +33,11 @@ def run(archive):
         baseline=json.loads((stage/'android/signing-certificate.json').read_text(encoding='utf-8'));verification=json.loads((stage/'client-release/verification.json').read_text(encoding='utf-8'))
         h.check(baseline['certificate_sha256']==verification['certificate_sha256'],'fixed public signing baseline is included')
         h.check(json.loads(import_apk(plan=True).stdout)['VersionCode']==expected['versionCode'],'offline import plan accepts bundled APK')
-        import_apk();import_apk();h.check(True,'offline import is repeatable in a Unicode path')
+        h.check(not (h.config.parent/config['data_dir']/'maintenance/apk.json').exists(),'fresh deployment has no pre-imported client catalog')
         h.start();h.post('login',{'username':'admin','password':'admin123'});h.check(h.admin.get(h.url+'me').status_code==200,'fresh deployment uses documented admin password')
         h.check(requests.get(h.url+'server').json()['insecure_lan'] is True,'plain startup follows LAN HTTP default')
         h.check(requests.get(h.url+'server',headers={'Host':'public.example:8080'}).status_code==200,'external Host default is enabled')
-        latest=requests.get(h.url+'client/latest').json();h.check(latest['apk']==expected,'public APK catalog matches verified metadata')
+        latest=requests.get(h.url+'client/latest').json();h.check(latest['apk']==expected,'plain startup auto-publishes bundled APK without import commands')
         apk=requests.get(h.url+'client/packages/'+expected['sha256']+'.apk').content
         h.check(len(apk)==int(expected['size']) and hashlib.sha256(apk).hexdigest()==expected['sha256'],'public APK download preserves size and hash')
         if (stage/'client-release/ui.json').exists():
@@ -56,7 +57,9 @@ def run(archive):
         detail=h.admin.get(h.url+path+'/items').json();h.check(detail['album']['cover']['id']==asset and len(detail['items'])==1,'album membership and video cover work')
         h.post(path+'/delete');h.check(h.admin.get(h.url+f'assets/{asset}/original').content==payload,'album deletion preserves original bytes')
         import_apk(False);h.check(True,'offline import refuses a running instance')
-        h.post('password',{'old_password':'admin123','new_password':'changed123'});h.stop();import_apk();h.start()
+        h.admin.delete(h.url+'admin/client/apk');h.check(requests.get(h.url+'client/latest').json()['apk'] is None,'administrator withdrawal takes effect')
+        h.post('password',{'old_password':'admin123','new_password':'changed123'});h.stop();import_apk();import_apk();h.check(True,'legacy offline import remains repeatable');h.start()
+        h.check(requests.get(h.url+'client/latest').json()['apk']==expected,'explicit offline import can republish a withdrawn APK')
         h.post('login',{'username':'admin','password':'admin123'},session=requests.Session(),status=401);h.post('login',{'username':'admin','password':'changed123'});h.check(True,'password survives reimport and restart')
         report={'checks':h.checks,'count':len(h.checks),'archive':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'physical_device_tested':False}
         (ROOT/'test-results/package-release-pass.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n',encoding='utf-8');print('Package acceptance:',len(h.checks),'checks; evidence:',h.home)

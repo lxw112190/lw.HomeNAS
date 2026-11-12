@@ -183,7 +183,7 @@ int runServer(Config config,std::optional<bool> insecureLanOverride,const std::f
     HANDLE instance=CreateFileW(lockPath.c_str(),GENERIC_READ|GENERIC_WRITE,0,nullptr,OPEN_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
     if(instance==INVALID_HANDLE_VALUE)throw std::runtime_error("This data directory is already in use, or is not writable");
     struct Close{HANDLE h;~Close(){CloseHandle(h);}}close{instance};
-    ensureCertificate(config.data);Store store(config);
+    ensureCertificate(config.data);Store store(config);importBundledClients(store);
     auto cert=readText(config.data/"server-cert.pem"),key=readText(config.data/"server-key.pem");
     httplib::SSLServer::PemMemory memory{};memory.cert_pem=cert.c_str();memory.cert_pem_len=cert.size();memory.key_pem=key.c_str();memory.key_pem_len=key.size();
     httplib::SSLServer tls(memory);httplib::Server http;

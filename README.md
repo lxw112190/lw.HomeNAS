@@ -30,11 +30,7 @@ Web上传支持选择保存文件夹：点击“添加照片与文件”进入�
 1. 下载并完整解压Windows发布ZIP，保持 `NasServer.exe`、`web`、`config`、`deploy` 等目录结构。
 2. 首次可双击根目录 `启动服务.cmd` 前台运行，浏览器打开 `http://127.0.0.1:8787/`。运行期间保持窗口打开。
 3. 发布包全新资料库默认 **admin / admin123**，登录后修改密码；已有账号不会被覆盖。源码默认配置使用随机初始密码，见控制台或 `data/initial-admin-password.txt`。
-4. 包内APK可先通过PowerShell导入，再从Web首页或登录页下载；后续也可在Web设置页发布APK。导入时停止NAS：
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File deploy/import_android.ps1
-```
+4. 完整发布包的 `client-release` 文件夹包含APK及版本清单。启动NAS后自动校验并发布，手机打开网页登录页即可下载，无需先登录，也无需执行导入命令。可选的签名页面资源同时自动发布；后续仍可在Web设置页发布APK。较旧包不会覆盖已发布新版，管理员撤下后重启不会重新上架同版。[完整包说明](docs/20261112-完整包启动自动发布APK.md)。
 
 5. 手机填写电脑IP和端口、登录账号，选择文件/相册和备份目标，再开始备份。手机与电脑先在可互访的家庭局域网使用。
 
@@ -129,3 +125,15 @@ SQLite、Mbed TLS、cpp-httplib等依赖已锁定；不要随意改变文件换�
 ## 项目与许可
 
 Android方案参考 [lw.Web2Android](https://github.com/lxw112190/lw.Web2Android)，部署脚本参考 [lw.PPOCR.OpenCVDNN](https://github.com/lxw112190/lw.PPOCR.OpenCVDNN)。项目许可见[LICENSE](LICENSE)，第三方组件和FFmpeg许可、来源及源码归档见[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)与包内licenses/tools目录。
+
+## 联系与支持
+
+作者：天天代码码天天
+
+QQ：819069052
+
+QQ Group: 天天代码码天天 | 群号: 264292622
+
+如果项目对你有帮助，可以扫码支持维护：
+
+<img src="assets/sponsor.jpg" alt="支持维护" width="220">
