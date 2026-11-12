@@ -131,9 +131,7 @@ Android方案参考 [lw.Web2Android](https://github.com/lxw112190/lw.Web2Android
 ## 联系与支持
 
 - 作者：天天代码码天天
-
 - QQ：819069052
-
 - QQ Group: 天天代码码天天 | 群号: 264292622
 
 如果项目对你有帮助，可以扫码支持维护：
