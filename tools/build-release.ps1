@@ -69,7 +69,7 @@ $notes=@"
 lw.HomeNAS automatic full package / Android CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
-v1.0 highlights: Web file moves and recoverable recycle bin; Web/APK preview navigation and on-demand metadata.
+v1.2 highlights: choose/create destination folders for Web uploads; frozen queue destinations and per-folder deduplication; folder names in task history. Bundled APK and optional UI packages auto-publish on startup, preserving newer releases and administrator withdrawals. README includes contact and support information.
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 Windows package tests and upstream Android CI passed. This does not replace physical-device testing.
 
