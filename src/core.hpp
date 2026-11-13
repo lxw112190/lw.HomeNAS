@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.3.0";
+constexpr const char* Version = "1.3.1";
 inline constexpr const char* TimelineClock = "(CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END)";
 
 struct Error : std::runtime_error {
