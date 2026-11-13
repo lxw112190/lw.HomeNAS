@@ -58,6 +58,7 @@ jobs:
           npm ci --prefix tests/dom --ignore-scripts --no-audit --no-fund
           node tests/collections-dom.cjs tests/dom/node_modules/jsdom
           node tests/backup-picker-dom.cjs tests/dom/node_modules/jsdom
+          node tests/backup-summary-dom.cjs
       - name: Restore persistent Debug signing identity
         if: github.event_name != 'pull_request'
         env:
@@ -113,8 +114,9 @@ jobs:
       - name: APK checksums and signing information
         shell: bash
         run: |
-          find android/app/build/outputs/apk -name '*.apk' -type f -print0 | xargs -0 sha256sum > android/app/build/outputs/apk/SHA256SUMS.txt
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk > android/app/build/outputs/apk/debug-signing.txt
+          python3 tools/name-android-artifact.py
+          find android/app/build/outputs/apk -name '*.apk' -type f -print0 | xargs -0 sha256sum > android/app/build/outputs/apk/SHA256SUMS.txt
           echo 'Download APKs from the lw.HomeNAS-Android artifact. See android/README.md for connection and signing instructions.' >> "$GITHUB_STEP_SUMMARY"
       - name: Remove restored Debug signing key
         if: always()

@@ -29,7 +29,7 @@ async function rejection(value,message){await assert.rejects(select(value),messa
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'homenas-release-'));
  try{
   const hash=data=>crypto.createHash('sha256').update(data).digest('hex');
-  const manifest={commit:sha,androidRunNumber:13,serverVersion:'1.0.0',package:'lw.HomeNAS-ci13.zip',apk:'lw.HomeNAS-ci13.apk',packageSha256:hash('zip'),apkSha256:hash('apk')};
+  const manifest={commit:sha,androidRunNumber:13,serverVersion:'1.0.0',package:'lw.HomeNAS-ci13.zip',apk:'HomeNAS-1.0.0.apk',packageSha256:hash('zip'),apkSha256:hash('apk')};
   for(const [name,data] of [[manifest.package,'zip'],[manifest.apk,'apk']]){fs.writeFileSync(path.join(directory,name),data);fs.writeFileSync(path.join(directory,name+'.sha256'),`${hash(data)}  ${name}\n`);}
   fs.writeFileSync(path.join(directory,'release-manifest.json'),JSON.stringify(manifest));const notes=path.join(directory,'..',path.basename(directory)+'-notes.md');fs.writeFileSync(notes,'test release');
   function publishing(fail=false,existing){

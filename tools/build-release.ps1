@@ -1,4 +1,4 @@
-﻿param(
+param(
     [Parameter(Mandatory=$true)][string]$ArtifactDirectory,
     [Parameter(Mandatory=$true)][ValidateRange(1,2147483647)][int]$CiNumber,
     [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$CiSha,
@@ -23,6 +23,8 @@ if($LASTEXITCODE -ne 0){throw 'Collection DOM checks failed'}
 if($LASTEXITCODE -ne 0){throw 'Web upload destination checks failed'}
 & node (Join-Path $root 'tests/backup-picker-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
 if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
+& node (Join-Path $root 'tests/backup-summary-dom.cjs')
+if($LASTEXITCODE -ne 0){throw 'APK backup summary DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')
 if($LASTEXITCODE -ne 0){throw 'Windows Release build failed'}
 $exe=Join-Path $root 'build/app/Release/NasServer.exe'
@@ -47,7 +49,7 @@ $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','12','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','13','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare
@@ -59,7 +61,7 @@ $assets=Join-Path $root 'deliveries/release-assets'
 New-Item -ItemType Directory -Path $assets | Out-Null
 Copy-Item -LiteralPath $result.archive,($result.archive+'.sha256') -Destination $assets
 $apk=Get-Content -LiteralPath (Join-Path $client 'apk.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$apkName='lw.HomeNAS-'+$apk.versionName+'-ci'+$CiNumber+'-release.apk'
+$apkName='HomeNAS-'+$apk.versionName+'.apk'
 Copy-Item -LiteralPath (Join-Path $client ($apk.sha256+'.apk')) -Destination (Join-Path $assets $apkName)
 $utf8=[Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText((Join-Path $assets ($apkName+'.sha256')),($apk.sha256+'  '+$apkName+"`n"),$utf8)

@@ -9,6 +9,13 @@ import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class) @Config(sdk=35)
 public class TransferProgressTest {
+    @Test public void scanStageIsScopedAndVisibleWithoutInventingTransferredBytes() throws Exception {
+        TransferProgress.begin("stage-owner");TransferProgress.stage("stage-owner","SCANNING");
+        assertEquals("SCANNING",TransferProgress.snapshot("stage-owner").getString("stage"));
+        assertEquals(0,TransferProgress.snapshot("stage-owner").getLong("bytes_per_second"));
+        assertFalse(TransferProgress.snapshot("someone-else").has("stage"));
+        TransferProgress.stage("someone-else","TRANSFERRING");assertEquals("SCANNING",TransferProgress.snapshot("stage-owner").getString("stage"));
+    }
     @Before public void reset() throws Exception {QueueFixture.reset(RuntimeEnvironment.getApplication());}
     @After public void cleanup() throws Exception {TransferProgress.end();TransferProgress.clock=System::nanoTime;QueueFixture.reset(RuntimeEnvironment.getApplication());}
     @Test public void resumeDoesNotCountOldOffsetAsNewUploadAndHashIsNotConfirmation() throws Exception {

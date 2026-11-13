@@ -150,11 +150,13 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",12).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",13).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         JSONObject transfer=TransferProgress.snapshot(session==null?"":session.scope);long[] totals=TaskStore.get(this).pendingTotals(session==null?"":session.scope);
         transfer.put("remaining_items",totals[0]).put("remaining_bytes",Long.toString(totals[1]));result.put("enqueue",enqueueJob.snapshot(session==null?"":session.scope));
         result.put("transfer",transfer).put("playbackDiagnostics",true).put("nativeMediaPlayback",true);
+        result.put("backupStatus",new BackupStatus(this).snapshot(session==null?"":session.scope,transfer.optBoolean("running"),settings));
+        result.put("versionCode",BuildConfig.VERSION_CODE).put("ciRun",BuildConfig.CI_RUN);
         String pem=settings.prefs.getString("pending_cert","");
         if(!pem.isEmpty())result.put("certificate",Protocol.hex(MessageDigest.getInstance("SHA-256").digest(NativeApi.certificate(pem).getEncoded())));
         return result;

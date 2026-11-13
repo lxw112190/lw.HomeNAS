@@ -3,7 +3,7 @@ function assets(directory, sha, number){
   const manifest=JSON.parse(fs.readFileSync(path.join(directory,'release-manifest.json'),'utf8'));
   if(manifest.commit!==sha || manifest.androidRunNumber!==Number(number))throw new Error('Release manifest belongs to a different CI run or commit.');
   const wanted=[manifest.package,manifest.package+'.sha256',manifest.apk,manifest.apk+'.sha256','release-manifest.json'];
-  if(![manifest.package,manifest.apk].every(name=>/^lw\.HomeNAS-[A-Za-z0-9.-]+\.(zip|apk)$/.test(name)))throw new Error('Invalid release file name.');
+  if(!/^lw\.HomeNAS-[A-Za-z0-9.-]+\.zip$/.test(manifest.package)||manifest.apk!==`HomeNAS-${manifest.serverVersion}.apk`)throw new Error('Invalid release file name.');
   const actual=fs.readdirSync(directory).sort();
   if(JSON.stringify(actual)!==JSON.stringify([...wanted].sort()))throw new Error('Unexpected or missing release assets.');
   for(const [name,expected] of [[manifest.package,manifest.packageSha256],[manifest.apk,manifest.apkSha256]]){

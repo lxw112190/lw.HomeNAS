@@ -33,6 +33,31 @@ function page(name){
  if(changed){$('error').hidden=true;window.scrollTo(0,0);}
 }
 function openConnection(){page('settings');$('connection-settings').open=true;}
+function backupTime(value){const n=Number(value),date=new Date(n);return n>0&&Number.isFinite(date.getTime())?date.toLocaleString('zh-CN'):'尚无记录';}
+function renderBackupSummary(s,pending,failed){
+ const box=$('backup-summary');box.hidden=!s.user;if(!s.user)return;
+ const history=s.backupStatus||{},t=s.transfer||{},items=t.items||[];
+ const results={COMPLETED:'本轮队列处理完成',ATTENTION:'仍有项目需要处理',PARTIAL:'仍有任务未完成',PAUSED:'已暂停，确认进度保留',INTERRUPTED:'上次运行中断，可继续',FAILED:'未完成，请检查连接或任务',AUTH:'需要重新登录',PERMISSION:'请检查目标文件夹权限'};
+ let title='选择照片，开始备份',detail='加入队列后，可查看每个文件的处理进度。';
+ if(!s.canUpload){title='当前账号只读';detail='可以浏览资料库；备份需要可上传的账号。';}
+ else if(t.running){
+  title=s.paused?'正在暂停':t.stage==='SCANNING'?'正在扫描已选相册':items.some(i=>i.phase==='UPLOADING')?'正在上传':items.some(i=>i.phase==='HASHING')?'正在计算文件摘要':items.some(i=>['VERIFYING','COMMITTING'].includes(i.phase))?'电脑正在校验入库':'正在准备备份';
+  detail=`本轮已确认 ${Number(t.completed||0)} 项，当前队列待处理 ${pending} 项。`;
+ }else if(pending&&s.paused){title='备份已暂停';detail=`${pending} 项待处理，点击“继续备份”恢复。`;}
+ else if(failed){title=`${failed} 项需要处理`;detail='查看具体原因后重试；授权失效或文件已移走时，需要重新选择文件。';}
+ else if(['FAILED','AUTH','PERMISSION','INTERRUPTED','PARTIAL'].includes(history.result)){title=results[history.result];detail=pending?`${pending} 项待处理，确认进度保留。`:'可查看连接设置，或重新选择照片开始备份。';}
+ else if(s.auto&&!s.paused){
+  const waiting={NETWORK:['等待网络连接','连接家庭网络后，系统会安排后续备份。'],UNMETERED:['等待非计费网络','当前设置仅在非计费网络备份。'],CHARGING:['等待充电','当前设置仅在充电时自动备份。'],BATTERY:['等待电量恢复','低电量时系统可能延后自动任务。'],NO_ALBUMS:['请选择自动备份相册','选择相册后，系统才能扫描新照片。']};
+  [title,detail]=waiting[history.wait_reason]||['自动备份已开启','条件满足后由系统调度；也可点“开始备份”立即处理。'];
+  if(pending)detail+=` 队列待处理 ${pending} 项。`;
+ }else if(pending){title=`${pending} 项等待备份`;detail='点击“开始备份”，电脑确认入库后才计为成功。';}
+ else if(history.result==='COMPLETED'){title='本轮队列处理完成';detail=`本轮已确认 ${Number(history.completed||0)} 项；可继续选择其他文件。`;}
+ $('backup-summary-title').textContent=title;$('backup-summary-detail').textContent=detail;
+ $('backup-auto-badge').textContent=s.auto?'定时备份已开启':'手动备份';
+ $('backup-last-result').textContent=history.result==='RUNNING'?'正在运行':results[history.result]||'尚无记录';
+ $('backup-last-finished').textContent=backupTime(history.last_finished);$('backup-last-scan').textContent=backupTime(history.last_scan);
+ $('backup-show-failed').hidden=!s.canUpload||!failed;$('backup-auto-settings').hidden=!s.canUpload;
+}
 
 function render(s){
   const mediaChanged=current?.scope===s.scope&&current?.mediaRevision!==undefined&&s.mediaRevision!==current.mediaRevision;
@@ -46,10 +71,11 @@ function render(s){
   if(mediaChanged){albumLoaded=false;$('albums').replaceChildren();if(activePage==='picker'){pickerRefreshPending=true;if(!pickerBusy)queueMicrotask(()=>loadPicker());}else if(activePage==='settings'&&$('album-settings').open)queueMicrotask(()=>$('load-albums').click());}
   $('logout').hidden=!s.user;document.querySelectorAll('.upload-only').forEach(n=>n.hidden=!s.canUpload);document.querySelectorAll('.session-only').forEach(n=>n.hidden=!s.user);
   if(first){fillAddress(s.connectionAddress||s.endpoint||'http://192.168.1.100:8787');$('username').value=s.user||s.lastUsername||'admin';$('auto').checked=!!s.auto;$('wifi').checked=s.wifiOnly!==false;$('charging').checked=!!s.charging;}
-  $('log-session').textContent=`版本 ${s.version||''} · 构建 ${s.build||'local'} · 日志会话 ${s.logSession||'--'}`;
+  $('log-session').textContent=`版本 ${s.version||''}${s.versionCode?' / code'+s.versionCode:''} · 构建 ${s.build||'local'}${s.ciRun?' · CI '+s.ciRun:''} · 日志会话 ${s.logSession||'--'}`;
   $('certificate').textContent=s.certificate?`SHA256：${s.certificate}`:'使用系统信任的证书，或导入电脑公开证书。';
   const q=s.queue||{counts:{},items:[]},counts=q.counts||{};$('ready').textContent=counts.READY||0;$('failed').textContent=(counts.ERROR||0)+(counts.SOURCE_MISSING||0);$('pending').textContent=['QUEUED','HASHING','UPLOADING','VERIFYING','COMMITTING'].reduce((n,k)=>n+(counts[k]||0),0);
   const pending=Number($('pending').textContent),failed=Number($('failed').textContent);
+  renderBackupSummary(s,pending,failed);
   $('backup-status').textContent=pending?(s.paused?'已暂停，进度已保留':`${pending} 项等待或正在备份`):'选择要保存的照片和文件';
   $('start').querySelector('span').textContent=s.paused?'继续备份':'开始备份';$('retry').hidden=!s.canUpload||!failed;
   const visibleItems=modern?(q.items||[]):(q.items||[]).slice(queuePosition*50,queuePosition*50+50);
@@ -68,6 +94,8 @@ for(const b of document.querySelectorAll('[data-help]'))b.onclick=()=>{if(!$('he
 for(const b of document.querySelectorAll('[data-close-dialog]'))b.onclick=()=>$(b.dataset.closeDialog).close();
 for(const [id,action] of [['choose','chooseFiles'],['permission','permission'],['metadata','metadataPermission'],['start','start'],['pause','pause'],['retry','retry'],['scan','scan'],['logout','logout'],['import-cert','importCertificate'],['clear-cert','clearCertificate']])bind(id,action);
 $('refresh').onclick=refresh;
+$('backup-show-failed').onclick=()=>{$('queue-filter').value='failed';syncChoices();queuePage(0,true).then(()=>$('tasks').scrollIntoView({block:'start'}));};
+$('backup-auto-settings').onclick=()=>{page('settings');$('album-settings').open=true;};
 $('host').addEventListener('change',pastedAddress);$('host').addEventListener('input',addressPreview);$('port').addEventListener('input',addressPreview);$('protocol').onchange=()=>{if(['8787','9443',''].includes($('port').value))$('port').value=$('protocol').value==='http'?'8787':'9443';addressPreview();};
 $('test-connection').onclick=async()=>{try{const r=await run($('test-connection'),'testConnection',connectionData());if(r.endpoint)fillAddress(r.endpoint);}catch{}};
 $('login').onsubmit=async event=>{event.preventDefault();const b=$('login').querySelector('[type=submit]');try{await run(b,'login',{...connectionData(),username:$('username').value,password:$('password').value});$('auto').checked=false;page('backup');}catch{}finally{$('password').value='';}};
@@ -196,14 +224,14 @@ function renderTaskRows(items,canUpload){
  if(!items.length&&!list.querySelector('.empty'))list.append(element('p',canUpload?'暂无传输任务':'可在资料库浏览共享文件','empty'));
 }
 function renderTransfer(s){
- const t=s.transfer||{},stopping=!!s.paused;$('transfer-live').hidden=!t.running;if(!t.running)return;
+ const t=s.transfer||{},stopping=!!s.paused,scanning=t.stage==='SCANNING';$('transfer-live').hidden=!t.running;if(!t.running)return;
  const remaining=Number(t.remaining_items||0),completed=Number(t.completed||0),size=Number(t.remaining_bytes||0),speed=Number(t.bytes_per_second||0);
- $('transfer-phase').textContent=stopping?'正在暂停':`本轮完成 ${completed} 项 · 剩余 ${remaining} 项`;
- $('transfer-name').textContent=`${t.items?.length||0} 项进行中${t.failed?' · '+t.failed+' 项需处理':''}`;
- $('transfer-progress').value=completed+remaining?100*completed/(completed+remaining):0;
+ $('transfer-phase').textContent=stopping?'正在暂停':scanning?'正在扫描已选相册':`本轮完成 ${completed} 项 · 剩余 ${remaining} 项`;
+ $('transfer-name').textContent=scanning?'正在核对相册文件，本轮扫描尚未完成。':`${t.items?.length||0} 项进行中${t.failed?' · '+t.failed+' 项需处理':''}`;
+ if(scanning)$('transfer-progress').removeAttribute('value');else $('transfer-progress').value=completed+remaining?100*completed/(completed+remaining):0;
  $('transfer-bytes').textContent='剩余待发送约 '+bytes(size);$('transfer-speed').textContent=!stopping&&speed>0?bytes(speed)+'/s':'';
  $('transfer-eta').textContent=!stopping&&speed>0&&size>0?'约 '+Math.max(1,Math.ceil(size/speed/60))+' 分钟（估计）':'';
- $('transfer-note').textContent=stopping?'正在取消各路请求，已确认进度保留。':'仅电脑确认完整入库后计为完成；速度按最近5秒确认字节计算。';
+ $('transfer-note').textContent=stopping?'正在取消各路请求，已确认进度保留。':scanning?'扫描仅覆盖已选且已授权相册，完成后继续处理队列。':'仅电脑确认完整入库后计为完成；速度按最近5秒确认字节计算。';
  $('transfer-files').replaceChildren();for(const item of t.items||[]){const row=element('div','','transfer-file'),head=element('div','','transfer-file-head'),bar=document.createElement('progress');head.append(element('span',item.name),element('small',labels[item.phase]||'准备中'));bar.max=100;bar.value=Number(item.size)>0?Math.min(100,Number(item.processed)*100/Number(item.size)):0;row.append(head,element('small','保存到：'+(item.folder_name||'按入队时目录')),bar);$('transfer-files').append(row);}
 }
 const choiceButtons=new Map();let choiceSource=null;

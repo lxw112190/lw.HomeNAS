@@ -9,7 +9,7 @@ def bundle(code,data=None,ui=False):
  data=data or ('synthetic client '+str(code)).encode();digest=hashlib.sha256(data).hexdigest()
  metadata={'sha256':digest,'size':str(len(data))}
  if ui:
-  metadata.update(revision=code,minNative=12)
+  metadata.update(revision=code,minNative=13)
   result={'payload':base64.b64encode(json.dumps(metadata).encode()).decode(),'signature':'fixture-not-a-real-signature'}
  else:result={**metadata,'versionCode':code,'versionName':'test-'+str(code),'notes':'synthetic, not installable'}
  (source/(digest+('.zip' if ui else '.apk'))).write_bytes(data)
@@ -22,7 +22,9 @@ try:
  h.post('login',{'username':'admin','password':(h.home/'数据/initial-admin-password.txt').read_text().strip()})
  h.stop();first,data=bundle(1);ui,_=bundle(10,ui=True);h.start()
  h.check(catalog()=={'apk':first,'ui':ui},'startup discovers APK and optional UI from executable directory, independent of working directory')
- h.check(requests.get(h.url+'client/packages/'+first['sha256']+'.apk').content==data,'anonymous APK download is byte-identical after plain startup')
+ download=requests.get(h.url+'client/packages/'+first['sha256']+'.apk')
+ h.check(download.content==data,'anonymous APK download is byte-identical after plain startup')
+ h.check('HomeNAS-test-1.apk' in download.headers['Content-Disposition'],'APK download uses a short versioned filename')
  path=h.home/'数据/maintenance/apk.json';mtime=path.stat().st_mtime_ns;restart()
  h.check(path.stat().st_mtime_ns==mtime,'unchanged startup skips metadata publication')
  h.stop();edited=dict(first,notes='new release notes, same APK');(source/'apk.json').write_text(json.dumps(edited));h.start();h.check(catalog()['apk']==first,'same APK version preserves existing published metadata')

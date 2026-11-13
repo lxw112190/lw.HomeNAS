@@ -31,7 +31,7 @@ final class BackupEngine {
         Settings.Session session=null;
         try {
             session=settings.session();if(session==null||!session.canUpload||settings.paused()){Diagnostics.event("backup.skipped","logged_in="+(session!=null)+" paused="+settings.paused());return;}
-            TransferProgress.begin(session.scope);check(session,control);NativeApi api=new NativeApi(session);
+            TransferProgress.begin(session.scope);new BackupStatus(context).begin(session.scope);check(session,control);NativeApi api=new NativeApi(session);
             JSONObject server=api.get("server",control);if(!server.optBoolean("backup_folders"))throw new IOException("请先升级电脑服务至0.5，确保备份目录正确");
             if(!session.serverId.equals(server.getString("server_id")))throw new IOException("服务器身份已改变，请核对后重新登录");
             settings.ensureFolder(session,api,control);
@@ -39,15 +39,22 @@ final class BackupEngine {
             int block=(int)Math.min(8*1024*1024L,advertised);if(block<1)throw new IOException("服务器块大小无效");
             int parallel=Math.max(1,Math.min(3,settings.prefs.getInt("upload_parallel",2)));
             Diagnostics.event("backup.parallel","workers="+parallel);
-            drain(session,block,parallel,control,progress);
+            TransferProgress.stage(session.scope,"TRANSFERRING");drain(session,block,parallel,control,progress);
             check(session,control);progress.update("正在扫描已选相册");
-            long added=MediaCatalog.scan(context,session,control);Diagnostics.event("scan.done","new_tasks="+added);
-            drain(session,block,parallel,control,progress);
+            TransferProgress.stage(session.scope,"SCANNING");long added=MediaCatalog.scan(context,session,control);Diagnostics.event("scan.done","new_tasks="+added);
+            if(!settings.albums().isEmpty())new BackupStatus(context).scanned(session.scope);
+            TransferProgress.stage(session.scope,"TRANSFERRING");drain(session,block,parallel,control,progress);
+            JSONObject counts=tasks.counts(session.scope);long failures=counts.optLong("ERROR")+counts.optLong("SOURCE_MISSING");
+            recordOutcome(session,failures>0?"ATTENTION":tasks.pendingTotals(session.scope)[0]>0?"PARTIAL":"COMPLETED");
             progress.update("本轮完成；仅“已备份”表示服务器完整校验并入库");
         }catch(NativeApi.Failure error){
+            recordOutcome(session,error.status==401?"AUTH":error.status==403?"PERMISSION":"FAILED");
             if(error.status==401&&session!=null){if(settings.invalidate(session)){BackupScheduler.cancel(context);settings.message("登录已过期或账号被调整，请重新登录；队列保留");}}
             else settings.message(error.getMessage());throw error;
-        }catch(InterruptedIOException error){Diagnostics.event("backup.paused","confirmed progress retained");throw error;}catch(Exception error){Diagnostics.error("backup.failed",error);throw error;}finally{TransferProgress.end();active=null;RUNNING.unlock();Diagnostics.event("backup.end","");}
+        }catch(InterruptedIOException error){recordOutcome(session,"PAUSED");Diagnostics.event("backup.paused","confirmed progress retained");throw error;}catch(Exception error){recordOutcome(session,"FAILED");Diagnostics.error("backup.failed",error);throw error;}finally{TransferProgress.end();active=null;RUNNING.unlock();Diagnostics.event("backup.end","");}
+    }
+    private void recordOutcome(Settings.Session session,String result){
+        if(session==null)return;try{JSONObject progress=TransferProgress.snapshot(session.scope);new BackupStatus(context).finish(session.scope,result,progress.optLong("completed"),progress.optLong("failed"));}catch(Exception error){Diagnostics.error("backup.history",error);}
     }
     private void drain(Settings.Session session,int block,int parallel,RunControl root,Progress progress) throws Exception {
         java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(parallel);

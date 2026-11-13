@@ -1,9 +1,16 @@
 <section id="page-backup" hidden>
   <div class="stats">
-    <div><strong id="ready">0</strong><span>已备份</span></div>
-    <div><strong id="pending">0</strong><span>待备份</span></div>
-    <div><strong id="failed">0</strong><span>未完成</span></div>
+    <div><strong id="ready">0</strong><span>队列已备份</span></div>
+    <div><strong id="pending">0</strong><span>队列待处理</span></div>
+    <div><strong id="failed">0</strong><span>需要处理</span></div>
   </div>
+  <section class="panel backup-summary" id="backup-summary" hidden aria-label="备份中心">
+    <div class="backup-summary-top"><h2 id="backup-summary-title">准备备份</h2><span id="backup-auto-badge"></span></div>
+    <p id="backup-summary-detail"></p>
+    <dl class="backup-history"><dt>最近一轮结果</dt><dd id="backup-last-result">尚无记录</dd><dt>上次结束</dt><dd id="backup-last-finished">尚无记录</dd><dt>上次相册扫描</dt><dd id="backup-last-scan">尚无记录</dd></dl>
+    <p class="caption">数量仅统计当前账号已加入队列的文件。相册扫描只覆盖已选相册和系统授权范围。</p>
+    <div class="backup-summary-actions"><button id="backup-show-failed" type="button" hidden>查看需处理项</button><button id="backup-auto-settings" class="text-button" type="button">自动备份设置</button></div>
+  </section>
   <div class="panel backup-actions upload-only" hidden>
     <div class="backup-heading"><span class="feature-icon"><svg class="icon" aria-hidden="true"><use href="#icon-backup"></use></svg></span><div><h2>备份到家庭电脑</h2><p id="backup-status">选择要保存的照片和文件</p></div></div>
     <button id="backup-folder" class="destination-button" type="button">备份到：默认文件夹　›</button>

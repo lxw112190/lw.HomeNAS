@@ -9,12 +9,14 @@ import java.util.ArrayDeque;
 final class TransferProgress {
     private static String scope="";
     private static boolean running;
+    private static String stage="PREPARING";
     private static long completed,failed,started;
     private static final LinkedHashMap<Long,Entry> entries=new LinkedHashMap<>();
     private static final ArrayDeque<long[]> samples=new ArrayDeque<>();
     static java.util.function.LongSupplier clock=System::nanoTime;
     private static final class Entry {String name,phase,folderId,folderName;long done,size,confirmed;}
-    static synchronized void begin(String owner){scope=owner;running=true;completed=failed=0;started=clock.getAsLong();entries.clear();samples.clear();}
+    static synchronized void begin(String owner){scope=owner;running=true;stage="PREPARING";completed=failed=0;started=clock.getAsLong();entries.clear();samples.clear();}
+    static synchronized void stage(String owner,String value){if(running&&scope.equals(owner))stage=value;}
     static synchronized void phase(TaskStore.Task task,String phase,long processed,long size){
         Entry item=entries.get(task.id);if(item==null){item=new Entry();item.name=task.name;item.folderId=task.folderId;item.folderName=task.folderName;item.confirmed=task.offset;entries.put(task.id,item);}
         item.phase=phase;item.done=processed;item.size=size;if(phase.equals("UPLOADING"))item.confirmed=processed;
@@ -37,7 +39,7 @@ final class TransferProgress {
                 .put("processed",Long.toString(item.done)).put("size",Long.toString(item.size)).put("confirmed",Long.toString(item.confirmed)).put("folder_id",item.folderId).put("folder_name",item.folderName));
         }
         JSONObject first=active.length()>0?active.getJSONObject(0):new JSONObject().put("name","").put("phase",running?"PREPARING":"IDLE").put("processed","0").put("size","0").put("confirmed","0");
-        return new JSONObject(first.toString()).put("running",running).put("items",active).put("completed",completed).put("failed",failed)
+        return new JSONObject(first.toString()).put("running",running).put("stage",stage).put("items",active).put("completed",completed).put("failed",failed)
             .put("bytes_per_second",rate).put("eta_seconds",-1);
     }
 }

@@ -131,12 +131,15 @@ def manifest_attributes(blob):
 
 def prepare(artifact, output, ui=None, ci_number=0, ci_sha=''):
     require(not output.exists(), 'Release output already exists')
-    path = artifact / 'release/app-release.apk'
+    metadata = json.loads((artifact / 'release/output-metadata.json').read_text(encoding='utf-8'))
+    filename = metadata['elements'][0]['outputFile']
+    require(re.fullmatch(r'(?:app-release|HomeNAS-[0-9A-Za-z.-]+)\.apk',filename), 'Invalid CI APK filename')
+    path = artifact / 'release' / filename
     require(path.stat().st_size <= 128 * 1024 * 1024, 'APK too large')
     data = path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     expected = {line.split()[1].replace('\\', '/'):line.split()[0] for line in (artifact / 'SHA256SUMS.txt').read_text(encoding='utf-8').splitlines() if line.strip()}
-    require(expected.get('android/app/build/outputs/apk/release/app-release.apk') == digest, 'CI APK checksum mismatch')
+    require(expected.get('android/app/build/outputs/apk/release/'+filename) == digest, 'CI APK checksum mismatch')
     baseline = json.loads((ROOT / 'android/signing-certificate.json').read_text(encoding='utf-8'))
     certificate = signing_certificate(data)
     require(certificate == baseline['certificate_sha256'], 'APK differs from fixed signing certificate')
