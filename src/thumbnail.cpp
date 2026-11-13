@@ -62,7 +62,7 @@ json imageMetadata(const fs::path& input) {
         };
         auto orientationValue=value(274,false);if(orientationValue.is_number_unsigned())orientation=orientationValue.get<unsigned>();
         for(auto pair:{std::pair<const char*,unsigned>{"camera_make",271},{"camera_model",272},{"software",305}}){auto v=value(pair.second,false);if(!v.is_null())result["exif"][pair.first]=v;}
-        for(auto pair:{std::pair<const char*,unsigned>{"taken_at",36867},{"exposure_seconds",33434},{"f_number",33437},{"iso",34855},{"focal_length_mm",37386},{"lens_model",42036}}){auto v=value(pair.second,true);if(!v.is_null())result["exif"][pair.first]=v;}
+        for(auto pair:{std::pair<const char*,unsigned>{"taken_at",36867},{"utc_offset",36881},{"exposure_seconds",33434},{"f_number",33437},{"iso",34855},{"focal_length_mm",37386},{"lens_model",42036}}){auto v=value(pair.second,true);if(!v.is_null())result["exif"][pair.first]=v;}
     }
     if(orientation>=5&&orientation<=8)std::swap(width,height);
     result["width"]=width;result["height"]=height;result["orientation"]=orientation;return result;

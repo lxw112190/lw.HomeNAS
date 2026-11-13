@@ -170,7 +170,7 @@ Config Config::load(const fs::path& path) {
     if (!j.is_object()) throw std::runtime_error("Configuration must be a JSON object");
     for (auto it = j.begin(); it != j.end(); ++it) if (!allowed.count(it.key())) throw std::runtime_error("Unknown configuration field: " + it.key());
     if (number(j, "schema_version") != 1) throw std::runtime_error("Unsupported configuration schema");
-    Config c; c.name = text(j, "name", 128); c.host = text(j, "https_host", 255);
+    Config c;c.file=fs::absolute(path); c.name = text(j, "name", 128); c.host = text(j, "https_host", 255);
     auto hp = number(j, "http_port"), sp = number(j, "https_port");
     if (hp < 1024 || hp > 65535 || sp < 1024 || sp > 65535 || hp == sp) throw std::runtime_error("Invalid ports");
     c.httpPort = static_cast<int>(hp); c.httpsPort = static_cast<int>(sp);

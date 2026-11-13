@@ -22,3 +22,5 @@ CI9 Windows 完整部署包新增独立命令行工具 FFmpeg 7.1（Gyan essenti
 开发/CI的DOM交互测试使用jsdom 26.1.0（MIT，https://github.com/jsdom/jsdom），依赖锁定于tests/dom/package-lock.json；不进入生产APK或Windows部署包。
 
 1.0.1新增AndroidX Media3 ExoPlayer/UI 1.5.1（Apache-2.0，The Android Open Source Project），用于APK原生音视频播放。沿用APK内Apache-2.0全文，版本与传递依赖由CI记录。源码：https://github.com/androidx/media/tree/1.5.1 。
+
+1.3.0新增本地二维码生成：Project Nayuki QR Code generator C++ v1.8.0（MIT），源码原始字节及其许可头摘录位于third_party/qrcodegen，摘要纳入dependencies.lock.json；来源https://github.com/nayuki/QR-Code-generator/tree/v1.8.0/cpp。Android扫码使用journeyapps/zxing-android-embedded 4.3.0及ZXing core（Apache-2.0），按用户点击申请相机权限，不使用Google Play服务或远端二维码API。来源https://github.com/journeyapps/zxing-android-embedded。

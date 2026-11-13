@@ -2,6 +2,7 @@
 #include "service.hpp"
 #include "httplib.h"
 #include "export.hpp"
+#include "connection.hpp"
 #include <csignal>
 #include <iostream>
 #include <set>
@@ -9,6 +10,7 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include <regex>
 #include <windows.h>
 #include <wincrypt.h>
 
@@ -160,11 +162,16 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/assets/([a-f0-9]{48})/rename",[&store](const auto& request,auto& response){reply(response,store.renameAsset(request.matches[1],body(request),store.authenticate(token(request))));});
     server.Get("/api/v1/assets",[&store](const auto& request,auto& response){auto search=request.get_param_value("q");if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");auto result=store.assets(request.get_param_value("before"),request.get_param_value("type"),search,request.has_param("limit")?static_cast<int>(std::min<uint64_t>(number(json{{"limit",request.get_param_value("limit")}},"limit"),101)):60,request.has_param("order")?request.get_param_value("order"):"created",request.get_param_value("from"),request.get_param_value("to"));auto who=store.authenticate(token(request));store.assetPermissions(result["items"],who);if(request.has_param("album_id")){store.albumMembership(result["items"],request.get_param_value("album_id"),who);result["membership_album_id"]=request.get_param_value("album_id");}reply(response,result);});
     server.Get("/api/v1/assets/([a-f0-9]{48})/original",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);auto type=row["mime"].template get<std::string>();serveFile(request,response,store.originalPath(row),type,row["name"],request.get_param_value("download")=="1"||type=="application/octet-stream");});
-    server.Get("/api/v1/assets/([a-f0-9]{48})/metadata",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);json details={{"id",row["id"]},{"name",row["name"]},{"mime",row["mime"]},{"size",row["size"]},{"sha256",row["sha256"]},{"modified",row["modified"]},{"created",row["created"]},{"image",nullptr}};if(row["category"]=="image"){try{details["image"]=imageMetadata(store.originalPath(row));}catch(...){details["image"]={{"available",false},{"exif",json::object()}};}}reply(response,details);});
+    server.Get("/api/v1/assets/([a-f0-9]{48})/metadata",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);json details={{"id",row["id"]},{"name",row["name"]},{"mime",row["mime"]},{"size",row["size"]},{"sha256",row["sha256"]},{"modified",row["modified"]},{"created",row["created"]},{"taken",row["taken"]},{"taken_text",row["taken_text"]},{"taken_zone",row["taken_zone"]},{"image",nullptr}};if(row["category"]=="image"){try{details["image"]=imageMetadata(store.originalPath(row));}catch(...){details["image"]={{"available",false},{"exif",json::object()}};}}reply(response,details);});
     server.Get("/api/v1/assets/([a-f0-9]{48})/thumbnail",[&store](const auto& request,auto& response){auto row=store.asset(request.matches[1]);if(row["preview"]!="READY")throw Error(404,"PREVIEW_UNAVAILABLE","缩略图尚未生成或该格式暂不支持预览");serveFile(request,response,store.config.data/"cache"/(row["id"].template get<std::string>()+".jpg"),"image/jpeg","",false);});
     server.Get("/api/v1/certificate",[&store](const auto& request,auto& response){admin(store.authenticate(token(request)));serveFile(request,response,store.config.data/"server-cert.pem","application/x-pem-file","lw.HomeNAS.crt",true);});
+    connectionRoutes(server,store,insecureLan,https);
+    server.Get("/api/v1/assets/calendar",[&store](const auto& request,auto& response){auto raw=request.get_param_value("offset");int offset=0;if(!raw.empty()){if(!std::regex_match(raw,std::regex("-?[0-9]{1,4}")))throw Error(400,"INVALID_CALENDAR","时区参数无效");offset=std::stoi(raw);}reply(response,store.calendar(request.get_param_value("type"),request.get_param_value("q"),offset));});
+    server.Get("/api/v1/admin/backups",[&store](const auto& request,auto& response){reply(response,store.metadataBackups(store.authenticate(token(request))));});
+    server.Post("/api/v1/admin/backups",[&store](const auto& request,auto& response){body(request);reply(response,store.metadataBackup(store.authenticate(token(request))),201);});
+    server.Get("/api/v1/admin/backups/([a-f0-9]{48})/download",[&store](const auto& request,auto& response){auto folder=store.metadataBackupPath(request.matches[1],store.authenticate(token(request)));exportFiles(response,{{folder/"catalog.db","catalog.db"},{folder/"config/server.json","config/server.json"},{folder/"backup.json","backup.json"}},"HomeNAS-metadata-backup.zip");});
     maintenanceRoutes(server,store);
-    for(const auto& name:{"index.html","boot.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
+    for(const auto& name:{"index.html","boot.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","timeline-tools.js","library-tools.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
         const std::string file=name;auto path=store.config.web/fs::u8path(file);auto route=file=="index.html"?"/":"/"+file;
         server.Get(route,[path,file](const auto&,auto& response){auto type=file.size()>=5&&file.substr(file.size()-5)==".html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
     }
@@ -176,6 +183,7 @@ void requestServerStop() {
     if(httpServer)httpServer->stop();if(tlsServer)tlsServer->stop();
 }
 int runServer(Config config,std::optional<bool> insecureLanOverride,const std::function<void()>& ready) {
+    for(const auto& root:{executableDirectory(),config.data.parent_path()})if(fs::is_regular_file(root/"migration.json")&&!json::parse(readText(root/"migration.json")).value("complete",false))throw std::runtime_error("迁移未完成，不能启动此目标实例；原目录保留，请检查迁移错误");
     const bool insecureLan=insecureLanOverride.value_or(config.allowInsecureLan);
     extern void initializeTlsThreads(); initializeTlsThreads();
     fs::create_directories(config.data);

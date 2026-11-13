@@ -35,6 +35,18 @@
       "url": "https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2",
       "sha256": "a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6",
       "bytes": 5473689
+    },
+    {
+      "name": "qrcodegen-cpp",
+      "url": "https://raw.githubusercontent.com/nayuki/QR-Code-generator/v1.8.0/cpp/qrcodegen.cpp",
+      "sha256": "1f3b3fcdac6954c32cf583ccd02ec9b5901f756a38c461acedc70be4a77d3757",
+      "bytes": 27322
+    },
+    {
+      "name": "qrcodegen-hpp",
+      "url": "https://raw.githubusercontent.com/nayuki/QR-Code-generator/v1.8.0/cpp/qrcodegen.hpp",
+      "sha256": "b779c3b156cf7a57ce789d6fee4fc991ccc2913774d26c909d22bb8f26b2a793",
+      "bytes": 20431
     }
   ],
   "files": [
@@ -1173,6 +1185,18 @@
     {
       "path": "third_party/mbedtls/LICENSE",
       "sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b"
+    },
+    {
+      "path": "third_party/qrcodegen/qrcodegen.cpp",
+      "sha256": "1f3b3fcdac6954c32cf583ccd02ec9b5901f756a38c461acedc70be4a77d3757"
+    },
+    {
+      "path": "third_party/qrcodegen/qrcodegen.hpp",
+      "sha256": "b779c3b156cf7a57ce789d6fee4fc991ccc2913774d26c909d22bb8f26b2a793"
+    },
+    {
+      "path": "third_party/qrcodegen/LICENSE",
+      "sha256": "4d5501e5bcd5ceaa30efd6785b046d7b6720a4705d917542aaf4f7530e453d6c"
     }
   ]
 }

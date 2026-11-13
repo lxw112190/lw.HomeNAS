@@ -30,7 +30,7 @@ $deploymentConfig.allow_external_hosts=$true
 $deploymentConfig | Add-Member -NotePropertyName allow_insecure_lan -NotePropertyValue $true -Force
 $deploymentConfig | Add-Member -NotePropertyName bootstrap_admin_password -NotePropertyValue 'admin123' -Force
 [IO.File]::WriteAllText($deploymentConfigFile,($deploymentConfig | ConvertTo-Json -Depth 8),[Text.UTF8Encoding]::new($false))
-foreach ($file in @('README.md','VERSION','LICENSE','THIRD-PARTY-NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stage }
+foreach ($file in @('README.md','README.en.md','VERSION','LICENSE','THIRD-PARTY-NOTICES.md')) { Copy-Item -LiteralPath (Join-Path $projectRoot $file) -Destination $stage }
 New-Item -ItemType Directory -Path (Join-Path $stage 'assets') | Out-Null
 Copy-Item -LiteralPath (Join-Path $projectRoot 'assets/sponsor.jpg') -Destination (Join-Path $stage 'assets/sponsor.jpg')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'docs') -Destination $stage -Recurse
@@ -47,7 +47,7 @@ Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/build-ui-bundle.py') -Dest
 Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/android_ui_policy.py') -Destination (Join-Path $stage 'tools')
 if(Test-Path -LiteralPath (Join-Path $projectRoot 'tools/ffmpeg/ffmpeg.exe')){Copy-Item -LiteralPath (Join-Path $projectRoot 'tools/ffmpeg') -Destination (Join-Path $stage 'tools') -Recurse}
 New-Item -ItemType Directory -Path (Join-Path $stage 'licenses') | Out-Null
-foreach ($pair in @(@('third_party/httplib/LICENSE','httplib-LICENSE'), @('third_party/json/LICENSE.MIT','json-LICENSE.MIT'), @('third_party/mbedtls/LICENSE','mbedtls-LICENSE'))) {
+foreach ($pair in @(@('third_party/qrcodegen/LICENSE','qrcodegen-LICENSE'), @('third_party/httplib/LICENSE','httplib-LICENSE'), @('third_party/json/LICENSE.MIT','json-LICENSE.MIT'), @('third_party/mbedtls/LICENSE','mbedtls-LICENSE'))) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $pair[0]) -Destination (Join-Path $stage ('licenses/'+$pair[1]))
 }
 $launch = "@echo off`r`n`"%~dp0NasServer.exe`"`r`npause`r`n"

@@ -1,4 +1,5 @@
 #include "service.hpp"
+#include "backup.hpp"
 #include <windows.h>
 #include <iostream>
 
@@ -34,16 +35,23 @@ int initializeAdmin(const nas::Config& config) {
 
 int wmain(int argc,wchar_t** argv) {
     try {
-        auto path=nas::executableDirectory()/"config/server.json";std::optional<bool> insecure;bool service=false,adminPassword=false;
+        auto path=nas::executableDirectory()/"config/server.json";std::optional<bool> insecure;bool service=false,adminPassword=false;nas::fs::path migrate,verify,restore;
         for(int i=1;i<argc;++i){std::wstring arg=argv[i];
             if(arg==L"--config"&&i+1<argc)path=nas::fs::absolute(argv[++i]);
             else if(arg==L"--allow-insecure-lan")insecure=true;
             else if(arg==L"--no-allow-insecure-lan")insecure=false;
+            else if(arg==L"--migrate-to"&&i+1<argc)migrate=nas::fs::absolute(argv[++i]);
+            else if(arg==L"--verify-library"&&i+1<argc)verify=nas::fs::absolute(argv[++i]);
+            else if(arg==L"--restore-backup"&&i+1<argc)restore=nas::fs::absolute(argv[++i]);
             else if(arg==L"--service")service=true;
             else if(arg==L"--initialize-admin")adminPassword=true;
             else if(arg==L"--version"){nas::consoleText(std::string(nas::Version)+"\n");return 0;}
             else if(arg==L"--sha256"&&i+1<argc){nas::consoleText(nas::hashFile(nas::fs::path(argv[++i]))+"\n");return 0;}
             else throw std::runtime_error("Usage: NasServer.exe [--config file] [--service] [--allow-insecure-lan|--no-allow-insecure-lan] [--initialize-admin] [--version] [--sha256 file]");
+        }
+        if(!migrate.empty()||!verify.empty()||!restore.empty()){
+            if(service||adminPassword||insecure.has_value()||(!migrate.empty()&&!verify.empty())||(!restore.empty()&&migrate.empty()))throw std::runtime_error("迁移/验证为停服维护命令，恢复快照需同时指定--migrate-to空目录");
+            if(!verify.empty())nas::consoleText(nas::verifyLibrary(verify).dump(2)+"\n");else nas::migrateLibrary(path,migrate,restore);return 0;
         }
         if(adminPassword){if(service||insecure.has_value())throw std::runtime_error("--initialize-admin is an offline maintenance command");return initializeAdmin(nas::Config::load(path));}
         if(service)return nas::runWindowsService(path,insecure);

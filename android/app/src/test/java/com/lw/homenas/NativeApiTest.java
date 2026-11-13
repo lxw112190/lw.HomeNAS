@@ -14,6 +14,16 @@ import static org.junit.Assert.*;
 @RunWith(RobolectricTestRunner.class) @Config(sdk=35)
 public class NativeApiTest {
     private static final String ID="0123456789abcdef0123456789abcdef0123456789abcdef";
+    @Test public void calendarAndMoveOptionsUseFixedAuthenticatedRoutes() throws Exception {
+        try(MockWebServer server=new MockWebServer()){
+            server.start();NativeApi api=new NativeApi(server.url("/").toString(),"",true,"test-token");
+            server.enqueue(new MockResponse().setBody("{\"items\":[],\"timeline_version\":2}"));api.get("assets/calendar?offset=480&type=image&q=trip",new RunControl(3000));
+            RecordedRequest calendar=server.takeRequest(2,TimeUnit.SECONDS);assertNotNull(calendar);assertEquals("/api/v1/assets/calendar?offset=480&type=image&q=trip",calendar.getPath());assertEquals("Bearer test-token",calendar.getHeader("Authorization"));
+            server.enqueue(new MockResponse().setBody("{\"items\":[],\"selected_count\":1}"));api.post("folders/move-options",new JSONObject().put("asset_ids",new org.json.JSONArray().put(ID)),new RunControl(3000));
+            RecordedRequest move=server.takeRequest(2,TimeUnit.SECONDS);assertNotNull(move);assertEquals("POST",move.getMethod());assertEquals("/api/v1/folders/move-options",move.getPath());assertEquals(ID,new JSONObject(move.getBody().readUtf8()).getJSONArray("asset_ids").getString(0));
+            assertThrows(java.io.IOException.class,()->api.get("assets/../../private/calendar",new RunControl(3000)));
+        }
+    }
     @Test public void metadataUsesAuthenticatedFixedRoute() throws Exception {
         try(MockWebServer server=new MockWebServer()){
             server.start();server.enqueue(new MockResponse().setBody("{\"image\":{\"exif\":{}}}"));

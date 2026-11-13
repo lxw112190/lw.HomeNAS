@@ -10,6 +10,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ITEMS = [
+    ('qrcodegen-cpp','https://raw.githubusercontent.com/nayuki/QR-Code-generator/v1.8.0/cpp/qrcodegen.cpp','third_party/qrcodegen/qrcodegen.cpp'),
+    ('qrcodegen-hpp','https://raw.githubusercontent.com/nayuki/QR-Code-generator/v1.8.0/cpp/qrcodegen.hpp','third_party/qrcodegen/qrcodegen.hpp'),
     ('httplib', 'https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.64.0/httplib.h', 'third_party/httplib/httplib.h'),
     ('httplib-license', 'https://raw.githubusercontent.com/yhirose/cpp-httplib/v0.64.0/LICENSE', 'third_party/httplib/LICENSE'),
     ('json', 'https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp', 'third_party/json/json.hpp'),
@@ -65,12 +67,15 @@ def fetch(item):
 if __name__ == '__main__':
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
         records = list(pool.map(fetch, ITEMS))
+    header=(ROOT/'third_party/qrcodegen/qrcodegen.hpp').read_text(encoding='utf-8').split('*/',1)[0]
+    license='\n'.join(line[3:] if line.startswith(' * ') else '' for line in header.splitlines()[1:]).strip()+'\n'
+    (ROOT/'third_party/qrcodegen/LICENSE').write_bytes(license.encode('utf-8'))
     files = []
-    for folder in ('httplib','json','sqlite','mbedtls'):
+    for folder in ('httplib','json','sqlite','mbedtls','qrcodegen'):
         for file in sorted((ROOT/'third_party'/folder).rglob('*')):
             if file.is_file():
                 files.append({'path': file.relative_to(ROOT).as_posix(), 'sha256': hashlib.sha256(file.read_bytes()).hexdigest()})
-    (ROOT / 'third_party/dependencies.lock.json').write_text(
-        json.dumps({'dependencies': records,'files':files}, indent=2) + '\n', encoding='utf-8')
+    (ROOT / 'third_party/dependencies.lock.json').write_bytes(
+        (json.dumps({'dependencies': records,'files':files}, indent=2) + '\n').encode('utf-8'))
     for record in records:
         print(record['name'], record['bytes'], record['sha256'])

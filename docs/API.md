@@ -102,3 +102,15 @@ Web上传目标接入后，`GET /api/v1/tasks` 和 `GET /api/v1/tasks/page` 也�
 成功返回 `{items:[folder对象...],selected_count:数量}`，只列出同时含有全部所选活动原件、且当前账号可以移出的来源文件夹。共享默认目录还要求普通用户有全部所选原件的上传归属；不因为有权浏览就获得移动权限。文件被删除或转入回收站时返回 409/SELECTION_CHANGED；重复/无效/超限为400，只读为403。返回空 items 代表没有共同的可管理来源；可以使用“加入文件夹”，或按来源分别移动。
 
 此接口不写分类或移动原件，不返回磁盘路径。来源只有一个时客户端可直接选择目标；多个来源时让用户选择。实际写入仍走已有 folders/{id}/move，每批最多100项，各批事务独立。预检不是锁定整个操作，其他用户仍可能改变成员关系；中途失败须报告已确认数量并保留其余项，不能显示全部成功。
+
+
+## 1.3.0补充
+
+- `GET /assets?order=timeline&from=毫秒&to=毫秒`：timeline_version=2，按taken→modified→created排序，范围为[from,to)。返回taken、taken_text、taken_zone、timeline_time、time_source；时间/大小仍是十进制字符串，游标与排序表达式一致。
+- `GET /assets/calendar?type=all&q=&offset=480`：登录后按调用方当前UTC分钟偏移汇总年月（最多2000组），返回items[{month,count}]及remaining旧图片索引数；offset限-840～840。
+- `GET /folders` / `GET /folders/{id}`：增加photo_count、video_count、total_bytes。为活动目录内容引用统计，不代表物理去重后新增占用。
+- `GET /connection`：登录后读取可连接地址，不包含认证凭据；`GET /connection/qr?endpoint=...`只允许本服务列出的地址，返回本地生成的SVG。
+- `POST /admin/backups {}`：仅管理员，201返回metadata快照清单（contains_originals=false）。`GET /admin/backups`列最近100份；`GET /admin/backups/{id}/download`为管理员流式ZIP64下载，含catalog.db、config/server.json、backup.json，不含原件。会话凭据不保存在快照里。
+- 停服维护：`--migrate-to 空目录`、`--verify-library 迁移目录`、`--restore-backup 解压目录 --migrate-to 空目录`。均不覆盖源资料。完整迁移包含上传临时文件和确认偏移；元数据恢复不能保证这些文件，未完成任务改为ERROR / RESTORED_METADATA_RESELECT，客户端应明确重试。
+
+完整使用与限制见[1.3.0说明](20261113-时间线备份迁移与手机连接.md)。

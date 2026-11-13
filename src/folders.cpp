@@ -5,7 +5,7 @@
 namespace nas {
 namespace {
 bool folderId(const std::string& id){return id=="default"||(id.size()==48&&id.find_first_not_of("0123456789abcdef")==std::string::npos);}
-const std::string folderFields="SELECT f.id,f.name,f.description,f.owner_id,f.created,f.updated,(SELECT display_name FROM users WHERE id=f.owner_id) AS owner_name,(SELECT count(*) FROM folder_items i JOIN assets a ON a.id=i.asset_id AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id) WHERE i.folder_id=f.id) AS item_count FROM folders f ";
+const std::string folderFields="SELECT f.id,f.name,f.description,f.owner_id,f.created,f.updated,(SELECT display_name FROM users WHERE id=f.owner_id) AS owner_name FROM folders f ";
 }
 void Store::initializeFolders(){
     db.transaction([&]{
@@ -23,7 +23,9 @@ json Store::folder(const std::string& id,const Identity& who,bool write){
     auto rows=db.query(folderFields+"WHERE f.id=? AND f.deleted=0",{id});if(rows.empty())throw Error(404,"FOLDER_NOT_FOUND","文件夹不存在或已删除");
     auto row=rows[0];bool writable=who.canUpload()&&(id=="default"||who.admin||row["owner_id"]==who.userId);
     row["is_default"]=id=="default";row["can_write"]=writable;row["can_edit"]=writable&&id!="default";
-    if(write&&!writable)throw Error(403,"FOLDER_OWNER_REQUIRED","只能写入默认文件夹或自己创建的文件夹");return row;
+    if(write&&!writable)throw Error(403,"FOLDER_OWNER_REQUIRED","只能写入默认文件夹或自己创建的文件夹");
+    // Upload permission checks must not recount a large destination folder per file.
+    if(!write){auto stats=db.query("SELECT count(*) AS item_count,COALESCE(sum(a.size),0) AS total_bytes,COALESCE(sum(a.category='image'),0) AS photo_count,COALESCE(sum(a.category='video'),0) AS video_count FROM folder_items i JOIN assets a ON a.id=i.asset_id AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id) WHERE i.folder_id=?",{id})[0];for(auto it=stats.begin();it!=stats.end();++it)row[it.key()]=it.value();}return row;
 }
 std::string Store::resolveFolder(const std::string& id,const Identity& who){
     if(!folderId(id))throw Error(400,"INVALID_FOLDER","文件夹标识无效");

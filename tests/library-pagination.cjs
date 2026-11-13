@@ -74,7 +74,7 @@ async function run(JSDOM){
   h.postHook=null;const retry=h.click('移入回收站');await h.choose('确定');await retry;const posts=h.calls.filter(c=>c.path==='assets/trash');check(posts.length===4&&posts[2].value.asset_ids.length===100&&posts[3].value.asset_ids.length===5,'retry submits only remaining 100 + 5');check(h.removed.size===205&&h.count()===0,'retry completes without resubmitting confirmed first batch');h.dom.window.close();
  }
  {
-  const h=fixture(JSDOM,55);h.rows[0].category='file';await h.w.loadLibrary(false);await h.click('选择文件');h.d.querySelector('[data-asset-id]').click();await h.w.loadLibrary(true);h.d.querySelector('[data-asset-id]').click();await tick();await h.click('加入图集');
+  const h=fixture(JSDOM,55);h.rows[0].category='file';await h.w.loadLibrary(false);await h.click('选择文件');h.d.querySelector('[data-asset-id]').click();await h.w.loadLibrary(true);h.d.querySelector('[data-asset-id]').click();await tick();await h.click('更多整理');await h.click('加入图集');
   check(!h.d.querySelector('dialog')&&h.errors.some(e=>e.includes('非照片/视频')),'album validation inspects off-page files before any write');check(!h.calls.some(c=>c.path.endsWith('/add')),'mixed selection never causes a partial album add');h.dom.window.close();
  }
  {

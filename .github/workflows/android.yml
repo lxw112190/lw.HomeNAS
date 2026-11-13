@@ -69,6 +69,7 @@ jobs:
           node tests/collections-dom.cjs tests/dom/node_modules/jsdom
           node tests/backup-picker-dom.cjs tests/dom/node_modules/jsdom
           node tests/backup-summary-dom.cjs
+          node tests/library-tools-dom.cjs
       - name: Restore persistent Debug signing identity
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:

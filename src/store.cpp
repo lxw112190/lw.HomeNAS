@@ -112,9 +112,9 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
       CREATE TABLE IF NOT EXISTS album_items(album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,asset_id TEXT NOT NULL REFERENCES assets(id),PRIMARY KEY(album_id,asset_id));
     )SQL");
     db.exec("CREATE INDEX IF NOT EXISTS asset_pending_video ON assets(created,id) WHERE state='READY' AND category='video' AND preview='PENDING';");
-    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});}
+    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");initializeTimeline();serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});metadataWorker_=std::thread([this]{metadataWorker();});}
 }
-Store::~Store() { stopping=true; queueCondition_.notify_all();videoCondition_.notify_all(); if(worker_.joinable()) worker_.join();if(videoWorker_.joinable())videoWorker_.join(); }
+Store::~Store() { stopping=true; queueCondition_.notify_all();videoCondition_.notify_all(); if(worker_.joinable()) worker_.join();if(videoWorker_.joinable())videoWorker_.join();if(metadataWorker_.joinable())metadataWorker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
 void Store::setting(const std::string& key,const std::string& value) { db.exec("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",{key,value}); }
 void Store::migrateAccounts() {
@@ -332,6 +332,7 @@ void Store::makePreview(const json& row) {
     auto mutex=sessionMutex("asset:"+row["id"].get<std::string>());std::lock_guard<std::mutex> guard(*mutex);
     if(db.query("SELECT id FROM assets WHERE id=? AND state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)",{row["id"]}).empty())return;
     if(row["category"]=="image") {
+        updateCaptureTime(row);
         try{generateThumbnail(originalPath(row),config.data/"cache"/(row["id"].get<std::string>()+".jpg"));db.exec("UPDATE assets SET preview='READY' WHERE id=?",{row["id"]});}
         catch(...){db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});}
     } else if(row["category"]!="video"||!videoToolAvailable(config))db.exec("UPDATE assets SET preview='UNAVAILABLE' WHERE id=?",{row["id"]});
@@ -382,8 +383,8 @@ json Store::assets(const std::string& before,const std::string& type,const std::
     if(limit<1||limit>100)throw Error(400,"INVALID_LIMIT","每页数量需1至100");
     if(order!="created"&&order!="timeline")throw Error(400,"INVALID_ORDER","排序方式无效");
     const bool timeline=order=="timeline",filtered=type=="image"||type=="video"||type=="file";
-    const std::string clock=timeline?"(CASE WHEN modified>0 THEN modified ELSE created END)":"created";
-    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview,(CASE WHEN modified>0 THEN modified ELSE created END) AS timeline_time FROM assets INDEXED BY "+std::string(timeline?(filtered?"asset_category_file_time":"asset_file_time"):(filtered?"asset_category_timeline":"asset_ready_timeline"))+" WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)";
+    const std::string clock=timeline?TimelineClock:"created";
+    Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview,taken,taken_text,taken_zone,"+std::string(TimelineClock)+" AS timeline_time FROM assets INDEXED BY "+std::string(timeline?(filtered?"asset_category_capture_time":"asset_capture_time"):(filtered?"asset_category_timeline":"asset_ready_timeline"))+" WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)";
     if(!before.empty()){
         auto colon=before.find(':');if(colon==std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");auto time=before.substr(0,colon),id=before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
@@ -401,7 +402,7 @@ json Store::assets(const std::string& before,const std::string& type,const std::
     if(rows.size()>static_cast<size_t>(limit)){rows.erase(rows.end()-1);}
     else limit=0;
     if(limit>0){auto last=rows.back();next=last[timeline?"timeline_time":"created"].get<std::string>()+":"+last["id"].get<std::string>();}
-    json result={{"items",rows},{"next",next},{"order",order}};if(!from.empty()){result["from"]=from;result["to"]=to;}return result;
+    for(auto& row:rows)row["time_source"]=number(row,"taken")?"exif":number(row,"modified")?"file":"import";json result={{"items",rows},{"next",next},{"order",order},{"timeline_version",2}};if(!from.empty()){result["from"]=from;result["to"]=to;}return result;
 }
 json Store::sourceStatus(const json& input,const Identity& who) {
     if(!input.contains("task_ids")||!input["task_ids"].is_array()||input["task_ids"].empty()||input["task_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次核对1至100项");

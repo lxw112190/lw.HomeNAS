@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory=$true)][ValidateRange(1,2147483647)][int]$CiNumber,
-    [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$CiSha
+    [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$CiSha,
+    [string]$OutputDirectory
 )
 $ErrorActionPreference='Stop'
 $root=Split-Path -Parent $PSScriptRoot
@@ -21,6 +22,8 @@ if($LASTEXITCODE -ne 0){throw 'Collection DOM checks failed'}
 if($LASTEXITCODE -ne 0){throw 'Web upload destination checks failed'}
 & node (Join-Path $root 'tests/backup-picker-dom.cjs') (Join-Path $root 'tests/dom/node_modules/jsdom')
 if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
+& node (Join-Path $root 'tests/library-tools-dom.cjs')
+if($LASTEXITCODE -ne 0){throw 'Timeline and connection UI checks failed'}
 & node (Join-Path $root 'tests/backup-summary-dom.cjs')
 if($LASTEXITCODE -ne 0){throw 'APK backup summary DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')
@@ -31,6 +34,7 @@ Invoke-ReleasePython @('tests/bundled_clients.py')
 Invoke-ReleasePython @('tests/parallel_uploads.py')
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
+Invoke-ReleasePython @('tests/library_upgrade.py')
 Invoke-ReleasePython @('tests/recycle.py')
 Invoke-ReleasePython @('tests/library_ux.py')
 & node (Join-Path $root 'tests/purge-ui.cjs')
@@ -46,5 +50,6 @@ if($LASTEXITCODE -ne 0){throw 'Windows PowerShell 5.1 deployment/logging checks 
 $resultFile=Join-Path $root 'deliveries/server-package-result.json'
 & (Join-Path $PSScriptRoot 'package.ps1') -Executable $exe -ReleaseLabel ('ci'+$CiNumber) -ResultFile $resultFile
 $result=Get-Content -LiteralPath $resultFile -Raw -Encoding UTF8 | ConvertFrom-Json
-Invoke-ReleasePython @('tools/server-artifact.py','create','--archive',$result.archive,'--output',(Join-Path $root 'deliveries/server-assets'),'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
+$artifactOutput=if($OutputDirectory){[IO.Path]::GetFullPath($OutputDirectory)}else{Join-Path $root 'deliveries/server-assets'}
+Invoke-ReleasePython @('tools/server-artifact.py','create','--archive',$result.archive,'--output',$artifactOutput,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 Write-Output 'Tested standalone Windows package ready; final assembly will reuse this executable.'

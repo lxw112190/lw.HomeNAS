@@ -106,7 +106,7 @@ class Harness:
     def run(self):
         self.start()
         try:
-            for resource in ['', 'boot.js', 'app.js', 'library-collections.js', 'photo-viewer.js', 'style.css', 'sha256.js', 'hash-worker.js'] + ['views/'+name+'.html' for name in ['login','home','library','transfers','users','settings','dialogs']]:
+            for resource in ['', 'boot.js', 'app.js', 'library-collections.js', 'photo-viewer.js', 'style.css', 'sha256.js', 'hash-worker.js', 'timeline-tools.js', 'library-tools.js'] + ['views/'+name+'.html' for name in ['login','home','library','transfers','users','settings','dialogs']]:
                 response=requests.get(self.url.replace('/api/v1/','/')+resource,timeout=10)
                 self.check(response.status_code==200 and len(response.content)>50,'bundled web resource: '+(resource or 'index.html'))
             self.check(requests.get(self.url + 'assets').status_code == 401, 'anonymous media access rejected')

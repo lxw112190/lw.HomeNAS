@@ -13,7 +13,7 @@ void importBundledClient(Store& store,const fs::path& source,bool apk){
     auto input=json::parse(readText(manifest,65536));auto metadata=apk?input:json::parse(decodeEnvelope(text(input,"payload",12000)));
     auto code=clientReleaseNumber(input,apk);auto hash=text(metadata,"sha256",64);auto size=number(metadata,"size");
     if(!code||code>2147483647||hash.size()!=64||hash.find_first_not_of("0123456789abcdef")!=std::string::npos||!size||size>(apk?128ULL:20ULL)*1024*1024)throw std::runtime_error("Invalid bundled client metadata");
-    if(apk){text(input,"versionName",64);text(input,"notes",4096,true);}else{text(input,"signature",2048);auto native=number(metadata,"minNative");if(!native||native>13)throw std::runtime_error("Unsupported bundled UI protocol");}
+    if(apk){text(input,"versionName",64);text(input,"notes",4096,true);}else{text(input,"signature",2048);auto native=number(metadata,"minNative");if(!native||native>14)throw std::runtime_error("Unsupported bundled UI protocol");}
     auto root=maintenanceRoot(store),catalog=root/(kind+".json"),withdrawn=root/(kind+"-withdrawn.json");
     if(fs::exists(withdrawn)&&code<=number(json::parse(readText(withdrawn,65536)),"version")){consoleText("Bundled "+kind+": retained administrator withdrawal.\n");return;}
     bool sameVersion=false;
@@ -66,7 +66,7 @@ void maintenanceRoutes(httplib::Server& server,Store& store){
     server.Post("/api/v1/admin/client/(apk|ui)/publish",[&store](const auto& request,auto& response){
         admin(store.authenticate(token(request)));auto input=body(request);bool apk=request.matches[1]=="apk";auto root=maintenanceRoot(store);std::string hash;
         if(apk){hash=text(input,"sha256",64);auto code=number(input,"versionCode");if(!code||code>2147483647)throw Error(400,"INVALID_VERSION","versionCode无效");text(input,"versionName",64);text(input,"notes",4096,true);}
-        else{auto envelope=input;auto encoded=text(envelope,"payload",12000);text(envelope,"signature",2048);auto decoded=decodeEnvelope(encoded);auto manifest=json::parse(decoded);hash=text(manifest,"sha256",64);if(number(manifest,"revision")==0||number(manifest,"minNative")==0||number(manifest,"minNative")>13)throw Error(400,"INVALID_VERSION","资源包协议或版本不支持");}
+        else{auto envelope=input;auto encoded=text(envelope,"payload",12000);text(envelope,"signature",2048);auto decoded=decodeEnvelope(encoded);auto manifest=json::parse(decoded);hash=text(manifest,"sha256",64);if(number(manifest,"revision")==0||number(manifest,"minNative")==0||number(manifest,"minNative")>14)throw Error(400,"INVALID_VERSION","资源包协议或版本不支持");}
         if(hash.size()!=64||hash.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_HASH","更新包摘要无效");
         auto file=root/"packages"/(hash+(apk?".apk":".zip"));if(!fs::exists(file))throw Error(404,"PACKAGE_MISSING","先上传对应安装包或资源包");
         if(apk)input["size"]=std::to_string(fs::file_size(file));

@@ -12,6 +12,7 @@ uint32_t crc32(uint32_t crc,const char* data,size_t count){
     for(size_t i=0;i<count;++i)crc=table[(crc^static_cast<unsigned char>(data[i]))&255]^(crc>>8);return crc;
 }
 }
+void streamArchive(httplib::Response& response,const std::shared_ptr<std::vector<Entry>>& entries,const std::string& name);
 void exportArchive(Store& store,httplib::Response& response,const json& input){
     if(!input.contains("asset_ids")||!input["asset_ids"].is_array()||input["asset_ids"].empty()||input["asset_ids"].size()>1000)throw Error(400,"INVALID_BATCH","每次导出1至1000项");
     auto entries=std::make_shared<std::vector<Entry>>();std::set<std::string> seen;
@@ -24,7 +25,13 @@ void exportArchive(Store& store,httplib::Response& response,const json& input){
         auto ms=number(row,"modified");if(!ms)ms=number(row,"created");std::time_t seconds=static_cast<std::time_t>(ms/1000);std::tm tm{};
         if(localtime_s(&tm,&seconds)==0&&tm.tm_year>=80&&tm.tm_year<=207){auto& e=entries->back();e.time=static_cast<uint16_t>((tm.tm_hour<<11)|(tm.tm_min<<5)|(tm.tm_sec/2));e.date=static_cast<uint16_t>(((tm.tm_year-80)<<9)|((tm.tm_mon+1)<<5)|tm.tm_mday);}
     }
-    response.set_header("Content-Disposition","attachment; filename=\"HomeNAS-export.zip\"");response.set_header("Cache-Control","private, no-store");
+    streamArchive(response,entries,"HomeNAS-export.zip");
+}
+void exportFiles(httplib::Response& response,const std::vector<std::pair<fs::path,std::string>>& files,const std::string& name){
+    auto entries=std::make_shared<std::vector<Entry>>();for(const auto& item:files){auto f=std::make_shared<File>(item.first,false);entries->push_back({f,item.second,f->size()});}streamArchive(response,entries,name);
+}
+void streamArchive(httplib::Response& response,const std::shared_ptr<std::vector<Entry>>& entries,const std::string& name){
+    response.set_header("Content-Disposition","attachment; filename=\""+name+"\"");response.set_header("Cache-Control","private, no-store");
     response.set_chunked_content_provider("application/zip",[entries](size_t,httplib::DataSink& sink){
         uint64_t position=0;auto write=[&](const char* data,size_t size){if(!sink.is_writable()||!sink.write(data,size))return false;position+=size;return true;};auto emit=[&](const std::string& s){return write(s.data(),s.size());};std::array<char,65536> buffer{};
         try{

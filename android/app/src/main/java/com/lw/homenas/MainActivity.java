@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",13).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",14).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         JSONObject transfer=TransferProgress.snapshot(session==null?"":session.scope);long[] totals=TaskStore.get(this).pendingTotals(session==null?"":session.scope);
         transfer.put("remaining_items",totals[0]).put("remaining_bytes",Long.toString(totals[1]));result.put("enqueue",enqueueJob.snapshot(session==null?"":session.scope));
@@ -168,6 +168,10 @@ public final class MainActivity extends Activity {
     private Object dispatch(JSONObject input) throws Exception {
         String action=input.getString("action");JSONObject data=input.optJSONObject("data");if(data==null)data=new JSONObject();
         switch(action) {
+            case "connectionDraft": {String value=data.getString("endpoint");if(value.length()>512)throw new IllegalArgumentException("电脑地址过长");String endpoint=Protocol.endpoint(value,true);settings.rememberConnection(endpoint,endpoint.startsWith("http:"));settings.message("已填写连接草稿，请测试后重新登录；当前队列仍使用原连接。");return snapshot();}
+            case "scanConnection": ui(()->new com.google.zxing.integration.android.IntentIntegrator(this).setDesiredBarcodeFormats(java.util.Collections.singletonList("QR_CODE")).setPrompt("扫描电脑网页显示的HomeNAS连接二维码").setBeepEnabled(false).setOrientationLocked(false).initiateScan());return new JSONObject().put("message","请扫描电脑网页的连接二维码");
+            case "timelineCalendar": {Settings.Session session=requireSession(false);int offset=data.optInt("offset",0);if(offset < -840||offset>840)throw new IllegalArgumentException("时区参数无效");JSONObject result=authenticatedGet(session,"assets/calendar?offset="+offset+"&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8"));if(!settings.current(session))throw new SecurityException("登录身份已改变");return result;}
+            case "folderMoveOptions": {Settings.Session session=requireSession(true);org.json.JSONArray ids=data.getJSONArray("asset_ids");if(ids.length()<1||ids.length()>1000)throw new IllegalArgumentException("每次最多1000项");for(int i=0;i<ids.length();i++)if(!Protocol.assetId(ids.getString(i)))throw new IllegalArgumentException("文件标识无效");JSONObject result;try{result=api(session).post("folders/move-options",new JSONObject().put("asset_ids",ids),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}if(!settings.current(session))throw new SecurityException("登录身份已改变");return result;}
             case "finishActivity": ui(this::finish);return new JSONObject();
             case "backupFolder": {
                 Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");
@@ -247,10 +251,12 @@ public final class MainActivity extends Activity {
             }
             case "exportDiagnostics": ui(()->{Intent pick=new Intent(Intent.ACTION_CREATE_DOCUMENT).setType("application/zip").addCategory(Intent.CATEGORY_OPENABLE).putExtra(Intent.EXTRA_TITLE,"HomeNAS-诊断-"+Diagnostics.session()+".zip");startActivityForResult(pick,EXPORT_LOGS);});return new JSONObject();
             case "testConnection": {
-                String endpoint=connection(data);String pem=endpoint.startsWith("https:")&&data.optBoolean("trustCertificate")?settings.prefs.getString("pending_cert",""):"";
-                JSONObject server=new NativeApi(endpoint,pem,endpoint.startsWith("http:"),"").get("server",new RunControl(15000));
-                if(!server.optString("authentication").equals("username_password"))throw new java.io.IOException("电脑端需使用0.2及以上账号版服务");
-                settings.message("连接成功：电脑服务 "+server.optString("version")+"；可继续输入账号密码登录");return new JSONObject().put("endpoint",endpoint).put("version",server.optString("version"));
+                long started=android.os.SystemClock.elapsedRealtime();String endpoint="",stage="地址校验";
+                try{endpoint=connection(data);String pem=endpoint.startsWith("https:")&&data.optBoolean("trustCertificate")?settings.prefs.getString("pending_cert",""):"";
+                    stage="网络 / 证书 / 服务响应";JSONObject server=new NativeApi(endpoint,pem,endpoint.startsWith("http:"),"").get("server",new RunControl(15000));
+                    stage="HomeNAS服务识别";if(!server.optString("authentication").equals("username_password")||!server.optString("server_id").matches("[a-f0-9]{48}"))throw new java.io.IOException("目标不是兼容的账号版HomeNAS服务，请检查端口");
+                    settings.rememberServer(endpoint,server.optString("name","HomeNAS"));settings.message("连接成功；请输入账号密码登录");return new JSONObject().put("ok",true).put("endpoint",endpoint).put("version",server.optString("version")).put("elapsedMs",android.os.SystemClock.elapsedRealtime()-started);
+                }catch(Exception error){String kind=error instanceof java.net.UnknownHostException?"域名解析":error instanceof javax.net.ssl.SSLException?"HTTPS证书校验":error instanceof java.net.ConnectException?"TCP连接":error instanceof java.net.SocketTimeoutException?"连接超时":error instanceof NativeApi.Failure?"HTTP服务响应":stage;Diagnostics.error("connection.test",error);return new JSONObject().put("ok",false).put("stage",kind).put("message",safeError(error)).put("endpoint",endpoint).put("elapsedMs",android.os.SystemClock.elapsedRealtime()-started);}
             }
             case "login": {
                 enqueueJob.cancel();settings.pause(true);BackupEngine.stopActive();stopService(new Intent(this,BackupService.class));
@@ -263,7 +269,7 @@ public final class MainActivity extends Activity {
                 JSONObject result;try{result=probe.post("login",login,control);}finally{login.remove("password");data.remove("password");}
                 String token=result.getString("token");if(!token.matches("[a-f0-9]{64}"))throw new java.io.IOException("登录响应不合法");
                 JSONObject me=new NativeApi(endpoint,pem,http,token).get("me",control);
-                queueBefore="";queueFilter="active";settings.save(endpoint,pem,http,server.getString("server_id"),me,token);BackupScheduler.cancel(this);assets.clear();resetApi();
+                queueBefore="";queueFilter="active";settings.save(endpoint,pem,http,server.getString("server_id"),me,token);settings.rememberServer(endpoint,server.optString("name","HomeNAS"));BackupScheduler.cancel(this);assets.clear();resetApi();
                 Diagnostics.event("login.saved","role="+me.optString("role")+" can_upload="+me.optBoolean("can_upload")+" encrypted_session=true");
                 settings.message("登录成功；请选择文件或相册，点击立即备份");return snapshot();
             }
@@ -305,7 +311,7 @@ public final class MainActivity extends Activity {
                 String query="before="+java.net.URLEncoder.encode(cursor,"UTF-8")+"&limit=48&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8")+"&order="+java.net.URLEncoder.encode(data.optString("order","created"),"UTF-8");
                 for(String key:new String[]{"from","to","album_id"})if(data.has(key))query+="&"+key+"="+java.net.URLEncoder.encode(data.getString(key),"UTF-8");
                 String path="assets?"+query;
-                JSONObject result=authenticatedGet(session,path);for(String key:new String[]{"from","to"})if(data.has(key)&&!result.optString(key).equals(data.getString(key)))throw new java.io.IOException("按天选择需要升级电脑端至1.0.2");if(data.has("album_id")&&!result.optString("membership_album_id").equals(data.getString("album_id")))throw new java.io.IOException("图集标记需要升级电脑端至1.0.2");if(data.optString("order").equals("timeline")&&!result.optString("order").equals("timeline"))throw new java.io.IOException("按文件时间需升级电脑服务至0.3；可先选择入库时间");if(!settings.current(session))throw new SecurityException("登录身份已改变");
+                JSONObject result=authenticatedGet(session,path);for(String key:new String[]{"from","to"})if(data.has(key)&&!result.optString(key).equals(data.getString(key)))throw new java.io.IOException("按天选择需要升级电脑端至1.0.2");if(data.has("album_id")&&!result.optString("membership_album_id").equals(data.getString("album_id")))throw new java.io.IOException("图集标记需要升级电脑端至1.0.2");if(data.optString("order").equals("timeline")&&(!result.optString("order").equals("timeline")||result.optInt("timeline_version")<2))throw new java.io.IOException("拍摄时间排序需要电脑服务1.3.0；请先更新后台");if(!settings.current(session))throw new SecurityException("登录身份已改变");
                 if(!data.optBoolean("selectionOnly")){if(data.optBoolean("pageMode")||assets.size()>200)assets.clear();JSONArray items=result.getJSONArray("items");for(int i=0;i<items.length();i++){JSONObject item=items.getJSONObject(i);assets.put(item.getString("id"),item);}}return result;
             }
             case "download": {
@@ -348,6 +354,9 @@ public final class MainActivity extends Activity {
     }
     @Override protected void onActivityResult(int request,int result,Intent intent) {
         super.onActivityResult(request,result,intent);
+        com.google.zxing.integration.android.IntentResult scanned=com.google.zxing.integration.android.IntentIntegrator.parseActivityResult(request,result,intent);
+        if(scanned!=null){if(scanned.getContents()==null){settings.message("已取消扫码");return;}try{String contents=scanned.getContents();if(contents.length()>512)throw new IllegalArgumentException("连接二维码内容过长");String endpoint=Protocol.endpoint(contents,contents.startsWith("http:"));settings.rememberConnection(endpoint,endpoint.startsWith("http:"));settings.message("已填写连接草稿，请测试后重新登录；当前队列仍使用原连接。");if(web!=null)web.evaluateJavascript("window.dispatchEvent(new CustomEvent('homenas-connection-filled',{detail:{endpoint:"+JSONObject.quote(endpoint)+"}}));",null);}catch(Exception error){settings.message("二维码不是有效HomeNAS地址："+safeError(error));}return;}
+
         Diagnostics.event("picker.result","request="+request+" result="+result);
         if(request==EXPORT_LOGS){if(result==RESULT_OK&&intent!=null&&intent.getData()!=null){Uri destination=intent.getData();if(!"content".equals(destination.getScheme())){settings.message("请选择系统文档保存位置");return;}io.execute(()->{try(OutputStream output=getContentResolver().openOutputStream(destination,"wt")){if(output==null)throw new java.io.IOException("无法写入日志文件");Diagnostics.export(this,output);settings.message("诊断日志ZIP已导出，可随问题描述发送");}catch(Exception error){settings.message("日志导出失败："+safeError(error)+" ["+Diagnostics.error("logs.export",error)+"]");}});}return;}
         if(request==SAVE) {

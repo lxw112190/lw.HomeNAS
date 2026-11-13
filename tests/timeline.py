@@ -22,7 +22,7 @@ try:
  h.check(len(seen)==125 and len(set(seen))==125 and times==sorted(times,reverse=True),'timeline walks equal timestamps and missing modified times without duplicates or omissions')
  h.check(h.admin.get(h.url+'assets',params={'order':'bad'}).status_code==400,'invalid timeline order rejected')
  with sqlite3.connect(h.home/'数据/catalog.db') as db:
-  plan=str(db.execute("EXPLAIN QUERY PLAN SELECT id FROM assets INDEXED BY asset_file_time WHERE state='READY' AND ((CASE WHEN modified>0 THEN modified ELSE created END),id)<(CAST(? AS INTEGER),?) ORDER BY (CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC LIMIT 49",('100000','f'*48)).fetchall());h.check('TEMP B-TREE' not in plan,'file timeline uses ordered expression index')
+  plan=str(db.execute("EXPLAIN QUERY PLAN SELECT id FROM assets INDEXED BY asset_capture_time WHERE state='READY' AND ((CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END),id)<(CAST(? AS INTEGER),?) ORDER BY (CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END) DESC,id DESC LIMIT 49",('100000','f'*48)).fetchall());h.check('TEMP B-TREE' not in plan,'file timeline uses ordered expression index')
   original=db.execute('SELECT path FROM assets WHERE id=?',(ready['asset_id'],)).fetchone()[0]
  (h.home/'数据'/original).unlink();h.check(h.post('sources/status',{'task_ids':[task['id']]})['items'][0]['state']=='MISSING','status will not mark a vanished original as backed up')
  (h.home/'TIMELINE-PASS.json').write_text(json.dumps({'checks':h.checks}),encoding='utf-8');print('Evidence:',h.home)

@@ -17,6 +17,7 @@
     <ClCompile Include="src\thumbnail.cpp" />
     <ClCompile Include="src\server.cpp" />
     <ClCompile Include="src\export.cpp" />
+    <ClCompile Include="src\timeline.cpp" /><ClCompile Include="src\backup.cpp" /><ClCompile Include="src\connection.cpp" /><ClCompile Include="third_party\qrcodegen\qrcodegen.cpp" />
     <ClCompile Include="src\service.cpp" />
     <ClCompile Include="third_party\sqlite\sqlite3.c" />
     <ClCompile Include="third_party\mbedtls\library\aes.c" />

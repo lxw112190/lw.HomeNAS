@@ -1,43 +1,15 @@
-> 当前开发 **1.2.0 / code22 / nativeApi13**：新增备份中心、按账号保存的最近运行/扫描状态、失败与自动备份设置入口；CI与网页登录下载APK使用短名称HomeNAS-1.2.0.apk。固定签名保留，首次启动升级协议会清除旧资源指针并使用新内置界面，保留账号和队列。Android完整编译、Robolectric/模拟器/真机待新CI。[设计与验证](../docs/20261113-备份中心与APK短文件名.md)。
+# lw.HomeNAS Android
 
-> 已发布 **1.2.0 / code21 / nativeApi12**：配套完整Windows包，服务启动自动发布包内APK，手机可从网页登录页下载。[发布与升级说明](../docs/20261112-v1.2.0发布说明.md)。
+> 当前开发 **1.3.0 / code23 / nativeApi14**：拍摄时间线及年/月日期范围、文件夹主要入口和目录统计、批量移动、扫码填地址、最近5台服务器与连接检测。需配套1.3.0后台，扫码使用时申请相机权限；固定签名保留，升级回内置页并保留账号/队列。完整Android编译、Robolectric与真机结果待新CI。[使用与验证](../docs/20261113-时间线备份迁移与手机连接.md)。
 
-> 历史源码 **1.1.1 / code20 / nativeApi12**：选好新目录后重新选图时，其他目录的待上传记录不再阻止新目录入队；自动相册扫描在切换目录/账号后停止，任务与进度显示实际目标。共用资料库控制器修复跨页选择、失败重试与分页按钮状态，增加已选清单。[使用与验证](../docs/20261107-跨页整理与手机目标目录修复.md)。
-
-> 历史开发源码 **1.1.0 / code19 / nativeApi11**：新增全选、按月选择及排除，原生分页入队可停止；默认2路上传，可选1/2/3路，总速度与每文件阶段独立展示。[记录](../docs/20261106-APK整月选择与并发备份.md)。
-
-> 历史开发源码 **1.0.2 / code18 / nativeApi10**：图集添加页标记已有成员，支持跨页按天全选并区分操作颜色；开源页改为卡片入口与统一阅读样式。保留应用内Media3音视频播放器及认证分段读取。编译、Lint、Robolectric和模拟器测试待新CI，HEVC实际效果需手机验证。旧界面资源在升级时回到新内置界面，固定签名沿用。[本轮功能与验证](../docs/20261106-资料库批量操作与图集交互.md)。
-
-> 历史开发记录 **0.8.0-dev / code13 / nativeApi7**：可选择备份目标文件夹，手动及自动备份共用当前目标；入队后固定目录，旧队列升级到默认目录并保留确认进度。需要电脑服务0.5和CI编译新APK，固定签名不变。界面资源最低协议7，升级回到新版内置页面。[使用与验证](../docs/20261105-备份文件夹.md)。
-
-> 已分发 **CI12 Release 0.7.0-dev/code10/nativeApi4**，配套r7。Debug与Release证书一致，固定签名基准记录在[公开证书指纹](signing-certificate.json)。构建、JVM单元测试和Android15模拟器7项检查通过。[部署说明](../docs/20261105-CI12安卓安装包发布.md)。下文其他版本均为历史记录。
-
-> 当前源码 **0.7.0-dev / code10 / nativeApi4**，新增图集、时间线/图集切换、输入去焦点外框及分层返回。签名资源 **r7/minNative4** 已准备；新 APK 需 CI 编译、真机验证。旧活动资源在首次升级原生协议时让位于新内置界面。[本轮说明](../docs/20261105-图集与手机返回键.md)。下列 CI9/code9 等均为历史记录。
-
-> 默认 APK 已更新为核验过的 **CI9 0.6.2-dev/code9**，配套 r6 与电脑端 FFmpeg。源码/页面与 APK 匹配，测试报告不在 Artifact 内，本机未运行 APK。[部署与签名限制](../docs/20261105-CI9安卓安装包发布.md)。下文“待 CI”及 CI7/CI5 的内容为历史记录。
-
-> 当前开发源码 **0.6.2-dev/code9**，包含相册授权/日期查询、备份速度、样式与诊断修复，等待 CI。[本轮说明](../docs/20261104-相册权限与媒体预览优化.md)。
-
-> 固定 Debug 签名支持属于下一次 CI 源码 **0.6.2-dev / code9**；本次部署包的实际 APK 保持已核验 **CI7 0.6.0-dev / code7**。
-
-> 最新默认 APK 为已核验 CI7 0.6.0-dev / code7，配套页面资源 r5。[部署及换签说明](../docs/20261104-CI7安卓安装包发布.md)。下文 CI5/r4 为历史分发记录。
-
-> 本轮源码升级 0.6.0-dev / versionCode 7 / nativeApi 3：时间线、图片/视频预览、按天选择及已备份核对。[功能与验证范围](../docs/20261104-时间线与按天选图.md)。CI7 APK 已收到并核验；设备功能仍待真机验证。
-
-> 安卓页面使用简约资源r4，已修复r3许可证TXT导致解包失败的问题，现有CI3/CI5无需重装。[界面预览与步骤](../docs/20261104-安卓简约界面r3.md)。
-
-# Android 家庭备份客户端
-
-源码版本0.6.2-dev（versionCode 9），兼容0.2账号权限版电脑服务；配合0.2.1可关联电脑请求日志。采用Java + 可信内置网页，沿用[lw.Web2Android](https://github.com/lxw112190/lw.Web2Android/tree/main/runtime)的WebViewAssetLoader方式，为NAS单独增加原生队列、传输、相册及后台调度。不修改普通Web2Android Runtime或现有通用打包器。
-
-**已分发版本记录：** 默认APK仍是已核验的CI5 0.5.0-dev / versionCode 6原件，原生队列分页、批量入队及摘要进度均由它提供。此次新外观通过签名资源r4更新，现有CI3/CI5无需重装APK；全新安装CI5后也请更新资源r4。APK签名、内容摘要及资源公钥已在接收时核验，测试报告未随Artifact提供，本机没有安装或运行APK。原CI5与CI3的APK签名不同，直接安装升级仍受原有签名限制。[简约界面更新](../docs/20261104-安卓简约界面r3.md) · [APK发布说明](../docs/20261104-CI5安卓安装包发布.md)。
+客户端使用Java原生队列、受信任本地页面和系统媒体接口；Windows后台不需要Android开发环境。源码包/部署包的实际发行状态以[Releases](https://github.com/lxw112190/lw.HomeNAS/releases)及对应Actions结果为准；历史开发记录见docs目录。
 
 ## 不装Android环境，使用CI生成APK
 
 1. 将本轮源码提交、推送到main。遵循用户约定，由用户执行git提交推送。
 2. 在[GitHub Actions → Build APK, server and Release](https://github.com/lxw112190/lw.HomeNAS/actions/workflows/android.yml)查看任务；首次推送会触发，也可点击Run workflow。
 3. 构建任务执行lint、JVM测试、assembleDebug；成功后下载 `lw.HomeNAS-Android-运行编号` Artifact并解压。
-4. 正常使用安装 `release/HomeNAS-1.2.0.apk`，调试可安装 `debug/HomeNAS-1.2.0-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
+4. 正常使用安装 `release/HomeNAS-1.3.0.apk`，调试可安装 `debug/HomeNAS-1.3.0-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
 5. 模拟器任务执行Android 15的页面、原生桥及Keystore冒烟检查，上传报告和截图。它不能替代你手机的相册、后台省电和电脑局域网联调。
 
 APK与后台并行构建，完整包需两边和模拟器全部通过；独立APK产物不等于整套发布通过。手动关闭emulator只生成独立产物，不生成完整包或Release。
@@ -46,7 +18,7 @@ APK与后台并行构建，完整包需两边和模拟器全部通过；独立AP
 
 ### 签名与覆盖升级
 
-用户已于 2026-11-05 确认配置下表四个仓库 Secrets。后续 push/手动 CI 的 Debug 与 Release 均使用这一套持久 JKS，包名保持 `com.lxw.homenas`。修改 APK 时递增 `versionCode` 并更新 `versionName`，不重新生成签名。当前待构建版本为 `0.7.0-dev / code10`。
+用户已于 2026-11-05 确认配置下表四个仓库 Secrets。后续 push/手动 CI 的 Debug 与 Release 均使用这一套持久 JKS，包名保持 `com.lxw.homenas`。修改 APK 时递增 `versionCode` 并更新 `versionName`，不重新生成签名。当前待构建版本为 `1.3.0 / code23`。
 
 缺少 Secrets、配置不完整或密钥错误时直接失败，不退回临时签名。PR 无法访问签名 Secrets，仍执行隔离开发签名下的编译/测试，但不上传可分发 APK。收到首次固定签名 APK 后记录公开证书 SHA256，后续各版核对一致；截图不代表实际签名产物已核验。
 

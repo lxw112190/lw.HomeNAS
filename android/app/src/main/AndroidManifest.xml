@@ -14,6 +14,8 @@
     <!-- HTTP is permitted by the platform only so the explicit LAN test option can work.
          NativeApi rejects cleartext by default. No remote page gets a native bridge. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application android:name=".NasApplication" android:allowBackup="false" android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:label="lw.HomeNAS 家庭备份" android:icon="@drawable/ic_home"

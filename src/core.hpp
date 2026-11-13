@@ -19,7 +19,8 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.2.0";
+constexpr const char* Version = "1.3.0";
+inline constexpr const char* TimelineClock = "(CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END)";
 
 struct Error : std::runtime_error {
     int status;
@@ -29,7 +30,7 @@ struct Error : std::runtime_error {
 };
 struct Config {
     std::string name, host, bootstrapAdminPassword;
-    fs::path data, web, ffmpeg;
+    fs::path data, web, ffmpeg, file;
     int httpPort = 8787, httpsPort = 9443;
     bool allowExternalHosts = false;
     bool allowInsecureLan = true;
@@ -77,6 +78,7 @@ public:
     void exec(const std::string& sql, const Params& values = {});
     json query(const std::string& sql, const Params& values = {});
     void transaction(const std::function<void()>& action);
+    void backupTo(const fs::path& file);
 private:
     sqlite3* db_ = nullptr;
     std::recursive_mutex mutex_;
@@ -109,6 +111,10 @@ public:
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
     json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="");
+    json calendar(const std::string& type,const std::string& search,int offset);
+    json metadataBackup(const Identity& who);
+    json metadataBackups(const Identity& who);
+    fs::path metadataBackupPath(const std::string& id,const Identity& who);
     void albumMembership(json& items,const std::string& id,const Identity& who);
     json recycledAsset(const std::string& id,const Identity& who);
     fs::path recycledThumbnail(const std::string& id,const Identity& who);
@@ -137,7 +143,11 @@ public:
     std::atomic<bool> stopping{false};
     std::atomic<unsigned> activeUploads{0};
 private:
-    std::thread worker_, videoWorker_;
+    std::thread worker_, videoWorker_, metadataWorker_;
+    std::mutex backupMutex_;
+    void initializeTimeline();
+    void updateCaptureTime(const json& row);
+    void metadataWorker();
     std::mutex queueMutex_, sessionsMutex_;
     std::condition_variable queueCondition_,videoCondition_;
     std::queue<std::string> queue_;

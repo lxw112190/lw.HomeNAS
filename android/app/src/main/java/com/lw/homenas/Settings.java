@@ -79,6 +79,16 @@ final class Settings {
         String name=result.getString("name");if(fallback||!folderName(session.scope).equals(name))folder(session.scope,expected,name);
         if(fallback)message("原目标文件夹已删除，后续备份使用默认文件夹；已排队任务保留");
     }
+    org.json.JSONArray recentServers() {
+        synchronized(LOCK){try{return new org.json.JSONArray(prefs.getString("recent_servers","[]"));}catch(Exception ignored){return new org.json.JSONArray();}}
+    }
+    void rememberServer(String endpoint,String name) throws Exception {
+        endpoint=Protocol.endpoint(endpoint,endpoint.startsWith("http:"));synchronized(LOCK){org.json.JSONArray previous=recentServers(),next=new org.json.JSONArray();
+            next.put(new JSONObject().put("endpoint",endpoint).put("name",name.substring(0,Math.min(name.length(),128))).put("lastUsed",System.currentTimeMillis()));
+            for(int i=0;i<previous.length()&&next.length()<5;i++){JSONObject row=previous.optJSONObject(i);if(row!=null&&!endpoint.equals(row.optString("endpoint")))next.put(row);}
+            if(!prefs.edit().putString("recent_servers",next.toString()).commit())throw new IllegalStateException("无法保存最近服务器");
+        }
+    }
     void rememberConnection(String endpoint,boolean http) {
         if(!prefs.edit().putString("draft_endpoint",endpoint).putBoolean("draft_http",http).commit())throw new IllegalStateException("无法保存电脑地址");
     }
@@ -87,6 +97,7 @@ final class Settings {
         JSONObject result=new JSONObject().put("endpoint",prefs.getString("endpoint","")).put("allowHttp",prefs.getBoolean("http",false))
             .put("uploadParallel",Math.max(1,Math.min(3,prefs.getInt("upload_parallel",2)))).put("auto",prefs.getBoolean("auto",false)).put("wifiOnly",prefs.getBoolean("wifi",true)).put("charging",prefs.getBoolean("charging",false))
             .put("paused",paused()).put("message",prefs.getString("message","欢迎使用家庭备份"));
+        result.put("recentConnections",recentServers());
         result.put("lastUsername",new JSONObject(prefs.getString("me","{}")).optString("username","admin"));
         result.put("connectionAddress",prefs.getString("draft_endpoint",prefs.getString("endpoint",Protocol.DEFAULT_CONNECTION)))
             .put("connectionHttp",prefs.getBoolean("draft_http",prefs.getBoolean("http",!prefs.contains("endpoint"))));

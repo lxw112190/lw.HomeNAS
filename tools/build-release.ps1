@@ -18,7 +18,7 @@ $client=Join-Path $root ('deliveries/client-ci'+$CiNumber)
 $prepare=@('tools/prepare-android-release.py','--artifact-directory',[IO.Path]::GetFullPath($ArtifactDirectory),'--output',$client,'--ci-number',[string]$CiNumber,'--ci-sha',$CiSha)
 if($UiKeyPath){
     $ui=Join-Path $root ('deliveries/ui-ci'+$CiNumber)
-    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','13','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
+    Invoke-ReleasePython @('tools/build-ui-bundle.py','--revision',[string](1000000L+$CiNumber),'--min-native','14','--key',[IO.Path]::GetFullPath($UiKeyPath),'--output',$ui)
     $prepare+=@('--ui-directory',$ui)
 }else{Write-Output 'UI signing secret is absent; package uses the complete UI already embedded in the APK.'}
 Invoke-ReleasePython @prepare
@@ -34,13 +34,13 @@ $apkName='HomeNAS-'+$apk.versionName+'.apk'
 Copy-Item -LiteralPath (Join-Path $client ($apk.sha256+'.apk')) -Destination (Join-Path $assets $apkName)
 $utf8=[Text.UTF8Encoding]::new($false)
 [IO.File]::WriteAllText((Join-Path $assets ($apkName+'.sha256')),($apk.sha256+'  '+$apkName+"`n"),$utf8)
-$manifest=[ordered]@{serverVersion=$result.version;androidVersion=$apk.versionName;versionCode=$apk.versionCode;androidRunNumber=$CiNumber;commit=$CiSha;serverArchiveSha256=$serverBuild.archiveSha256;serverExecutableSha256=$serverBuild.executableSha256;package=[IO.Path]::GetFileName($result.archive);packageSha256=$result.sha256;apk=$apkName;apkSha256=$apk.sha256;ui=$(if($UiKeyPath){'signed r'+(1000000L+$CiNumber)}else{'APK builtin'});checks='Windows build, smoke, albums, folders, rename, timeline and package acceptance passed';physicalDeviceTested=$false}
+$manifest=[ordered]@{serverVersion=$result.version;androidVersion=$apk.versionName;versionCode=$apk.versionCode;androidRunNumber=$CiNumber;commit=$CiSha;serverArchiveSha256=$serverBuild.archiveSha256;serverExecutableSha256=$serverBuild.executableSha256;package=[IO.Path]::GetFileName($result.archive);packageSha256=$result.sha256;apk=$apkName;apkSha256=$apk.sha256;ui=$(if($UiKeyPath){'signed r'+(1000000L+$CiNumber)}else{'APK builtin'});checks='Windows build, data and preview regressions, EXIF timeline, metadata backup, offline migration and full ZIP acceptance passed';physicalDeviceTested=$false}
 [IO.File]::WriteAllText((Join-Path $assets 'release-manifest.json'),($manifest|ConvertTo-Json -Depth 6),$utf8)
 $notes=@"
 lw.HomeNAS automatic full package / CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
-v1.2 highlights: choose/create destination folders for Web uploads; frozen queue destinations and per-folder deduplication; folder names in task history. Bundled APK and optional UI packages auto-publish on startup, preserving newer releases and administrator withdrawals. README includes contact and support information.
+v1.3 highlights: EXIF capture-time timeline with year/month/date navigation; consistent metadata snapshots and verified offline library migration; folders-first organization with statistics and batch moves; phone QR setup, recent servers and actionable connection checks. Chinese and English READMEs are included.
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 APK and Windows built in parallel from the same commit. Android emulator and full ZIP acceptance passed; the final ZIP reuses the exact independently tested Windows executable. This does not replace physical-device testing.
 
