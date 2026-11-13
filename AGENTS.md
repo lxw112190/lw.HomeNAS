@@ -39,7 +39,7 @@
 - 客户端维护分为APK版本与已签名Web资源版本，原生桥协议变化须调整兼容要求。资源私钥仅保存在仓库忽略的local-signing目录或CI Secrets，源码只提交公钥；不得打进部署包。
 - 修改原生协议升级/活动界面重置逻辑时，同步更新ClientMaintenanceTest的启动前提：先模拟当前APK首次启动，再测试同协议资源回退；另测旧协议升级清理指针、保留其他状态。测试不能将首次迁移返回的builtin/null当成已下载界面目录。JUnit失败摘要须展示具体用例与堆栈，完整XML保留Artifact；不得跳过失败测试放行APK。
 - 防火墙脚本仅生成或验证计划，不自行在开发机开放端口；用户显式运行Open/Remove时才修改当前程序路径对应的受管规则。
-- 完整包CI接续可信main分支Android成功运行，APK与模拟器job都要通过，Windows与APK固定同一提交，证书匹配android/signing-certificate.json；发布前验收实际ZIP。只公开附件齐全的草稿，已公开发布不覆盖，不自动提交版本或重建私钥。UI签名Secret可选，缺少时使用APK完整内置界面；自动UI revision使用1000000+Android CI序号。PowerShell辅助函数避免与python等外部命令同名并递归调用。
+- 完整包CI统一在android.yml（Build APK, server and Release），保留其run_number连续性；APK与Windows server任务无相互needs，可并行。package必须等待select/apk/server/emulator成功，仅下载当前workflow同一次运行产物，按提交/CI编号/版本/摘要恢复已测试EXE和固定FFmpeg，不重编译或从历史最新成功运行混取。publish仍等待完整ZIP验收及版本门禁，PR及关闭模拟器均不生成完整发布。Windows与APK固定同一提交，证书匹配android/signing-certificate.json；ZIP解压后的EXE摘要还须等于后台已测试产物。只公开附件齐全的草稿，已公开发布不覆盖，不自动提交版本或重建私钥。UI签名Secret可选，缺少时使用APK完整内置界面；自动UI revision使用1000000+Android CI序号。PowerShell辅助函数避免与python等外部命令同名并递归调用。
 
 - 签名UI资源发布前必须按已分发APK的真实解包规则检查每个ZIP条目（路径/类型/数量/展开大小/重复/必要入口），不能仅验证签名和HTTP。现有APK拒绝TXT，许可证应保留全文为HTML；使用递增revision修复已发布包，不原地覆盖同版本。运行tools/check-android.py和test_android_*check.py回归。
 - 所有锁定哈希针对原始字节，.gitattributes必须同时保持third_party/** -text及tools/ffmpeg/** -text，FFmpeg许可证/README也受provenance.json锁定，不只保护C/C++源码。避免Windows core.autocrlf改写导致CI校验失败；不得跳过校验、改为CRLF哈希或校验时忽略换行。发布测试须合并两份锁定清单检查所有已入库文件的Git属性，并覆盖Windows检出过滤器及篡改拒绝。

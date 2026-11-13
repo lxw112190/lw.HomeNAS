@@ -1,30 +1,40 @@
-name: Android APK
+name: Build APK, server and Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      emulator:
-        description: Run Android 15 emulator smoke test
-        type: boolean
-        default: true
   push:
     branches: [main]
   pull_request:
-    paths: ['android/**', '!android/app/src/main/assets/**', 'tools/*android*.py', 'tests/test_android_*check.py', '.github/workflows/android.yml']
+  workflow_dispatch:
+    inputs:
+      emulator:
+        description: Run Android emulator (required for full package and Release)
+        type: boolean
+        default: true
+      publish:
+        description: Publish an unreleased VERSION after all checks pass
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  actions: read
 
+# Keep android.yml and its run counter: signed UI revisions use 1000000 + run_number.
+# Let an active main run finish; do not cancel package/publish midway.
 concurrency:
-  group: android-${{ github.ref }}
-  cancel-in-progress: true
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   apk:
+    name: Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -60,7 +70,7 @@ jobs:
           node tests/backup-picker-dom.cjs tests/dom/node_modules/jsdom
           node tests/backup-summary-dom.cjs
       - name: Restore persistent Debug signing identity
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -92,7 +102,7 @@ jobs:
       - name: Record resolved runtime dependencies
         run: gradle -p android --no-daemon :app:dependencies --configuration debugRuntimeClasspath > android/app/build/reports/runtime-dependencies.txt
       - name: Stable signed release
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -123,12 +133,13 @@ jobs:
         shell: bash
         run: rm -f "$RUNNER_TEMP/homenas-ci-debug.jks"
       - uses: actions/upload-artifact@v4
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         with:
           name: lw.HomeNAS-Android-${{ github.run_number }}
           path: android/app/build/outputs/apk/
           retention-days: 14
           if-no-files-found: error
+          overwrite: true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -137,14 +148,19 @@ jobs:
             android/app/build/reports/
             android/app/build/test-results/
           retention-days: 7
+          overwrite: true
 
   emulator:
+    name: Android emulator tests
     needs: apk
     if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.emulator)
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -173,3 +189,171 @@ jobs:
             android/app/build/outputs/androidTest-results/
             android/app/build/outputs/device-evidence/
           retention-days: 7
+          overwrite: true
+
+  server:
+    name: Windows server
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install verification dependencies
+        run: python -m pip install requests pillow cryptography PyYAML
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tests/dom/package-lock.json
+      - name: Build and test Windows server independently
+        shell: pwsh
+        env:
+          CI_NUMBER: ${{ github.run_number }}
+          CI_SHA: ${{ github.sha }}
+        run: |
+          ./tools/build-server-release.ps1 -CiNumber ([int]$env:CI_NUMBER) -CiSha $env:CI_SHA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lw.HomeNAS-server-ci${{ github.run_number }}
+          path: deliveries/server-assets/
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-server-checks-${{ github.run_id }}
+          path: |
+            test-results/*/RESULT.json
+            test-results/*/*PASS.json
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true
+
+  select:
+    name: Release policy
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.source.outputs.run_id }}
+      run_number: ${{ steps.source.outputs.run_number }}
+      sha: ${{ steps.source.outputs.sha }}
+      artifact_name: ${{ steps.source.outputs.artifact_name }}
+      server_artifact_name: ${{ steps.source.outputs.server_artifact_name }}
+      tag: ${{ steps.source.outputs.tag }}
+      version: ${{ steps.source.outputs.version }}
+      publish: ${{ steps.source.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Validate current main commit and version publication policy
+        id: source
+        uses: actions/github-script@v7
+        env:
+          INPUT_PUBLISH: ${{ inputs.publish }}
+        with:
+          script: |
+            const select = require('./.github/scripts/select-release.cjs');
+            await select({github,context,core});
+
+  package:
+    name: Full deployment package
+    needs: [select,apk,server,emulator]
+    runs-on: windows-2022
+    timeout-minutes: 35
+    concurrency:
+      group: package-${{ github.run_id }}
+      cancel-in-progress: false
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install verification dependencies
+        run: python -m pip install requests pillow cryptography PyYAML
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.select.outputs.artifact_name }}
+          path: incoming-android
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.select.outputs.server_artifact_name }}
+          path: incoming-server
+      - name: Assemble and verify full deployment without rebuilding
+        shell: pwsh
+        env:
+          CI_NUMBER: ${{ needs.select.outputs.run_number }}
+          CI_SHA: ${{ needs.select.outputs.sha }}
+          UI_SIGNING_KEY_BASE64: ${{ secrets.UI_SIGNING_KEY_BASE64 }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $keyFile=Join-Path $env:RUNNER_TEMP 'homenas-resource-signing.pem'
+          try{
+            $parameters=@{ArtifactDirectory=(Join-Path $PWD 'incoming-android');ServerArtifactDirectory=(Join-Path $PWD 'incoming-server');CiNumber=[int]$env:CI_NUMBER;CiSha=$env:CI_SHA}
+            if($env:UI_SIGNING_KEY_BASE64){[IO.File]::WriteAllBytes($keyFile,[Convert]::FromBase64String($env:UI_SIGNING_KEY_BASE64));$parameters.UiKeyPath=$keyFile}
+            & ./tools/build-release.ps1 @parameters
+          }finally{if(Test-Path -LiteralPath $keyFile){Remove-Item -LiteralPath $keyFile -Force}}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lw.HomeNAS-full-ci${{ needs.select.outputs.run_number }}
+          path: |
+            deliveries/release-assets/
+            deliveries/release-notes.md
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Windows-release-checks-${{ github.run_id }}
+          path: |
+            test-results/*/RESULT.json
+            test-results/*/*PASS.json
+            test-results/package-release-pass.json
+          if-no-files-found: warn
+          retention-days: 7
+          overwrite: true
+
+  publish:
+    name: Publish new version
+    needs: [select,package]
+    if: needs.select.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: publish-version-${{ needs.select.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.select.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: lw.HomeNAS-full-ci${{ needs.select.outputs.run_number }}
+          path: verified
+      - name: Publish verified assets from a draft
+        uses: actions/github-script@v7
+        env:
+          CI_SHA: ${{ needs.select.outputs.sha }}
+          CI_NUMBER: ${{ needs.select.outputs.run_number }}
+        with:
+          script: |
+            const publish = require('./.github/scripts/publish-release.cjs');
+            await publish({github,context,core,directory:'verified/release-assets',notes:'verified/release-notes.md',sha:process.env.CI_SHA,number:process.env.CI_NUMBER});

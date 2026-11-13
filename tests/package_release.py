@@ -6,7 +6,7 @@ from PIL import Image
 from smoke import Harness,ROOT
 
 
-def run(archive):
+def run(archive, expected_executable_sha256=None):
     with zipfile.ZipFile(archive) as z:
         names=z.namelist();assert len(names)==len(set(names)) and z.testzip() is None
         top={Path(n).parts[0] for n in names};assert len(top)==1
@@ -30,6 +30,9 @@ def run(archive):
         args=['powershell','-NoProfile','-ExecutionPolicy','Bypass','-File',str(script)]+(['-PlanOnly'] if plan else [])
         p=subprocess.run(args,capture_output=True);assert (p.returncode==0)==ok,p.stderr[:1000];return p
     try:
+        if expected_executable_sha256:
+            with h.exe.open('rb') as stream:actual=hashlib.file_digest(stream,'sha256').hexdigest()
+            h.check(actual==expected_executable_sha256,'full ZIP contains the exact independently tested server executable')
         baseline=json.loads((stage/'android/signing-certificate.json').read_text(encoding='utf-8'));verification=json.loads((stage/'client-release/verification.json').read_text(encoding='utf-8'))
         h.check(baseline['certificate_sha256']==verification['certificate_sha256'],'fixed public signing baseline is included')
         h.check(json.loads(import_apk(plan=True).stdout)['VersionCode']==expected['versionCode'],'offline import plan accepts bundled APK')
@@ -67,4 +70,5 @@ def run(archive):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser();p.add_argument('--archive',required=True,type=Path);run(p.parse_args().archive.resolve())
+    p=argparse.ArgumentParser();p.add_argument('--archive',required=True,type=Path);p.add_argument('--expected-executable-sha256')
+    args=p.parse_args();run(args.archive.resolve(),args.expected_executable_sha256)

@@ -75,11 +75,54 @@ class ReleaseChecks(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'differs'):ffmpeg.verified(file,pin)
 
     def test_workflow_keeps_manual_artifact_only_mode(self):
-        workflow=workflows.validate((ROOT/'.github/workflows/release.yml').read_text(encoding='utf-8'))
+        workflow=workflows.validate((ROOT/'.github/workflows/android.yml').read_text(encoding='utf-8'))
         step=next(s for s in workflow['jobs']['select']['steps'] if s.get('id')=='source')
         self.assertEqual(step['env']['INPUT_PUBLISH'],'${{ inputs.publish }}')
         self.assertEqual(workflow['permissions']['contents'],'read');self.assertEqual(workflow['jobs']['publish']['permissions']['contents'],'write')
         self.assertIn("needs.select.outputs.publish == 'true'",workflow['jobs']['publish']['if'])
+
+    def test_parallel_builds_join_only_after_emulator_and_use_current_run_artifacts(self):
+        workflow=workflows.validate((ROOT/'.github/workflows/android.yml').read_text(encoding='utf-8'))
+        jobs=workflow['jobs']
+        self.assertFalse(jobs['apk'].get('needs'))
+        self.assertFalse(jobs['server'].get('needs'))
+        self.assertEqual(jobs['emulator']['needs'],'apk')
+        self.assertEqual(set(jobs['package']['needs']),{'select','apk','server','emulator'})
+        self.assertEqual(set(jobs['publish']['needs']),{'select','package'})
+        # Neither a skipped emulator nor a failed build can be bypassed by always().
+        self.assertNotIn('if',jobs['package'])
+        self.assertNotIn('always()',jobs['publish']['if'])
+        for name in ('apk','server','emulator','select'):
+            checkout=next(step for step in jobs[name]['steps'] if step.get('uses')=='actions/checkout@v4')
+            self.assertEqual(checkout['with']['ref'],'${{ github.sha }}')
+        for name in ('package','publish'):
+            checkout=next(step for step in jobs[name]['steps'] if step.get('uses')=='actions/checkout@v4')
+            self.assertEqual(checkout['with']['ref'],'${{ needs.select.outputs.sha }}')
+        downloads=[step['with'] for step in jobs['package']['steps'] if step.get('uses')=='actions/download-artifact@v4']
+        self.assertEqual({step['path'] for step in downloads},{'incoming-android','incoming-server'})
+        for step in downloads:self.assertNotIn('run-id',step)
+        # Keep only one automatic entry point; a workflow_run chain would serialize again.
+        for path in (ROOT/'.github/workflows').glob('*.yml'):
+            events=workflows.validate(path.read_text(encoding='utf-8')).get(True,{})
+            self.assertNotIn('workflow_run',events)
+            if 'push' in events:self.assertEqual(path.name,'android.yml')
+        self.assertEqual(workflow.get(True)['push']['branches'],['main'])
+        self.assertIn("github.event_name != 'pull_request'",jobs['select']['if'])
+        self.assertEqual(workflow['concurrency']['cancel-in-progress'],"${{ github.event_name == 'pull_request' }}")
+
+    def test_package_reuses_server_build_and_does_not_download_ffmpeg_again(self):
+        build=(ROOT/'tools/build-server-release.ps1').read_text(encoding='utf-8')
+        assembly=(ROOT/'tools/build-release.ps1').read_text(encoding='utf-8')
+        self.assertIn("'build.ps1'",build)
+        self.assertIn("'tests/smoke.py'",build)
+        self.assertIn("'tests/deployment-scripts.ps1'",build)
+        self.assertIn("'tools/server-artifact.py','create'",build)
+        self.assertNotIn('ArtifactDirectory',build)
+        self.assertNotIn("'build.ps1'",assembly)
+        self.assertIn("'tools/server-artifact.py','restore'",assembly)
+        self.assertIn("'tools/fetch-ffmpeg.py','--verify-only'",assembly)
+        self.assertIn("'tools/prepare-android-release.py'",assembly)
+        self.assertIn("'tests/package_release.py'",assembly)
 
     def test_ffmpeg_crlf_pin_remains_strict_with_diagnostic(self):
         with tempfile.TemporaryDirectory() as d:

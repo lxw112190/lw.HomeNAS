@@ -2,28 +2,22 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('nod
 const select=require('../.github/scripts/select-release.cjs'),publish=require('../.github/scripts/publish-release.cjs');
 const sha='a'.repeat(40),other='b'.repeat(40);let checks=0;
 function fixture(change={}){
- const run={id:123,run_number:13,name:'Android APK',path:'.github/workflows/android.yml',head_branch:'main',head_repository:{full_name:'owner/repo'},event:'push',status:'completed',conclusion:'success',head_sha:sha,...change};
- const jobs=[{name:'apk',conclusion:'success'},{name:'emulator',conclusion:'success'}],artifacts=[{name:'lw.HomeNAS-Android-13',expired:false,workflow_run:{head_sha:sha}}],outputs={};
- const github={rest:{actions:{getWorkflowRun:async()=>({data:run}),listWorkflowRuns:async()=>({data:{workflow_runs:[run]}}),listJobsForWorkflowRun:()=>{},listWorkflowRunArtifacts:()=>{}},repos:{getContent:async()=>({data:{type:'file',encoding:'base64',content:Buffer.from('1.0.0\n').toString('base64')}}),getReleaseByTag:async()=>{throw {status:404};}}}};
- github.paginate=async fn=>fn===github.rest.actions.listJobsForWorkflowRun?jobs:artifacts;
- const context={repo:{owner:'owner',repo:'repo'},eventName:'workflow_run',payload:{workflow_run:{id:123}}};
+ const run={id:123,run_number:13,name:'Build APK, server and Release',path:'.github/workflows/android.yml',head_branch:'main',head_repository:{full_name:'owner/repo'},event:'push',status:'in_progress',conclusion:null,head_sha:sha,...change};
+ const outputs={},calls=[];
+ const github={rest:{actions:{getWorkflowRun:async input=>{assert.equal(input.run_id,123);calls.push('current run');return {data:run};}},repos:{getContent:async input=>{assert.equal(input.ref,sha);calls.push('version at SHA');return {data:{type:'file',encoding:'base64',content:Buffer.from('1.0.0\n').toString('base64')}};},getReleaseByTag:async()=>{throw {status:404};}}}};
+ const context={repo:{owner:'owner',repo:'repo'},eventName:'push',ref:'refs/heads/main',runId:123,sha};
  const core={getInput:()=>'',setOutput:(name,value)=>outputs[name]=value,notice:()=>{}};
- return {github,context,core,run,jobs,artifacts,outputs};
+ return {github,context,core,run,outputs,calls};
 }
 async function rejection(value,message){await assert.rejects(select(value),message);checks++;}
 (async()=>{
- let f=fixture();await select(f);assert.equal(f.outputs.sha,sha);assert.equal(f.outputs.publish,'true');assert.equal(f.outputs.artifact_name,'lw.HomeNAS-Android-13');checks++;
- f=fixture();f.context.eventName='workflow_dispatch';f.core.getInput=n=>n==='publish'?'false':'';await select(f);assert.equal(f.outputs.publish,'false');checks++;
- await rejection(fixture({event:'pull_request'}),/trusted/);
- await rejection(fixture({head_branch:'feature'}),/trusted/);
- await rejection(fixture({head_repository:{full_name:'attacker/repo'}}),/trusted/);
- f=fixture();f.context.eventName='workflow_dispatch';f.core.getInput=n=>n==='android_run_id'?'999999999999999999999':'';await rejection(f,/safe integer/);
- f=fixture();f.jobs[1].conclusion='skipped';await rejection(f,/both pass/);
- f=fixture();f.artifacts[0].workflow_run.head_sha=other;await rejection(f,/selected commit/);
- f=fixture();f.artifacts[0].expired=true;await rejection(f,/unexpired/);
- f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:false}});await select(f);assert.equal(f.outputs.publish,'false');assert.equal(f.outputs.already,'false');checks++;
+ let f=fixture();await select(f);assert.equal(f.outputs.sha,sha);assert.equal(f.outputs.publish,'true');assert.equal(f.outputs.artifact_name,'lw.HomeNAS-Android-13');assert.equal(f.outputs.server_artifact_name,'lw.HomeNAS-server-ci13');assert.deepEqual(f.calls,['current run','version at SHA']);checks++;
+ f=fixture({event:'workflow_dispatch'});f.context.eventName='workflow_dispatch';f.core.getInput=n=>n==='publish'?'false':'';await select(f);assert.equal(f.outputs.publish,'false');checks++;
+ f=fixture();f.context.eventName='pull_request';await rejection(f,/trusted/);
+ f=fixture();f.context.ref='refs/heads/feature';await rejection(f,/trusted/);
+ for(const value of [{event:'pull_request'},{head_branch:'feature'},{head_repository:{full_name:'attacker/repo'}},{id:124},{head_sha:other},{run_number:0},{run_number:2146483648},{path:'.github/workflows/other.yml'}])await rejection(fixture(value),/Unexpected source/);
+ f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:false}});await select(f);assert.equal(f.outputs.publish,'false');checks++;
  f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await select(f);assert.equal(f.outputs.publish,'false');checks++;
- f=fixture();f.artifacts[0].expired=true;f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:sha,draft:false,html_url:'published'}});await rejection(f,/unexpired/);
  f=fixture();f.github.rest.repos.getContent=async()=>({data:{type:'file',encoding:'base64',content:Buffer.from('../bad').toString('base64')}});await rejection(f,/semantic VERSION/);
  f=fixture();f.github.rest.repos.getReleaseByTag=async()=>({data:{target_commitish:other,draft:true}});await rejection(f,/different commit/);
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'homenas-release-'));

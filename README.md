@@ -112,10 +112,13 @@ SQLite、Mbed TLS、cpp-httplib等依赖已锁定；不要随意改变文件换�
 
 ## CI与正式发布
 
-- 推送 `main`：构建固定签名Debug/Release APK、Lint/JVM测试与模拟器检查；通过后构建同一提交的Windows后台及完整ZIP。
+- 推送 `main`：在 **Build APK, server and Release** 中并行执行APK构建（固定签名Debug/Release、Lint/JVM）与Windows后台编译/回归；模拟器接续APK任务，全部通过后汇合生成完整ZIP。后台只编译一次，最终打包复用同一提交、同一CI编号的已测试EXE和FFmpeg。
+- Actions产物：`lw.HomeNAS-Android-N` 是APK；`lw.HomeNAS-server-ciN` 是不含APK的独立后台包；**`lw.HomeNAS-full-ciN` 是日常部署推荐的完整包**，内含后台、APK及校验清单。任一构建分支成功即可下载该分支产物，但完整包必须等待两边构建和模拟器全部通过。
+- 工作流入口继续使用 [android.yml](.github/workflows/android.yml)，延续原CI编号；旧串行 `release.yml` 已合并，避免重复触发和混用历史APK。
 - **版本未发布**：读取该提交的 `VERSION`，如 `1.0.0`，全部检查通过后自动创建并公开正式 `v1.0.0` Release；带预发布后缀的版本标记为prerelease。
 - **版本已发布**：继续生成Actions中的完整包与APK，保留原有Release和标签，不重复发布、不覆盖旧附件。
-- 手动工作流可关闭publish，只生成构建产物。失败草稿不会当作正式版发布。
+- 在main手动运行时，关闭 `publish` 可仅构建完整包；关闭 `emulator` 则只生成APK和后台独立产物，跳过完整包与Release。PR执行编译和检查，不分发签名APK、不发布。失败草稿不会当作正式版发布。
+- 失败后可在同一次运行中重跑失败任务；已成功分支的产物会被复用，产物过期时需重跑全部任务。验证细节见[并行CI说明](docs/20261113-APK与后台并行CI.md)。
 - 升版时同步 `VERSION`、`src/core.hpp`、`CMakeLists.txt`、Android versionName；修改APK原生/内置功能时递增versionCode。CI会检查版本一致性。
 
 仓库Secrets继续使用 `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD`。`UI_SIGNING_KEY_BASE64` 可选，未配置时完整包使用APK内置页面。密钥、数据、真实日志和签名私钥不提交Git。

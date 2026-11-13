@@ -35,10 +35,12 @@
 ## 不装Android环境，使用CI生成APK
 
 1. 将本轮源码提交、推送到main。遵循用户约定，由用户执行git提交推送。
-2. 在[GitHub Actions → Android APK](https://github.com/lxw112190/lw.HomeNAS/actions/workflows/android.yml)查看任务；首次推送会触发，也可点击Run workflow。
+2. 在[GitHub Actions → Build APK, server and Release](https://github.com/lxw112190/lw.HomeNAS/actions/workflows/android.yml)查看任务；首次推送会触发，也可点击Run workflow。
 3. 构建任务执行lint、JVM测试、assembleDebug；成功后下载 `lw.HomeNAS-Android-运行编号` Artifact并解压。
-4. 测试安装 `debug/app-debug.apk`。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
+4. 正常使用安装 `release/HomeNAS-1.2.0.apk`，调试可安装 `debug/HomeNAS-1.2.0-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
 5. 模拟器任务执行Android 15的页面、原生桥及Keystore冒烟检查，上传报告和截图。它不能替代你手机的相册、后台省电和电脑局域网联调。
+
+APK与后台并行构建，完整包需两边和模拟器全部通过；独立APK产物不等于整套发布通过。手动关闭emulator只生成独立产物，不生成完整包或Release。
 
 工作流：[../.github/workflows/android.yml](../.github/workflows/android.yml)。JDK17、Gradle8.11.1、AGP8.9.2、SDK35全部在CI准备；本地没有Gradle wrapper、Android Studio或SDK也可以使用该流程。[AGP兼容说明](https://developer.android.com/build/releases/agp-8-9-0-release-notes)。
 
@@ -53,7 +55,7 @@
 1. 先在仓库 Secrets 设置 `ANDROID_KEYSTORE_PASSWORD` 与 `ANDROID_KEY_PASSWORD`（均至少 16 字符，妥善保存）。
 2. 手动运行 **Prepare Android signing key**，下载其加密 JKS 并在电脑离线备份。
 3. 将 JKS 的 Base64 保存到 `ANDROID_KEYSTORE_BASE64`；`ANDROID_KEY_ALIAS` 设为 `homenas`。
-4. 删除生成密钥的 Artifact，以后保持这四个 Secrets 不变；重新运行 Android APK 工作流。
+4. 删除生成密钥的 Artifact，以后保持这四个 Secrets 不变；重新运行 Build APK, server and Release 工作流。
 5. 后续每次发布递增 `versionCode`，并保留同一包名。比较各次 Artifact 的 `debug-signing.txt` 证书 SHA256，应保持一致。
 
 不要把 JKS、Base64 或密码提交 Git。第一次从旧的临时签名切换到固定签名仍可能无法覆盖，先处理好待备份队列。CI7 APK 不含原临时私钥，不能从 APK 反推私钥。现已完成 Secrets 配置，实际产物待下一次 CI 核验。
