@@ -14,8 +14,8 @@ final class ClientMaintenance {
     ClientMaintenance(Context c){context=c.getApplicationContext();prefs=context.getSharedPreferences("client-maintenance",0);}
     private File root(){File f=new File(context.getFilesDir(),"ui-bundles");f.mkdirs();return f;}
     synchronized File beginLaunch(){
-        // An older downloaded UI must not hide features bundled in a new native protocol.
-        if(prefs.getInt("builtinNative",0)<14)prefs.edit().putInt("builtinNative",14).remove("active").remove("previous").remove("staged").putBoolean("unconfirmed",false).commit();
+        // A new APK must display its bundled fixes even when the bridge protocol is unchanged.
+        if(prefs.getInt("builtinNative",0)<14||prefs.getInt("builtinCode",0)<BuildConfig.VERSION_CODE)prefs.edit().putInt("builtinCode",BuildConfig.VERSION_CODE).putInt("builtinNative",14).remove("active").remove("previous").remove("staged").putBoolean("unconfirmed",false).commit();
         String active=prefs.getString("active","");
         if(prefs.getBoolean("unconfirmed",false)){active=prefs.getString("previous","");prefs.edit().putString("active",active).remove("staged").putBoolean("unconfirmed",false).commit();}
         String staged=prefs.getString("staged","");if(!staged.isEmpty()){prefs.edit().putString("previous",active).putString("active",staged).remove("staged").commit();active=staged;}

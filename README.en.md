@@ -4,7 +4,7 @@
 
 Turn a Windows PC into a home backup server for photos, videos, documents and recordings. The server uses **C++17 and cpp-httplib**, with a browser management UI and an Android client built around native Java and trusted local WebView pages.
 
-This source tree prepares **1.3.1 / Android versionCode 24 / native protocol 14**. The patch aligns Web timeline controls, fixes inherited form spacing and adds responsive rows, and styles the phone connection address selector. Version 1.3.0 was published after CI36 passed; the new patch still requires its own signed APK, emulator and combined-package checks. Signing and native protocol remain unchanged. See [patch notes](docs/20261113-v1.3.1发布说明.md) and [published Releases](https://github.com/lxw112190/lw.HomeNAS/releases).
+This source tree prepares **1.3.2 / Android versionCode 25 / native protocol 14**. Android selection updates are now local to the changed photo/day, repeated enqueue snapshots avoid rescanning thumbnails, and gallery tools are collapsed under an expandable panel. Signing identity is unchanged. The new signed APK, Robolectric tests, emulator and physical-device behavior still require CI/device verification. See [implementation and validation](docs/20261114-APK选图性能与资料库简化.md).
 
 ## Features
 

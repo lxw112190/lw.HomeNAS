@@ -37,6 +37,11 @@ public class ClientMaintenanceTest {
         // Migration runs once; a compatible bundle can be used on later launches.
         prefs.edit().putString("active","r7").commit();File next=manager.beginLaunch();assertNotNull(next);assertEquals("r7",next.getName());
     }
+    @Test public void sameProtocolApkUpgradeResetsUiOnlyOnce() throws Exception {
+        ui("r14-old");prefs.edit().putInt("builtinNative",14).putInt("builtinCode",BuildConfig.VERSION_CODE-1).putString("active","r14-old").putString("staged","r14-old").putString("unrelated-setting","retained").commit();
+        ClientMaintenance manager=new ClientMaintenance(context);assertNull(manager.beginLaunch());assertEquals(BuildConfig.VERSION_CODE,prefs.getInt("builtinCode",0));assertEquals("retained",prefs.getString("unrelated-setting",""));
+        prefs.edit().putString("active","r14-old").commit();assertNotNull(manager.beginLaunch());
+    }
     @Test public void confirmedUiSurvivesAnotherLaunch() throws Exception {
         ClientMaintenance manager=new ClientMaintenance(context);assertNull(manager.beginLaunch());ui("r7");
         prefs.edit().putString("staged","r7").commit();File staged=manager.beginLaunch();assertNotNull(staged);assertEquals("r7",staged.getName());

@@ -1,6 +1,6 @@
 # lw.HomeNAS Android
 
-> 当前开发 **1.3.1 / code24 / nativeApi14**：拍摄时间线及年/月日期范围、文件夹主要入口和目录统计、批量移动、扫码填地址、最近5台服务器与连接检测。需配套1.3.0后台，扫码使用时申请相机权限；固定签名保留，升级回内置页并保留账号/队列。v1.3.0已通过CI36并发布。本次网页布局补丁同步版本名与code24，协议和签名不变；新版Android编译及模拟器仍待新CI，真机结果需手机实测。[使用与验证](../docs/20261113-时间线备份迁移与手机连接.md)。
+> 当前开发 **1.3.2 / code25 / nativeApi14**：拍摄时间线及年/月日期范围、文件夹主要入口和目录统计、批量移动、扫码填地址、最近5台服务器与连接检测。需配套1.3.0后台，扫码使用时申请相机权限；固定签名保留，升级回内置页并保留账号/队列。v1.3.0已通过CI36并发布。本次优化大量选图刷新及资料库折叠操作，版本为code25，协议和签名不变；新版Android编译及模拟器仍待新CI，真机结果需手机实测。[使用与验证](../docs/20261113-时间线备份迁移与手机连接.md)。
 
 客户端使用Java原生队列、受信任本地页面和系统媒体接口；Windows后台不需要Android开发环境。源码包/部署包的实际发行状态以[Releases](https://github.com/lxw112190/lw.HomeNAS/releases)及对应Actions结果为准；历史开发记录见docs目录。
 
@@ -9,7 +9,7 @@
 1. 将本轮源码提交、推送到main。遵循用户约定，由用户执行git提交推送。
 2. 在[GitHub Actions → Build APK, server and Release](https://github.com/lxw112190/lw.HomeNAS/actions/workflows/android.yml)查看任务；首次推送会触发，也可点击Run workflow。
 3. 构建任务执行lint、JVM测试、assembleDebug；成功后下载 `lw.HomeNAS-Android-运行编号` Artifact并解压。
-4. 正常使用安装 `release/HomeNAS-1.3.1.apk`，调试可安装 `debug/HomeNAS-1.3.1-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
+4. 正常使用安装 `release/HomeNAS-1.3.2.apk`，调试可安装 `debug/HomeNAS-1.3.2-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
 5. 模拟器任务执行Android 15的页面、原生桥及Keystore冒烟检查，上传报告和截图。它不能替代你手机的相册、后台省电和电脑局域网联调。
 
 APK与后台并行构建，完整包需两边和模拟器全部通过；独立APK产物不等于整套发布通过。手动关闭emulator只生成独立产物，不生成完整包或Release。
@@ -18,7 +18,7 @@ APK与后台并行构建，完整包需两边和模拟器全部通过；独立AP
 
 ### 签名与覆盖升级
 
-用户已于 2026-11-05 确认配置下表四个仓库 Secrets。后续 push/手动 CI 的 Debug 与 Release 均使用这一套持久 JKS，包名保持 `com.lxw.homenas`。修改 APK 时递增 `versionCode` 并更新 `versionName`，不重新生成签名。当前待构建版本为 `1.3.1 / code24`。
+用户已于 2026-11-05 确认配置下表四个仓库 Secrets。后续 push/手动 CI 的 Debug 与 Release 均使用这一套持久 JKS，包名保持 `com.lxw.homenas`。修改 APK 时递增 `versionCode` 并更新 `versionName`，不重新生成签名。当前待构建版本为 `1.3.2 / code25`。
 
 缺少 Secrets、配置不完整或密钥错误时直接失败，不退回临时签名。PR 无法访问签名 Secrets，仍执行隔离开发签名下的编译/测试，但不上传可分发 APK。收到首次固定签名 APK 后记录公开证书 SHA256，后续各版核对一致；截图不代表实际签名产物已核验。
 

@@ -19,3 +19,5 @@ s.day('2026-11-06',true);assert(s.has('2026-11-06','restored-day'));assert(s.has
 assert(JSON.parse(JSON.stringify(s.payload())).exclude_months.includes('2026-11'));
 s.allItems(false);assert(!s.hasSelection());
 console.log('Month/all selection: cross-page ranges, excluded months/days/items, day override and clear passed');
+
+s.clear();for(let i=0;i<5000;i++)s.item('2026-11-05','bulk'+i,true);assert(s.partial('2026-11-05'));assert(s.partialMonth('2026-11'));const cached=s.partialItems;for(let i=0;i<1000;i++)assert(s.partial('2026-11-05'));assert.equal(s.partialItems,cached);s.month('2026-11',false);assert(!s.partial('2026-11-05'));assert(!s.partialMonth('2026-11'));s.day('2026-11-05',true);s.item('2026-11-05','excluded',false);assert(s.partial('2026-11-05'));s.day('2026-11-05',false);assert(!s.partial('2026-11-05'));console.log('Large-selection partial-state index: 5000 items, cached repeated lookups and range invalidation passed');

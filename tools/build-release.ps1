@@ -40,7 +40,7 @@ $notes=@"
 lw.HomeNAS automatic full package / CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
-v1.3.1: Web timeline filters now use aligned 40px controls, consistent field spacing, a clear primary action and responsive rows. The phone connection address selector also gets consistent styling and bounded long-address display. APK version code advances to 24 with the existing signing identity; native protocol remains 14.
+v1.3.2: Android large-selection updates avoid whole-grid rescans and repeated polling work. Only one day of thumbnails stays expanded; selections are retained. Gallery type/date/organization controls are collapsed under Filter and organize. APK code25 uses the existing signing identity and native protocol14. A new APK resets old UI pointers once to show its bundled fixes.
 v1.3 highlights: EXIF capture-time timeline with year/month/date navigation; consistent metadata snapshots and verified offline library migration; folders-first organization with statistics and batch moves; phone QR setup, recent servers and actionable connection checks. Chinese and English READMEs are included.
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 APK and Windows built in parallel from the same commit. Android emulator and full ZIP acceptance passed; the final ZIP reuses the exact independently tested Windows executable. This does not replace physical-device testing.
