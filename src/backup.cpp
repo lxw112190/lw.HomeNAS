@@ -17,7 +17,7 @@ void snapshot(sqlite3* source,const fs::path& target){
     check(sqlite3_exec(output.db,"PRAGMA journal_mode=DELETE; DELETE FROM credentials;",nullptr,nullptr,nullptr),output.db);
 }
 void snapshotFile(const fs::path& source,const fs::path& target){Sqlite input;check(sqlite3_open_v2(source.u8string().c_str(),&input.db,SQLITE_OPEN_READONLY,nullptr),input.db);snapshot(input.db,target);}
-json counts(Database& db){json out=json::object();for(const auto* table:{"assets","uploads","folders","folder_items","albums","album_items","users","asset_trash"})out[table]=db.query(std::string("SELECT count(*) AS n FROM ")+table)[0]["n"];return out;}
+json counts(Database& db){json out=json::object();for(const auto* table:{"assets","uploads","folders","folder_items","folder_acl","folder_tree","albums","album_items","users","asset_trash"})out[table]=db.query(std::string("SELECT count(*) AS n FROM ")+table)[0]["n"];return out;}
 void integrity(Database& db){auto check=db.query("PRAGMA quick_check");if(check.size()!=1||check[0].begin().value()!="ok"||!db.query("PRAGMA foreign_key_check").empty())throw std::runtime_error("Database integrity or classification relations failed verification");}
 json portableConfig(const fs::path& file){auto config=json::parse(readText(file));config["data_dir"]="../data";config["web_dir"]="../web";config["ffmpeg_path"]="../tools/ffmpeg/ffmpeg.exe";config.erase("bootstrap_admin_password");return config;}
 void requireAdmin(const Identity& who){if(!who.admin)throw Error(403,"ADMIN_REQUIRED","备份与迁移需要管理员权限");}

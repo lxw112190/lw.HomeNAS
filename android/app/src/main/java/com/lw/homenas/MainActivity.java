@@ -150,7 +150,7 @@ public final class MainActivity extends Activity {
     }
     private void ensureDestination(Settings.Session session) throws Exception {try{settings.ensureFolder(session,api(session),new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}}
     private synchronized JSONObject snapshot() throws Exception {
-        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",14).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
+        JSONObject result=settings.publicState().put("access",MediaCatalog.access(this)).put("mediaAccess",MediaPermissions.state(this)).put("mediaRevision",mediaRevision.get()).put("version",BuildConfig.VERSION_NAME).put("build",BuildConfig.BUILD_REF).put("logSession",Diagnostics.session()).put("resourceVersion",maintenance.version()).put("nativeApi",15).put("queueCursor",queueBefore).put("queueFilter",queueFilter);
         Settings.Session session=settings.session();result.put("queue",TaskStore.get(this).summary(session==null?"":session.scope,queueBefore,queueFilter));
         JSONObject transfer=TransferProgress.snapshot(session==null?"":session.scope);long[] totals=TaskStore.get(this).pendingTotals(session==null?"":session.scope);
         transfer.put("remaining_items",totals[0]).put("remaining_bytes",Long.toString(totals[1]));result.put("enqueue",enqueueJob.snapshot(session==null?"":session.scope));
@@ -177,18 +177,20 @@ public final class MainActivity extends Activity {
                 Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");
                 JSONObject folder=authenticatedGet(session,"folders/"+id);if(!folder.optBoolean("can_write"))throw new SecurityException("不能备份到其他用户的文件夹");
                 if(!id.equals(folder.optString("id")))throw new java.io.IOException("服务器返回的目标文件夹不一致");
-                if(!settings.current(session))throw new SecurityException("登录身份已改变");enqueueJob.cancel();settings.folder(session.scope,id,folder.getString("name"));mediaPicker.clear();
-                settings.message("新加入的备份将保存到「"+folder.getString("name")+"」；已有任务保留各自目标");Diagnostics.event("backup.destination","folder="+id);return snapshot();
+                if(!settings.current(session))throw new SecurityException("登录身份已改变");enqueueJob.cancel();settings.folder(session.scope,id,folder.optString("full_path",folder.getString("name")));mediaPicker.clear();
+                settings.message("新加入的备份将保存到「"+folder.optString("full_path",folder.getString("name"))+"」；已有任务保留各自目标");Diagnostics.event("backup.destination","folder="+id);return snapshot();
             }
+            case "folderPeople": return authenticatedGet(requireSession(true),"folders/people");
+            case "folderPolicy": {Settings.Session session=requireSession(true);String id=data.getString("id");if(!Protocol.folderId(id))throw new IllegalArgumentException("目录无效");JSONObject result=data.has("value")?api(session).post("folders/"+id+"/permissions",data.getJSONObject("value"),new RunControl(35000)):authenticatedGet(session,"folders/"+id+"/permissions");if(!settings.current(session))throw new SecurityException("登录已改变");return result;}
             case "folderList": case "folderItems": case "folderChange": {
                 boolean write=action.equals("folderChange");Settings.Session session=requireSession(write);String folderId=data.optString("folderId","");
                 if(!folderId.isEmpty()&&!Protocol.folderId(folderId))throw new IllegalArgumentException("文件夹标识无效");
                 JSONObject result;
-                if(write){String operation=data.optString("operation");if(!operation.matches("create|edit|delete|add|remove|move")||(!operation.equals("create")&&folderId.isEmpty()))throw new IllegalArgumentException("文件夹操作无效");
+                if(write){String operation=data.optString("operation");if(!operation.matches("create|edit|delete|add|remove|move|relocate")||(!operation.equals("create")&&folderId.isEmpty()))throw new IllegalArgumentException("文件夹操作无效");
                     JSONObject value=data.optJSONObject("value");if(value==null)value=new JSONObject();
                     try{result=api(session).post(operation.equals("create")?"folders":"folders/"+folderId+"/"+operation,value,new RunControl(35000));}catch(Exception error){checkAuthentication(session,error);throw error;}
                 }else{String before=data.optString("before","");if(before.length()>48)throw new IllegalArgumentException("分页游标无效");
-                    String query="before="+java.net.URLEncoder.encode(before,"UTF-8");
+                    String query="before="+java.net.URLEncoder.encode(before,"UTF-8");if(data.has("parent_id")){String parent=data.getString("parent_id");if(!parent.isEmpty()&&!Protocol.folderId(parent))throw new IllegalArgumentException("父目录无效");query+="&parent_id="+java.net.URLEncoder.encode(parent,"UTF-8");}
                     if(action.equals("folderItems")){if(folderId.isEmpty())throw new IllegalArgumentException("请选择文件夹");query+="&type="+java.net.URLEncoder.encode(data.optString("type","all"),"UTF-8")+"&q="+java.net.URLEncoder.encode(data.optString("search",""),"UTF-8");}
                     result=authenticatedGet(session,action.equals("folderList")?"folders?"+query:"folders/"+folderId+"/items?"+query);
                 }

@@ -44,10 +44,11 @@ void Store::metadataWorker(){
         std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 }
-json Store::calendar(const std::string& type,const std::string& search,int offset){
+json Store::calendar(const std::string& type,const std::string& search,int offset,const Identity* who){
     if(offset < -840||offset>840||search.size()>256)throw Error(400,"INVALID_CALENDAR","日期参数无效");
     Params args{std::to_string(offset)+" minutes"};std::string sql="SELECT strftime('%Y-%m',"+std::string(TimelineClock)+"/1000,'unixepoch',?) AS month,count(*) AS count FROM assets WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)";
+    if(who)sql+=" AND "+assetAccessSql("assets",*who);
     if(type=="image"||type=="video"||type=="file"){sql+=" AND category=?";args.push_back(type);}if(!search.empty()){sql+=" AND name LIKE ?";args.push_back("%"+search+"%");}
-    return {{"items",db.query(sql+" GROUP BY month ORDER BY month DESC LIMIT 2000",args)},{"remaining",db.query("SELECT count(*) AS count FROM assets WHERE state='READY' AND category='image' AND metadata_scanned=0")[0]["count"]},{"offset",offset},{"timeline_version",2}};
+    return {{"items",db.query(sql+" GROUP BY month ORDER BY month DESC LIMIT 2000",args)},{"remaining",db.query("SELECT count(*) AS count FROM assets WHERE state='READY' AND category='image' AND metadata_scanned=0 AND "+(who?assetAccessSql("assets",*who):"1"))[0]["count"]},{"offset",offset},{"timeline_version",2}};
 }
 }

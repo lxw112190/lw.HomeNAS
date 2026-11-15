@@ -38,7 +38,7 @@ std::string category(const std::string& name) {
     return "file";
 }
 json cleanTask(json task) { task.erase("source_key"); return task; }
-const std::string TaskListFields="SELECT u.id,u.user_id,u.device_id,u.name,u.size,u.offset,u.state,u.asset_id,u.error,u.created,u.updated,u.folder_id,COALESCE(f.id,'default') AS effective_folder_id,COALESCE(f.name,'默认文件夹') AS folder_name FROM uploads u LEFT JOIN folders f ON f.id=u.folder_id AND f.deleted=0 ";
+const std::string TaskListFields="SELECT u.id,u.user_id,u.device_id,u.name,u.size,u.offset,u.state,u.asset_id,u.error,u.created,u.updated,u.folder_id,u.folder_id AS effective_folder_id,COALESCE(f.name,'目录已删除，请重新选择') AS folder_name FROM uploads u LEFT JOIN folders f ON f.id=u.folder_id AND f.deleted=0 ";
 void taskFolderFlags(json& rows){for(auto& row:rows)row["folder_defaulted"]=row["folder_id"]!=row["effective_folder_id"];}
 void requireAdmin(const Identity& who) { if(!who.admin)throw Error(403,"ADMIN_REQUIRED","此操作需要管理员权限"); }
 void requireUpload(const Identity& who) { if(!who.canUpload())throw Error(403,"READ_ONLY","当前账号为只读，不能上传或更改备份任务"); }
@@ -93,7 +93,7 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
       CREATE TABLE IF NOT EXISTS devices(id TEXT PRIMARY KEY,name TEXT NOT NULL,admin INTEGER NOT NULL DEFAULT 0,revoked INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,last_seen INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS credentials(hash TEXT PRIMARY KEY,device_id TEXT NOT NULL REFERENCES devices(id),expires INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS assets(id TEXT PRIMARY KEY,sha256 TEXT NOT NULL,size INTEGER NOT NULL,path TEXT NOT NULL,name TEXT NOT NULL,mime TEXT NOT NULL,category TEXT NOT NULL,created INTEGER NOT NULL,modified INTEGER NOT NULL,state TEXT NOT NULL,preview TEXT NOT NULL DEFAULT 'PENDING');
-      CREATE UNIQUE INDEX IF NOT EXISTS ready_digest ON assets(sha256,size) WHERE state='READY';
+      CREATE INDEX IF NOT EXISTS ready_digest ON assets(sha256,size) WHERE state='READY';
       CREATE INDEX IF NOT EXISTS asset_timeline ON assets(created DESC,id DESC);
       CREATE TABLE IF NOT EXISTS uploads(id TEXT PRIMARY KEY,client_task_id TEXT NOT NULL,device_id TEXT NOT NULL REFERENCES devices(id),name TEXT NOT NULL,sha256 TEXT NOT NULL,size INTEGER NOT NULL,offset INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL,asset_id TEXT NOT NULL DEFAULT '',error TEXT NOT NULL DEFAULT '',source_key TEXT NOT NULL,album TEXT NOT NULL DEFAULT '',modified INTEGER NOT NULL DEFAULT 0,created INTEGER NOT NULL,updated INTEGER NOT NULL,UNIQUE(device_id,client_task_id));
       CREATE TABLE IF NOT EXISTS sources(device_id TEXT NOT NULL,source_key TEXT NOT NULL,asset_id TEXT NOT NULL REFERENCES assets(id),name TEXT NOT NULL,album TEXT NOT NULL,modified INTEGER NOT NULL,PRIMARY KEY(device_id,source_key,asset_id));
@@ -112,7 +112,7 @@ Store::Store(Config value,bool startBackground) : config(std::move(value)), db(c
       CREATE TABLE IF NOT EXISTS album_items(album_id TEXT NOT NULL REFERENCES albums(id) ON DELETE CASCADE,asset_id TEXT NOT NULL REFERENCES assets(id),PRIMARY KEY(album_id,asset_id));
     )SQL");
     db.exec("CREATE INDEX IF NOT EXISTS asset_pending_video ON assets(created,id) WHERE state='READY' AND category='video' AND preview='PENDING';");
-    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");initializeTimeline();serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});metadataWorker_=std::thread([this]{metadataWorker();});}
+    db.exec("CREATE INDEX IF NOT EXISTS asset_ready_timeline ON assets(created DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_timeline ON assets(state,category,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_user_timeline ON uploads(user_id,created DESC,id DESC); CREATE INDEX IF NOT EXISTS upload_timeline ON uploads(created DESC,id DESC);");db.exec("CREATE INDEX IF NOT EXISTS asset_file_time ON assets((CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY'; CREATE INDEX IF NOT EXISTS asset_category_file_time ON assets(category,(CASE WHEN modified>0 THEN modified ELSE created END) DESC,id DESC) WHERE state='READY';");db.exec("DROP INDEX IF EXISTS ready_digest; CREATE INDEX ready_digest ON assets(sha256,size) WHERE state='READY'");initializeTimeline();serverId=setting("server_id");if(startBackground){recover(); worker_=std::thread([this]{worker();});videoWorker_=std::thread([this]{videoWorker();});metadataWorker_=std::thread([this]{metadataWorker();});}
 }
 Store::~Store() { stopping=true; queueCondition_.notify_all();videoCondition_.notify_all(); if(worker_.joinable()) worker_.join();if(videoWorker_.joinable())videoWorker_.join();if(metadataWorker_.joinable())metadataWorker_.join(); }
 std::string Store::setting(const std::string& key) { auto rows=db.query("SELECT value FROM settings WHERE key=?",{key}); return rows.empty()?"":rows[0]["value"].get<std::string>(); }
@@ -198,10 +198,10 @@ fs::path Store::part(const std::string& id) const { return config.data/"storage/
 fs::path Store::originalPath(const json& row) const { return config.data/fs::u8path(row["path"].get<std::string>()); }
 json Store::taskRow(const std::string& id) {
     if(id.size()!=48 || id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");
-    auto rows=db.query("SELECT * FROM uploads WHERE id=?",{id});if(rows.empty())throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");auto row=rows[0];auto folders=db.query("SELECT id,name,deleted FROM folders WHERE id=?",{row["folder_id"]});bool fallback=folders.empty()||folders[0]["deleted"]=="1";row["effective_folder_id"]=fallback?json("default"):row["folder_id"];row["folder_name"]=fallback?json("默认文件夹"):folders[0]["name"];row["folder_defaulted"]=fallback;return row;
+    auto rows=db.query("SELECT * FROM uploads WHERE id=?",{id});if(rows.empty())throw Error(404,"UPLOAD_NOT_FOUND","上传任务不存在");auto row=rows[0];auto folders=db.query("SELECT id,name,deleted FROM folders WHERE id=?",{row["folder_id"]});bool unavailable=folders.empty()||folders[0]["deleted"]=="1";row["effective_folder_id"]=row["folder_id"];row["folder_name"]=unavailable?json("目录已删除，请重新选择"):folders[0]["name"];row["folder_defaulted"]=false;row["folder_unavailable"]=unavailable;return row;
 }
 json Store::upload(const std::string& id,const Identity& who) {
-    auto task=taskRow(id);if(!who.admin&&task["user_id"]!=who.userId)throw Error(403,"USER_MISMATCH","不能访问其他账号的上传任务");return cleanTask(task);
+    auto task=taskRow(id);if(!who.admin&&task["user_id"]!=who.userId)throw Error(403,"USER_MISMATCH","不能访问其他账号的上传任务");if(task["state"]=="UPLOADING"||task["state"]=="VERIFYING"||task["state"]=="COMMITTING"){resolveFolder(task["folder_id"],who);if(task["error"].get<std::string>().rfind("FOLDER_",0)==0&&task["state"]!="UPLOADING"){db.exec("UPDATE uploads SET error='' WHERE id=?",{id});enqueue(id);}}if(!who.admin&&db.query("SELECT "+folderAccessSql("u.folder_id",who)+" AS n FROM uploads u WHERE u.id=?",{id})[0]["n"]=="0")task["folder_name"]="目标目录已不可访问";return cleanTask(task);
 }
 json Store::createUpload(const json& input,const Identity& who) {
     requireUpload(who);
@@ -225,7 +225,7 @@ json Store::createUpload(const json& input,const Identity& who) {
             }
             result=cleanTask(taskRow(row["id"]));return;
         }
-        auto assets=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY'",{hash,std::to_string(size)});
+        auto assets=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY' AND "+assetAccessSql("assets",who)+" AND EXISTS(SELECT 1 FROM folder_items i WHERE i.asset_id=assets.id AND i.folder_id=?)",{hash,std::to_string(size),requested});
         std::string assetId;
         if(!assets.empty()) {
             auto path=originalPath(assets[0]);std::error_code error;
@@ -233,7 +233,7 @@ json Store::createUpload(const json& input,const Identity& who) {
             else db.exec("UPDATE assets SET state='MISSING' WHERE id=? AND state='READY'",{assets[0]["id"].get<std::string>()});
         }
         if(assetId.empty()) {
-            if(!db.query("SELECT t.asset_id FROM asset_trash t JOIN assets a ON a.id=t.asset_id WHERE a.sha256=? AND a.size=?",{hash,std::to_string(size)}).empty())throw Error(409,"ASSET_TRASHED","该文件在回收站且原件需要检查，请在电脑处理后再备份");
+            if(!db.query("SELECT t.asset_id FROM asset_trash t JOIN assets a ON a.id=t.asset_id WHERE a.sha256=? AND a.size=? AND "+assetAccessSql("a",who),{hash,std::to_string(size)}).empty())throw Error(409,"ASSET_TRASHED","该文件在回收站且原件需要检查，请在电脑处理后再备份");
             auto reserved=db.query("SELECT COALESCE(SUM(size-offset),0) AS bytes FROM uploads WHERE state IN ('UPLOADING','VERIFYING','COMMITTING')");auto remaining=number(reserved[0],"bytes");
             auto available=fs::space(config.data).available;
             if(available<config.minFree || remaining>available-config.minFree || size>available-config.minFree-remaining)throw Error(507,"INSUFFICIENT_SPACE","电脑存储空间不足，已考虑未完成任务的容量预留");
@@ -252,7 +252,7 @@ json Store::writeChunk(const std::string& id,const Identity& who,uint64_t offset
     requireUpload(who);
     auto mutex=sessionMutex(id);std::unique_lock<std::mutex> lock(*mutex,std::try_to_lock);
     if(!lock.owns_lock())throw Error(409,"UPLOAD_BUSY","该文件正在处理，请查询进度后重试");
-    auto task=upload(id,who);auto confirmed=number(task,"offset"),total=number(task,"size");
+    auto task=upload(id,who);resolveFolder(task["folder_id"],who);auto confirmed=number(task,"offset"),total=number(task,"size");
     if(task["state"]!="UPLOADING")throw Error(409,"UPLOAD_STATE","该任务当前不能接收数据");
     if(offset!=confirmed)throw Error(409,"OFFSET_MISMATCH","续传偏移不一致，请重新查询服务器进度");
     if(!size || size>config.chunkBytes || size>total-confirmed || !validHash(digest))throw Error(400,"INVALID_CHUNK","数据块长度或摘要无效");
@@ -267,8 +267,8 @@ json Store::writeChunk(const std::string& id,const Identity& who,uint64_t offset
         unsigned char bytes[32];if(mbedtls_sha256_finish(&context,bytes)!=0)throw std::runtime_error("Block hashing failed");
         static const char* digits="0123456789abcdef";std::string actual;for(auto b:bytes){actual+=digits[b>>4];actual+=digits[b&15];}
         if(!secureEqual(actual,digest))throw Error(422,"CHUNK_HASH_MISMATCH","数据块校验失败，请重传本块");
-        file.flush();db.exec("UPDATE uploads SET offset=?,updated=?,error='' WHERE id=?",{std::to_string(confirmed+received),std::to_string(millis()),id});
-        mbedtls_sha256_free(&context);return upload(id,who);
+        file.flush();auto updated=std::to_string(millis());db.transaction([&]{resolveFolder(task["folder_id"],who);db.exec("UPDATE uploads SET offset=?,updated=?,error='' WHERE id=?",{std::to_string(confirmed+received),updated,id});});
+        task["offset"]=std::to_string(confirmed+received);task["updated"]=updated;task["error"]="";mbedtls_sha256_free(&context);return cleanTask(task);
     }catch(...){
         mbedtls_sha256_free(&context);
         try{file.truncate(confirmed);file.flush();}catch(...){db.exec("UPDATE uploads SET state='ERROR',error='PART_ROLLBACK_FAILED' WHERE id=?",{id});}
@@ -278,7 +278,8 @@ json Store::writeChunk(const std::string& id,const Identity& who,uint64_t offset
 void Store::enqueue(const std::string& id) { {std::lock_guard<std::mutex> lock(queueMutex_);queue_.push(id);}queueCondition_.notify_one(); }
 json Store::complete(const std::string& id,const Identity& who) {
     requireUpload(who);
-    auto mutex=sessionMutex(id);std::lock_guard<std::mutex> lock(*mutex);auto task=upload(id,who);
+    auto mutex=sessionMutex(id);std::lock_guard<std::mutex> lock(*mutex);auto task=upload(id,who);resolveFolder(task["folder_id"],who);
+    if(task["state"]=="VERIFYING"||task["state"]=="COMMITTING"){enqueue(id);return task;}
     if(task["state"]=="READY" || task["state"]=="VERIFYING" || task["state"]=="COMMITTING")return task;
     if(task["state"]!="UPLOADING" || number(task,"offset")!=number(task,"size"))throw Error(409,"UPLOAD_INCOMPLETE","文件尚未完整上传");
     db.exec("UPDATE uploads SET state='VERIFYING',error='',updated=? WHERE id=?",{std::to_string(millis()),id});enqueue(id);return upload(id,who);
@@ -287,15 +288,15 @@ json Store::cancel(const std::string& id,const Identity& who) {
     requireUpload(who);
     auto mutex=sessionMutex(id);std::unique_lock<std::mutex> lock(*mutex,std::try_to_lock);
     if(!lock.owns_lock())throw Error(409,"UPLOAD_BUSY","文件正在处理，请先暂停上传后重试");
-    auto task=upload(id,who);
+    auto task=taskRow(id);if(!who.admin&&task["user_id"]!=who.userId)throw Error(403,"USER_MISMATCH","不能取消其他账号的上传任务");
     if(task["state"]!="UPLOADING"&&task["state"]!="CANCELLED")throw Error(409,"UPLOAD_STATE","仅能取消尚未入库的上传任务");
     db.exec("UPDATE uploads SET state='CANCELLED',updated=? WHERE id=?",{std::to_string(millis()),id});
     std::error_code ec;fs::remove(part(id),ec);
-    return upload(id,who);
+    return cleanTask(taskRow(id));
 }
 void Store::finishCommit(const json& task,const json& assetRow) {
     db.transaction([&]{
-        auto id=task["id"].get<std::string>(),assetId=assetRow["id"].get<std::string>();
+        taskIdentity(task);auto id=task["id"].get<std::string>(),assetId=assetRow["id"].get<std::string>();
         if(db.query("SELECT id FROM assets WHERE id=? AND state<>'PURGING'",{assetId}).empty())throw Error(409,"ASSET_PURGING","文件正在彻底删除，未将备份标记为成功");
         db.exec("UPDATE assets SET state='READY' WHERE id=?",{assetId});
         db.exec("UPDATE uploads SET state='READY',asset_id=?,offset=size,error='',updated=? WHERE id=?",{assetId,std::to_string(millis()),id});
@@ -304,7 +305,7 @@ void Store::finishCommit(const json& task,const json& assetRow) {
     });
 }
 void Store::process(const std::string& id) {
-    auto mutex=sessionMutex(id);std::lock_guard<std::mutex> guard(*mutex);auto task=taskRow(id);auto size=number(task,"size");json row;
+    auto mutex=sessionMutex(id);std::lock_guard<std::mutex> guard(*mutex);auto task=taskRow(id);auto uploader=taskIdentity(task);auto size=number(task,"size");json row;
     if(task["state"]=="COMMITTING") {
         auto rows=db.query("SELECT * FROM assets WHERE id=?",{task["asset_id"]});if(rows.empty())throw Error(500,"COMMIT_RECORD_MISSING","入库记录缺失");row=rows[0];
         auto target=originalPath(row),source=fs::exists(target)?target:part(id);
@@ -313,7 +314,7 @@ void Store::process(const std::string& id) {
     } else {
         if(task["state"]!="VERIFYING")return;
         if(fs::file_size(part(id))!=size || hashFile(part(id),&stopping)!=task["sha256"])throw Error(422,"FILE_HASH_MISMATCH","完整文件摘要不一致，未标记为备份成功");
-        auto duplicates=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY'",{task["sha256"],task["size"]});
+        auto duplicates=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY' AND "+assetAccessSql("assets",uploader)+" AND EXISTS(SELECT 1 FROM folder_items i WHERE i.asset_id=assets.id AND i.folder_id=?)",{task["sha256"],task["size"],task["folder_id"]});
         if(!duplicates.empty() && fs::exists(originalPath(duplicates[0])) && fs::file_size(originalPath(duplicates[0]))==size) {
             row=duplicates[0];finishCommit(task,row);std::error_code error;fs::remove(part(id),error);return;
         }
@@ -354,7 +355,7 @@ void Store::videoWorker() {
 void Store::worker() {
     for(;;){
         std::string id;{std::unique_lock<std::mutex> lock(queueMutex_);queueCondition_.wait(lock,[&]{return stopping||!queue_.empty();});if(stopping)return;id=queue_.front();queue_.pop();}
-        try{if(id.rfind("preview:",0)==0)makePreview(asset(id.substr(8)));else process(id);}catch(const Error& e){if(stopping)return;try{db.exec("UPDATE uploads SET state='ERROR',error=?,updated=? WHERE id=?",{e.code,std::to_string(millis()),id});}catch(...){stopping=true;return;}}
+        try{if(id.rfind("preview:",0)==0)makePreview(asset(id.substr(8)));else process(id);}catch(const Error& e){if(stopping)return;try{db.exec("UPDATE uploads SET state=CASE WHEN ? IN ('FOLDER_NOT_FOUND','FOLDER_UNAVAILABLE','FOLDER_OWNER_REQUIRED','FOLDER_PERMISSION_CHANGED','FOLDER_ACCESS_DENIED') THEN state ELSE 'ERROR' END,error=?,updated=? WHERE id=?",{e.code,e.code,std::to_string(millis()),id});}catch(...){stopping=true;return;}}
         catch(const std::exception&){if(stopping)return;try{db.exec("UPDATE uploads SET state='ERROR',error='PROCESS_FAILED',updated=? WHERE id=?",{std::to_string(millis()),id});}catch(...) {stopping=true;return;}}
     }
 }
@@ -379,12 +380,13 @@ void Store::recover() {
 json Store::asset(const std::string& id) {
     auto rows=db.query("SELECT * FROM assets WHERE id=? AND state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)",{id});if(rows.empty())throw Error(404,"ASSET_NOT_FOUND","文件不存在或原件需要恢复检查");return rows[0];
 }
-json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit,const std::string& order,const std::string& from,const std::string& to) {
+json Store::assets(const std::string& before,const std::string& type,const std::string& search,int limit,const std::string& order,const std::string& from,const std::string& to,const Identity* who) {
     if(limit<1||limit>100)throw Error(400,"INVALID_LIMIT","每页数量需1至100");
     if(order!="created"&&order!="timeline")throw Error(400,"INVALID_ORDER","排序方式无效");
     const bool timeline=order=="timeline",filtered=type=="image"||type=="video"||type=="file";
     const std::string clock=timeline?TimelineClock:"created";
     Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview,taken,taken_text,taken_zone,"+std::string(TimelineClock)+" AS timeline_time FROM assets INDEXED BY "+std::string(timeline?(filtered?"asset_category_capture_time":"asset_capture_time"):(filtered?"asset_category_timeline":"asset_ready_timeline"))+" WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)";
+    if(who)sql+=" AND "+assetAccessSql("assets",*who);
     if(!before.empty()){
         auto colon=before.find(':');if(colon==std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");auto time=before.substr(0,colon),id=before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
@@ -411,12 +413,12 @@ json Store::sourceStatus(const json& input,const Identity& who) {
     auto rows=db.query("SELECT u.id,u.state,u.size,u.modified,u.sha256,u.asset_id,a.path,a.state AS asset_state,a.size AS original_size,(SELECT count(*) FROM asset_trash t WHERE t.asset_id=a.id) AS trashed FROM uploads u LEFT JOIN assets a ON a.id=u.asset_id WHERE u.user_id=? AND u.id IN ("+slots+")",params);
     json items=json::array();for(auto row:rows){std::string state=row["state"];
         if(state=="READY"){std::error_code error;bool present=row["asset_state"]=="READY"&&!row["path"].is_null();if(present){auto file=config.data/fs::u8path(row["path"].get<std::string>());present=fs::is_regular_file(file,error)&&!error&&fs::file_size(file,error)==number(row,"size")&&!error;}if(!present)state="MISSING";}
-        if(row["trashed"]=="1")state="TRASHED";
+        if(row["trashed"]=="1")state="TRASHED";if(!row["asset_id"].is_null()&&row["asset_id"]!=""&&db.query("SELECT a.id FROM assets a WHERE a.id=? AND "+assetAccessSql("a",who),{row["asset_id"]}).empty()){state="INACCESSIBLE";row["asset_id"]="";}
         items.push_back({{"id",row["id"]},{"state",state},{"size",row["size"]},{"modified",row["modified"]},{"sha256",row["sha256"]},{"asset_id",row["asset_id"]}});
     }if(input.contains("folder_id"))folderMembership(items,resolveFolder(text(input,"folder_id",48),who));return {{"items",items}};
 }
 json Store::tasks(const Identity& who) {
-    auto rows=db.query(TaskListFields+(who.admin?"":"WHERE u.user_id=? ")+"ORDER BY u.updated DESC,u.id DESC LIMIT 100",who.admin?Params{}:Params{who.userId});taskFolderFlags(rows);return rows;
+    auto rows=db.query(TaskListFields+(who.admin?"":"WHERE u.user_id=? ")+"ORDER BY u.updated DESC,u.id DESC LIMIT 100",who.admin?Params{}:Params{who.userId});taskFolderFlags(rows);if(!who.admin)for(auto& row:rows)if(db.query("SELECT "+folderAccessSql("'"+row["folder_id"].get<std::string>()+"'",who)+" AS n")[0]["n"]=="0")row["folder_name"]="目标目录已不可访问";return rows;
 }
 json Store::taskPage(const Identity& who,const std::string& before,const std::string& filter){
     Params values;std::string sql=TaskListFields+"WHERE 1=1";
@@ -430,13 +432,13 @@ json Store::taskPage(const Identity& who,const std::string& before,const std::st
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
         sql+=" AND (u.created,u.id)<(?,?)";values.insert(values.end(),{time,id});
     }
-    auto rows=db.query(sql+" ORDER BY u.created DESC,u.id DESC LIMIT 51",values);taskFolderFlags(rows);bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
+    auto rows=db.query(sql+" ORDER BY u.created DESC,u.id DESC LIMIT 51",values);taskFolderFlags(rows);if(!who.admin)for(auto& row:rows)if(db.query("SELECT "+folderAccessSql("'"+row["folder_id"].get<std::string>()+"'",who)+" AS n")[0]["n"]=="0")row["folder_name"]="目标目录已不可访问";bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
     std::string next;if(more)next=rows.back()["created"].get<std::string>()+":"+rows.back()["id"].get<std::string>();return {{"items",rows},{"next",next}};
 }
 json Store::overview(const Identity& caller){
-    auto counts=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(size),0) AS bytes,COALESCE(SUM(category='image'),0) AS images,COALESCE(SUM(category='video'),0) AS videos FROM assets WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)")[0];
-    auto active=db.query("SELECT COUNT(*) AS active,COALESCE(SUM(size-offset),0) AS reserved FROM uploads WHERE state IN ('UPLOADING','VERIFYING','COMMITTING')")[0];
-    auto trash=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(a.size),0) AS bytes FROM asset_trash t JOIN assets a ON a.id=t.asset_id")[0];
+    auto counts=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(size),0) AS bytes,COALESCE(SUM(category='image'),0) AS images,COALESCE(SUM(category='video'),0) AS videos FROM assets WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id) AND "+assetAccessSql("assets",caller))[0];
+    auto active=db.query("SELECT COUNT(*) AS active,COALESCE(SUM(size-offset),0) AS reserved FROM uploads WHERE state IN ('UPLOADING','VERIFYING','COMMITTING')"+std::string(caller.admin?"":" AND user_id=?"),caller.admin?Params{}:Params{caller.userId})[0];
+    auto trash=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(a.size),0) AS bytes FROM asset_trash t JOIN assets a ON a.id=t.asset_id WHERE "+assetAccessSql("a",caller))[0];
     auto space=fs::space(config.data);
     json result={{"library",counts},{"trash",trash},{"transfers",active},{"capacity",std::to_string(space.capacity)},{"available",std::to_string(space.available)},{"chunk_bytes",std::to_string(config.chunkBytes)},
         {"data_dir",config.data.u8string()},{"addresses",ipv4Addresses()},{"http_port",config.httpPort},{"https_port",config.httpsPort},{"certificate_sha256",certificateFingerprint(config.data/"server-cert.pem")}};

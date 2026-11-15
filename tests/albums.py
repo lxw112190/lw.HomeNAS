@@ -18,6 +18,7 @@ try:
  h.stop();fixture=h.home/'数据/fixture';fixture.mkdir();(fixture/'shared').write_bytes(b'abc')
  with sqlite3.connect(h.home/'数据/catalog.db') as db:
   db.executemany("INSERT INTO assets(id,sha256,size,path,name,mime,category,created,modified,state,preview) VALUES(?,?,3,'fixture/shared',?,'image/jpeg','image',123,456,'READY','UNAVAILABLE')",[(f'{i:048x}',f'{i:064x}',f'photo-{i}') for i in range(1,106)])
+  db.executemany("INSERT INTO folder_items(folder_id,asset_id) VALUES('default',?)",[(f'{i:048x}',) for i in range(1,106)])
  h.start();ids=[f'{i:048x}' for i in range(1,106)]
  h.post(path+'/add',{'asset_ids':ids[:100]},session=owner);h.post(path+'/add',{'asset_ids':ids[100:]},session=owner)
  h.post(path+'/add',{'asset_ids':ids[:2]},session=owner)
@@ -27,7 +28,7 @@ try:
  second=h.post('albums',{'name':'atomic'},session=owner,status=201)
  h.post('albums/'+second['id']+'/add',{'asset_ids':[ids[0],'f'*48]},session=owner,status=404)
  h.check(owner.get(h.url+'albums/'+second['id']+'/items').json()['album']['item_count']=='0','invalid batch rolls back all references')
- h.post(path+'/cover',{'asset_id':'f'*48},session=owner,status=400)
+ h.post(path+'/cover',{'asset_id':'f'*48},session=owner,status=404)
  h.post(path+'/cover',{'asset_id':ids[0]},session=owner)
  page=viewer.get(h.url+path+'/items').json();h.check(page['album']['cover']['id']==ids[0] and not page['album']['can_edit'],'selected cover is a member, readable to viewers')
  seen=[];before=''

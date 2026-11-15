@@ -31,7 +31,7 @@ try:
  change('restore',[aid],other,403);change('restore',[aid],viewer,403)
  change('restore',[aid]);h.check(owner.get(h.url+'assets/'+aid+'/original').content==payload,'restore returns exact original bytes')
  h.check(owner.get(h.url+'folders/'+folder['id']+'/items').json()['items'][0]['id']==aid and owner.get(h.url+'albums/'+album['id']+'/items').json()['items'][0]['id']==aid,'restore retains folder and album memberships')
- change('trash',[aid]);h.post('folders/'+folder['id']+'/delete',{},session=owner);change('restore',[aid],h.admin)
+ change('trash',[aid]);h.post('folders/'+folder['id']+'/delete',{},session=owner,status=409);change('restore',[aid],h.admin);h.post('folders/'+folder['id']+'/remove',{'asset_ids':[aid],'confirm_access_change':True},session=owner);h.post('folders/'+folder['id']+'/delete',{},session=owner)
  h.check(any(x['id']==aid for x in owner.get(h.url+'folders/default/items').json()['items']),'restore after folder removal has a live default membership')
  change('trash',[aid]);change('restore',[aid],h.admin)
  change('trash',[aid,aid],owner,400);change('trash',[],owner,400)
@@ -39,7 +39,7 @@ try:
  h.check(owner.get(h.url+'trash?before=bad').status_code==400,'invalid recycle cursor rejected')
  # Preview/move contract exposes current memberships, respects existing folder write controls.
  memberships=owner.get(h.url+'assets/'+aid+'/folders').json()['items'];h.check(any(x['id']=='default' and x['can_write'] for x in memberships),'preview can discover writable source folders')
- target=h.post('folders',{'name':'移动目标'},session=owner,status=201);h.post('folders/default/move',{'asset_ids':[aid],'target_id':target['id']},session=owner)
+ target=h.post('folders',{'name':'移动目标'},session=owner,status=201);h.post('folders/default/move',{'confirm_access_change':True,'asset_ids':[aid],'target_id':target['id']},session=owner)
  h.check(owner.get(h.url+'folders/'+target['id']+'/items').json()['items'][0]['id']==aid,'preview move route relocates folder association')
  h.check(owner.get(h.url+'assets/'+aid+'/original').content==payload,'move does not change original')
  # Pagination and search operate on recycle records, not on the active library.
@@ -60,10 +60,10 @@ try:
   with sqlite3.connect(h.home/'数据/catalog.db') as db:relative=db.execute('SELECT path FROM assets WHERE id=?',(ident,)).fetchone()[0]
   path=(h.home/'数据'/relative).resolve();assert path.is_relative_to(h.home.resolve());return path
  purge(aid,'0',status=409);h.check(owner.get(h.url+'assets/'+aid+'/original').content==payload,'active originals cannot be purged')
- change('trash',[aid]);record=trash_row(aid);path=original_path(aid);cache=h.home/'数据/cache'/(aid+'.jpg');cache.write_bytes(b'synthetic cache')
+ h.post('folders/default/add',{'asset_ids':[aid],'confirm_access_change':True},session=owner);change('trash',[aid]);record=trash_row(aid);path=original_path(aid);cache=h.home/'数据/cache'/(aid+'.jpg');cache.write_bytes(b'synthetic cache')
  purge(aid,record['deleted_at'],owner,403);purge(aid,record['deleted_at'],viewer,403);purge(aid,record['deleted_at'],status=400,confirm='');purge(aid,str(int(record['deleted_at'])+1),status=409)
  h.check(path.read_bytes()==payload and cache.exists(),'permission, confirmation and stale-record failures preserve bytes')
- other_task,_=h.create(payload,name='shared.txt',session=other);h.check(other_task['asset_id']==aid,'another member deduplicates to the same trashed original')
+ h.post('folders/'+target['id']+'/permissions',{'policy':'public','confirm_access_change':True},session=owner);other_task,_=h.create(payload,name='shared.txt',session=other);h.check(other_task['asset_id']==aid,'another member deduplicates to the same trashed original')
  import ctypes
  from ctypes import wintypes
  kernel=ctypes.WinDLL('kernel32',use_last_error=True);kernel.CreateFileW.argtypes=[wintypes.LPCWSTR,wintypes.DWORD,wintypes.DWORD,wintypes.LPVOID,wintypes.DWORD,wintypes.DWORD,wintypes.HANDLE];kernel.CreateFileW.restype=wintypes.HANDLE;kernel.CloseHandle.argtypes=[wintypes.HANDLE]

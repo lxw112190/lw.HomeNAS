@@ -114,3 +114,44 @@ Web上传目标接入后，`GET /api/v1/tasks` 和 `GET /api/v1/tasks/page` 也�
 - 停服维护：`--migrate-to 空目录`、`--verify-library 迁移目录`、`--restore-backup 解压目录 --migrate-to 空目录`。均不覆盖源资料。完整迁移包含上传临时文件和确认偏移；元数据恢复不能保证这些文件，未完成任务改为ERROR / RESTORED_METADATA_RESELECT，客户端应明确重试。
 
 完整使用与限制见[1.3.0说明](20261113-时间线备份迁移与手机连接.md)。
+
+## 1.4.0 多级目录与成员权限
+
+本节替代旧版本的“全部共享”“删除后默认回退”“跨目录全局去重”约定。公共`GET /server`新增`folder_acl_version:1`、`folder_max_depth:16`，member_mode为`folder_acl_accounts`。目录ID、资产ID和大小字符串约定不变。
+
+### 结构与查询
+
+- `GET /folders`未传parent_id时返回可见目录扁平分页列表；`parent_id=`显式空值只取一级，`parent_id=ID`只取直接子目录。每页48项，沿用before/next，先过滤权限再分页。
+- 目录对象新增parent_id、policy、full_path、breadcrumbs（从一级到自身的id/name）、depth、access_level（1/2/3）、can_manage、child_count和stats_scope:`direct`。can_write代表权限至少2，can_edit代表可修改目录。文件统计只算本层可见活动资料。
+- `GET /folders/{id}/items`另返回children（直接子目录首个分页对象）；更多子目录走`GET /folders?parent_id=ID&before=...`。
+- `POST /folders {"name":"2026年","parent_id":"父目录ID"}`创建子目录，需父目录管理权；parent_id省略或空值创建一级。新一级private，子级inherit。
+- `POST /folders/{id}/relocate {"parent_id":"目标父目录ID或空字符串","confirm_access_change":true}`移动整棵目录。源和目标父目录均需管理权；空值移到一级，原inherit策略变private。保留ID及磁盘原件位置，检查循环、同名和16层上限。
+- edit/delete需管理权。delete只接受无子目录、无任何文件关联的目录（含回收站引用），否则409/FOLDER_NOT_EMPTY。默认文件夹不可改名、删除或更改权限。
+
+### 权限
+
+`GET /folders/people`为有上传能力账号返回启用账号id/username/display_name/role，不含凭据。`GET /folders/{id}/permissions`需管理权，返回目录及people、grants。
+
+`POST /folders/{id}/permissions`需管理权，JSON上限64KiB，例如：
+
+```json
+{"policy":"restricted","grants":[{"user_id":"48位账号ID","level":2}],"confirm_access_change":true}
+```
+
+policy为private/restricted/public/inherit，一级不接受inherit。restricted每目录最多200个不重复账号，level为1只读、2可整理、3管理；其他策略不保存grants。legacy仅用于旧目录迁移，不能新设。
+
+有效权限取所有祖先限制的最小值，viewer再限制为只读；服务器管理员全权，目录所有者也受祖先限制。显式子级授权超过接收者父级权限返回400/PARENT_PERMISSION_LIMIT；管理者保存后失去管理权返回409/SELF_ACCESS_REQUIRED；整次事务回滚。缺少confirm_access_change为409/ACCESS_CONFIRM_REQUIRED。
+
+### 文件引用与上传
+
+旧多目录关联保留，文件读写权限取所属目录交集；图集不扩权。`folders/{id}/add|remove|move`增加`confirm_access_change:true`，每批100项、整批事务，需目录写权限和文件整理权限；旧默认目录保留上传归属限制。
+
+媒体列表、时间线、日历、统计、图集、回收站、下载/Range、缩略图、元数据和ZIP均检查可见性。不可见媒体按404处理；已知但删除/无权的目录查询为403，未知目录仍可404。目录错误不能作为自动改存默认目录的信号。
+
+任务保留原folder_id，effective_folder_id不改成default，folder_defaulted为false；folder_unavailable标记目标删除。无访问权的历史任务folder_name用通用提示，避免暴露后续目录名称。来源状态增加INACCESSIBLE并隐藏asset_id。
+
+创建、写块、完成和后台提交复核目标权限。传块期间撤权则当前块回滚，确认offset不前移；VERIFYING/COMMITTING保留字节与中间状态，恢复权限后查询或complete可重启核验。上传者可取消自己仍为UPLOADING的失效目标任务。均不回退共享目录。
+
+去重只复用同一目标目录中本人可读取的READY记录；跨目标相同内容建立独立记录及物理原件。在线快照与完整迁移含folder_acl和folder_tree，不支持用旧程序重开升级后的库。
+
+使用与验证边界见[多级目录说明](20261114-多级目录与权限继承.md)。

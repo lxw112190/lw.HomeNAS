@@ -24,6 +24,8 @@ if($LASTEXITCODE -ne 0){throw 'Web upload destination checks failed'}
 if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
 & node (Join-Path $root 'tests/library-tools-dom.cjs')
 if($LASTEXITCODE -ne 0){throw 'Timeline and connection UI checks failed'}
+& node (Join-Path $root 'tests/folder-hierarchy-dom.cjs')
+if($LASTEXITCODE -ne 0){throw 'Folder hierarchy UI checks failed'}
 & node (Join-Path $root 'tests/backup-summary-dom.cjs')
 if($LASTEXITCODE -ne 0){throw 'APK backup summary DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')
@@ -34,6 +36,7 @@ Invoke-ReleasePython @('tests/bundled_clients.py')
 Invoke-ReleasePython @('tests/parallel_uploads.py')
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
+Invoke-ReleasePython @('tests/folder_acl.py')
 Invoke-ReleasePython @('tests/library_upgrade.py')
 Invoke-ReleasePython @('tests/recycle.py')
 Invoke-ReleasePython @('tests/library_ux.py')

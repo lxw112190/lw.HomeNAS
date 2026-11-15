@@ -29,7 +29,7 @@ public class ClientMaintenanceTest {
     }
     @Test public void nativeUpgradeUsesBuiltinUiAndPreservesOtherState() throws Exception {
         File old=ui("r6"),staged=ui("r7");
-        prefs.edit().putInt("builtinNative",13).putString("active","r6").putString("previous","r5").putString("staged","r7").putBoolean("unconfirmed",true).putString("unrelated-setting","retained").commit();
+        prefs.edit().putInt("builtinNative",14).putString("active","r6").putString("previous","r5").putString("staged","r7").putBoolean("unconfirmed",true).putString("unrelated-setting","retained").commit();
         ClientMaintenance manager=new ClientMaintenance(context);assertNull(manager.beginLaunch());assertEquals("builtin",manager.version());
         for(String key:new String[]{"active","previous","staged"})assertFalse(prefs.contains(key));
         assertFalse(prefs.getBoolean("unconfirmed",true));assertEquals("retained",prefs.getString("unrelated-setting",""));
@@ -38,7 +38,7 @@ public class ClientMaintenanceTest {
         prefs.edit().putString("active","r7").commit();File next=manager.beginLaunch();assertNotNull(next);assertEquals("r7",next.getName());
     }
     @Test public void sameProtocolApkUpgradeResetsUiOnlyOnce() throws Exception {
-        ui("r14-old");prefs.edit().putInt("builtinNative",14).putInt("builtinCode",BuildConfig.VERSION_CODE-1).putString("active","r14-old").putString("staged","r14-old").putString("unrelated-setting","retained").commit();
+        ui("r14-old");prefs.edit().putInt("builtinNative",15).putInt("builtinCode",BuildConfig.VERSION_CODE-1).putString("active","r14-old").putString("staged","r14-old").putString("unrelated-setting","retained").commit();
         ClientMaintenance manager=new ClientMaintenance(context);assertNull(manager.beginLaunch());assertEquals(BuildConfig.VERSION_CODE,prefs.getInt("builtinCode",0));assertEquals("retained",prefs.getString("unrelated-setting",""));
         prefs.edit().putString("active","r14-old").commit();assertNotNull(manager.beginLaunch());
     }

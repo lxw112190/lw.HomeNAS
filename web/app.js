@@ -158,7 +158,7 @@ function renderUploadDestination(){
 function resetUploadDestination(){state.uploadFolder={id:'default',name:'默认文件夹'};renderUploadDestination();}
 async function chooseUploadDestination(){
  if(!state.me?.can_upload)return;const revision=state.uploadRevision,owner=state.me.user_id,button=$('choose-upload-folder');button.disabled=true;
- try{const folder=await collectionView.chooseFolder();if(revision!==state.uploadRevision||owner!==state.me?.user_id||!folder)return;state.uploadFolder={id:folder.id,name:folder.name};renderUploadDestination();}
+ try{const folder=await collectionView.chooseFolder();if(revision!==state.uploadRevision||owner!==state.me?.user_id||!folder)return;state.uploadFolder={id:folder.id,name:folder.full_path||folder.name};renderUploadDestination();}
  catch(e){if(revision===state.uploadRevision)error(e.message);}finally{button.disabled=false;}
 }
 function openUpload(){navigate('transfers');$('choose-files').focus();}

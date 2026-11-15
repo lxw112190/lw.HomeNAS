@@ -13,12 +13,12 @@ uint32_t crc32(uint32_t crc,const char* data,size_t count){
 }
 }
 void streamArchive(httplib::Response& response,const std::shared_ptr<std::vector<Entry>>& entries,const std::string& name);
-void exportArchive(Store& store,httplib::Response& response,const json& input){
+void exportArchive(Store& store,httplib::Response& response,const json& input,const Identity& who){
     if(!input.contains("asset_ids")||!input["asset_ids"].is_array()||input["asset_ids"].empty()||input["asset_ids"].size()>1000)throw Error(400,"INVALID_BATCH","每次导出1至1000项");
     auto entries=std::make_shared<std::vector<Entry>>();std::set<std::string> seen;
     for(const auto& value:input["asset_ids"]){
         if(!value.is_string())throw Error(400,"INVALID_ID","文件标识无效");auto id=value.get<std::string>();if(id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos||!seen.insert(id).second)throw Error(400,"INVALID_ID","文件标识无效或重复");
-        auto row=store.asset(id);auto file=std::make_shared<File>(store.originalPath(row),false);if(file->size()!=number(row,"size"))throw Error(409,"ORIGINAL_CHANGED","原件已变化，请刷新资料库");
+        store.requireAssetAccess(id,who);auto row=store.asset(id);auto file=std::make_shared<File>(store.originalPath(row),false);if(file->size()!=number(row,"size"))throw Error(409,"ORIGINAL_CHANGED","原件已变化，请刷新资料库");
         auto name=row["name"].get<std::string>();for(auto& c:name)if(static_cast<unsigned char>(c)<32||std::string("/\\:*?\"<>|").find(c)!=std::string::npos)c='_';
         while(!name.empty()&&(name.back()=='.'||name.back()==' '))name.pop_back();if(name.empty())name="file";
         entries->push_back({file,std::to_string(entries->size()+1)+"_"+name,file->size()});

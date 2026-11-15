@@ -13,6 +13,8 @@ import static org.junit.Assert.*;
 
 @RunWith(RobolectricTestRunner.class) @Config(sdk=35)
 public class NativeApiTest {
+    @org.junit.Before @org.junit.After public void isolateSettings(){new Settings(org.robolectric.RuntimeEnvironment.getApplication()).prefs.edit().clear().commit();}
+
     private static final String ID="0123456789abcdef0123456789abcdef0123456789abcdef";
     @Test public void calendarAndMoveOptionsUseFixedAuthenticatedRoutes() throws Exception {
         try(MockWebServer server=new MockWebServer()){
@@ -22,6 +24,14 @@ public class NativeApiTest {
             server.enqueue(new MockResponse().setBody("{\"items\":[],\"selected_count\":1}"));api.post("folders/move-options",new JSONObject().put("asset_ids",new org.json.JSONArray().put(ID)),new RunControl(3000));
             RecordedRequest move=server.takeRequest(2,TimeUnit.SECONDS);assertNotNull(move);assertEquals("POST",move.getMethod());assertEquals("/api/v1/folders/move-options",move.getPath());assertEquals(ID,new JSONObject(move.getBody().readUtf8()).getJSONArray("asset_ids").getString(0));
             assertThrows(java.io.IOException.class,()->api.get("assets/../../private/calendar",new RunControl(3000)));
+        }
+    }
+    @Test public void folderHierarchyAndPermissionsUseFixedAuthenticatedRoutes() throws Exception {
+        try(MockWebServer server=new MockWebServer()){
+            server.start();NativeApi api=new NativeApi(server.url("/").toString(),"",true,"test-token");
+            for(String path:new String[]{"folders?parent_id="+ID,"folders/people","folders/"+ID+"/permissions"}){server.enqueue(new MockResponse().setBody("{}"));api.get(path,new RunControl(3000));RecordedRequest r=server.takeRequest(2,TimeUnit.SECONDS);assertEquals("/api/v1/"+path,r.getPath());assertEquals("Bearer test-token",r.getHeader("Authorization"));}
+            for(String op:new String[]{"permissions","relocate"}){server.enqueue(new MockResponse().setBody("{}"));api.post("folders/"+ID+"/"+op,new JSONObject().put("confirm_access_change",true),new RunControl(3000));assertEquals("/api/v1/folders/"+ID+"/"+op,server.takeRequest(2,TimeUnit.SECONDS).getPath());}
+            assertThrows(java.io.IOException.class,()->api.get("folders/../../permissions",new RunControl(3000)));
         }
     }
     @Test public void metadataUsesAuthenticatedFixedRoute() throws Exception {
@@ -35,12 +45,12 @@ public class NativeApiTest {
             assertEquals(1,server.getRequestCount());
         }
     }
-    @Test public void deletedPreferenceFallsBackOnlyAfterDefaultIsValidated() throws Exception {
+    @Test public void deletedPreferenceStopsWithoutSwitchingToDefault() throws Exception {
         android.content.Context context=org.robolectric.RuntimeEnvironment.getApplication();Settings settings=new Settings(context);settings.prefs.edit().putLong("revision",77).putString("token","fixture-only").commit();
         Settings.Session session=new Settings.Session("http://127.0.0.1:8787","","fixture-only","folder-fallback-test",new JSONObject().put("user_id","alice"),true,77);settings.folder(session.scope,ID,"Deleted");
         try(MockWebServer server=new MockWebServer()){
             server.start();NativeApi api=new NativeApi(server.url("/").toString(),"",true,"test-token");server.enqueue(new MockResponse().setResponseCode(404).setBody("{\"message\":\"deleted\"}"));server.enqueue(new MockResponse().setBody("{\"id\":\"default\",\"name\":\"默认文件夹\",\"can_write\":true}"));
-            settings.ensureFolder(session,api,new RunControl(3000));assertEquals("default",settings.folder(session.scope));assertEquals("默认文件夹",settings.folderName(session.scope));
+            assertThrows(NativeApi.Failure.class,()->settings.ensureFolder(session,api,new RunControl(3000)));assertEquals(ID,settings.folder(session.scope));assertEquals("Deleted",settings.folderName(session.scope));assertEquals(1,server.getRequestCount());
         }
     }
     @Test public void folderRoutesAreFixedAndPreserveDestination() throws Exception {

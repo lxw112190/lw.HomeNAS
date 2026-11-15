@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.3.2";
+constexpr const char* Version = "1.4.0";
 inline constexpr const char* TimelineClock = "(CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END)";
 
 struct Error : std::runtime_error {
@@ -110,8 +110,8 @@ public:
                     const std::function<bool(const std::function<bool(const char*, size_t)>&)>& reader);
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
-    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="");
-    json calendar(const std::string& type,const std::string& search,int offset);
+    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="",const Identity* who=nullptr);
+    json calendar(const std::string& type,const std::string& search,int offset,const Identity* who=nullptr);
     json metadataBackup(const Identity& who);
     json metadataBackups(const Identity& who);
     fs::path metadataBackupPath(const std::string& id,const Identity& who);
@@ -122,7 +122,14 @@ public:
     json album(const std::string& id,const Identity& who,bool edit=false);
     json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
     json changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who);
-    json folders(const std::string& before,const Identity& who);
+    json folders(const std::string& before,const Identity& who,const std::string& parent="*");
+    void rebuildFolderTree();
+    std::string folderAccessSql(const std::string& folder,const Identity& who);
+    std::string assetAccessSql(const std::string& alias,const Identity& who,int level=1);
+    void requireAssetAccess(const std::string& id,const Identity& who,int level=1);
+    Identity taskIdentity(const json& task);
+    json folderPeople(const Identity& who);
+    json folderPolicy(const std::string& id,const json* input,const Identity& who);
     json folder(const std::string& id,const Identity& who,bool write=false);
     json folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
     json changeFolder(const std::string& id,const std::string& action,const json& input,const Identity& who);

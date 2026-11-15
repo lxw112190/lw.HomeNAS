@@ -15,11 +15,11 @@ json Store::album(const std::string& id,const Identity& who,bool edit){
     if(edit)writer(who);
     auto rows=db.query(albumFields+"WHERE a.id=?",{id});
     if(rows.empty())throw Error(404,"ALBUM_NOT_FOUND","图集不存在或已删除");
-    auto row=rows[0];bool allowed=who.canUpload()&&(who.admin||row["owner_id"]==who.userId);
+    auto row=rows[0];row["item_count"]=db.query("SELECT count(*) AS n FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) AND "+assetAccessSql("s",who),{id})[0]["n"];bool allowed=who.canUpload()&&(who.admin||row["owner_id"]==who.userId);
     if(edit&&!allowed)throw Error(403,"ALBUM_OWNER_REQUIRED","只能管理自己创建的图集");
     row["can_edit"]=allowed;
-    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) ORDER BY (s.id=?) DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
-    row["cover"]=covers.empty()?json(nullptr):covers[0];return row;
+    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) AND "+assetAccessSql("s",who)+" ORDER BY (s.id=?) DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
+    row["cover"]=covers.empty()?json(nullptr):covers[0];row["cover_id"]=covers.empty()?json(""):covers[0]["id"];return row;
 }
 json Store::albums(const std::string& before,const Identity& who){
     if(!before.empty()&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
@@ -31,6 +31,7 @@ json Store::albumItems(const std::string& id,const std::string& before,const std
     auto info=album(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
     if(!before.empty()&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
     Params params{id};std::string sql="SELECT s.id,s.sha256,s.size,s.name,s.mime,s.category,s.created,s.modified,s.preview FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id)";
+    sql+=" AND "+assetAccessSql("s",who);
     if(!before.empty()){sql+=" AND i.asset_id<?";params.push_back(before);}
     if(type=="image"||type=="video"||type=="file"){sql+=" AND s.category=?";params.push_back(type);}
     if(!search.empty()){sql+=" AND s.name LIKE ?";params.push_back("%"+search+"%");}
@@ -54,7 +55,7 @@ json Store::changeAlbum(const std::string& id,const std::string& action,const js
             if(name.find_first_not_of(" \t\r\n")==std::string::npos)throw Error(400,"INVALID_NAME","请填写图集名称");
             db.exec("UPDATE albums SET name=?,description=?,updated=? WHERE id=?",{name,description,now,id});
         }else if(action=="cover"){
-            auto assetId=text(input,"asset_id",48);
+            auto assetId=text(input,"asset_id",48);requireAssetAccess(assetId,who);
             if(db.query("SELECT i.asset_id FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) WHERE i.album_id=? AND i.asset_id=?",{id,assetId}).empty())throw Error(400,"NOT_ALBUM_MEMBER","请从图集内选择封面");
             db.exec("UPDATE albums SET cover_id=?,updated=? WHERE id=?",{assetId,now,id});
         }else if(action=="add"||action=="remove"){
@@ -62,7 +63,7 @@ json Store::changeAlbum(const std::string& id,const std::string& action,const js
             std::set<std::string> ids;
             for(auto& value:input["asset_ids"]){if(!value.is_string()||!albumId(value.get<std::string>()))throw Error(400,"INVALID_ID","文件标识无效");ids.insert(value.get<std::string>());}
             for(auto& assetId:ids){
-                if(action=="add"){auto row=asset(assetId);if(row["category"]!="image"&&row["category"]!="video")throw Error(400,"MEDIA_REQUIRED","图集只接收照片和视频");db.exec("INSERT OR IGNORE INTO album_items(album_id,asset_id) VALUES(?,?)",{id,assetId});}
+                if(action=="add"){requireAssetAccess(assetId,who);auto row=asset(assetId);if(row["category"]!="image"&&row["category"]!="video")throw Error(400,"MEDIA_REQUIRED","图集只接收照片和视频");db.exec("INSERT OR IGNORE INTO album_items(album_id,asset_id) VALUES(?,?)",{id,assetId});}
                 else db.exec("DELETE FROM album_items WHERE album_id=? AND asset_id=?",{id,assetId});
             }
             db.exec("UPDATE albums SET updated=?,cover_id=CASE WHEN EXISTS(SELECT 1 FROM album_items WHERE album_id=? AND asset_id=cover_id) THEN cover_id ELSE '' END WHERE id=?",{now,id,id});

@@ -11,7 +11,7 @@ void Store::assetPermissions(json& rows,const Identity& who){
         for(const auto& row:rows){if(!slots.empty())slots+=",";slots+="?";args.push_back(row["id"]);}
         for(const auto& row:db.query("SELECT DISTINCT asset_id FROM uploads WHERE user_id=? AND state='READY' AND asset_id IN ("+slots+")",args))owned.insert(row["asset_id"]);
     }
-    for(auto& row:rows)row["can_rename"]=who.canUpload()&&(who.admin||owned.count(row["id"].get<std::string>())!=0);
+    for(auto& row:rows){auto id=row["id"].get<std::string>();auto permitted=!db.query("SELECT a.id FROM assets a WHERE a.id=? AND "+assetAccessSql("a",who,2),{id}).empty();auto modern=!db.query("SELECT 1 FROM folder_items i JOIN folders f ON f.id=i.folder_id WHERE i.asset_id=? AND f.policy<>'legacy'",{id}).empty();row["can_rename"]=who.canUpload()&&permitted&&(who.admin||modern||owned.count(id)!=0);}
 }
 json Store::renameAsset(const std::string& id,const json& input,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能重命名文件");

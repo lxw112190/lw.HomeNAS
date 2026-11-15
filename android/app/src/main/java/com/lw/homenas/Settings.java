@@ -72,12 +72,10 @@ final class Settings {
     void folder(String scope,String id,String name){if(!Protocol.folderId(id))throw new IllegalArgumentException("文件夹标识无效");synchronized(LOCK){if(!prefs.edit().putString("backup_folder_"+Protocol.key(scope),id).putString("backup_folder_name_"+Protocol.key(scope),name).commit())throw new IllegalStateException("无法保存目标文件夹");}}
     void fallbackFolder(String scope,String previous){synchronized(LOCK){if(folder(scope).equals(previous))folder(scope,"default","默认文件夹");}}
     void ensureFolder(Session session,NativeApi api,RunControl control) throws Exception {
-        String requested=folder(session.scope);JSONObject result;boolean fallback=false;
-        try{result=api.get("folders/"+requested,control);}catch(NativeApi.Failure failure){if(failure.status!=404||requested.equals("default"))throw failure;result=api.get("folders/default",control);fallback=true;}
+        String requested=folder(session.scope);JSONObject result=api.get("folders/"+requested,control);
         if(!current(session)||!folder(session.scope).equals(requested))throw new java.io.InterruptedIOException("账号或目标目录已改变，请重试");
-        String expected=fallback?"default":requested;if(!expected.equals(result.optString("id")))throw new java.io.IOException("服务器返回的目标目录不一致");if(!result.optBoolean("can_write")){pause(true);throw new SecurityException("目标文件夹不可写，备份已暂停，请重新选择");}
-        String name=result.getString("name");if(fallback||!folderName(session.scope).equals(name))folder(session.scope,expected,name);
-        if(fallback)message("原目标文件夹已删除，后续备份使用默认文件夹；已排队任务保留");
+        String expected=requested;if(!expected.equals(result.optString("id")))throw new java.io.IOException("服务器返回的目标目录不一致");if(!result.optBoolean("can_write")){pause(true);throw new SecurityException("目标文件夹不可写，备份已暂停，请重新选择");}
+        String name=result.optString("full_path",result.getString("name"));if(!folderName(session.scope).equals(name))folder(session.scope,expected,name);
     }
     org.json.JSONArray recentServers() {
         synchronized(LOCK){try{return new org.json.JSONArray(prefs.getString("recent_servers","[]"));}catch(Exception ignored){return new org.json.JSONArray();}}

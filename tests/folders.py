@@ -14,7 +14,7 @@ try:
  a=h.post('folders',{'name':'我的备份','description':'fixture'},session=owner,status=201);b=h.post('folders',{'name':'我的备份'},session=other,status=201)
  h.post('folders',{'name':'我的备份'},session=owner,status=409);h.check(a['id']!=b['id'],'different owners may use the same name; own duplicates rejected')
  h.post('folders/'+a['id']+'/edit',{'name':'不能修改'},session=other,status=403);h.post('folders/'+a['id']+'/delete',session=viewer,status=403)
- h.check(viewer.get(h.url+'folders/'+a['id']).json()['can_write'] is False,'all users browse folders while writes remain owner restricted')
+ h.check(viewer.get(h.url+'folders/'+a['id']).status_code==403,'new private folders reject ungranted readers')
  payload=b'shared folder fixture';t,input=h.create(payload,name='fixture.txt',session=owner,folder_id=a['id']);h.chunk(t,payload,0,session=owner)
  h.stop();h.start();resumed=owner.get(h.url+'uploads/'+t['id']).json();h.check(resumed['folder_id']==a['id'] and int(resumed['offset'])==len(payload),'restart retains the queued destination and acknowledged offset')
  h.post('uploads/'+t['id']+'/complete',session=owner,status=202)
@@ -31,26 +31,21 @@ try:
   other_result=other.get(h.url+route).json();other_rows=other_result['items'] if isinstance(other_result,dict) else other_result
   h.check(not other_rows,'task folder metadata preserves member isolation: '+route)
  h.post('uploads',{**input,'folder_id':'default'},session=owner,status=409);h.check(True,'an existing upload id cannot change its destination')
- dup,_=h.create(payload,session=other,folder_id=b['id']);h.check(dup['state']=='READY' and dup['asset_id']==asset and len(items(b['id']))==1,'dedup immediately attaches the same original to another user folder')
+ dup,_=h.create(payload,session=other,folder_id=b['id']);h.check(dup['state']=='UPLOADING','private destination does not expose another folder dedup identity');h.chunk(dup,payload,0,session=other);duplicate=h.finish(dup);h.check(duplicate['asset_id']!=asset and len(items(b['id']))==1,'same bytes in independent private directories retain independent identities')
  denied={**input,'client_task_id':'forbidden','folder_id':a['id']};h.post('uploads',denied,session=other,status=403)
  status=h.post('sources/status',{'task_ids':[t['id']],'folder_id':a['id']},session=owner);assert status['items'][0]['in_folder']
- h.post('folders/'+a['id']+'/remove',{'asset_ids':[asset]},session=owner);h.check(not items(a['id']) and len(items('default'))==1 and len(items(b['id']))==1,'moving to default retains other folder references and original')
- h.post('folders/default/move',{'asset_ids':[asset],'target_id':a['id']},session=owner);h.check(not items('default') and len(items(a['id']))==1,'owner can move their uploaded file from default')
- h.post('folders/'+a['id']+'/add',{'asset_ids':[asset,'f'*48]},session=owner,status=404);h.check(len(items(a['id']))==1,'invalid batch rolls back all folder associations')
- h.post('folders/'+a['id']+'/edit',{'name':'中文新目录'},session=owner);h.check(viewer.get(h.url+'folders/'+a['id']).json()['name']=='中文新目录','folder rename is shared')
+ h.post('folders/'+a['id']+'/remove',{'confirm_access_change':True,'asset_ids':[asset]},session=owner);h.check(not items(a['id']) and len(items('default'))==1 and len(items(b['id']))==1,'moving to default retains other folder references and original')
+ h.post('folders/default/move',{'confirm_access_change':True,'asset_ids':[asset],'target_id':a['id']},session=owner);h.check(not items('default') and len(items(a['id']))==1,'owner can move their uploaded file from default')
+ h.post('folders/'+a['id']+'/add',{'confirm_access_change':True,'asset_ids':[asset,'f'*48]},session=owner,status=404);h.check(len(items(a['id']))==1,'invalid batch rolls back all folder associations')
+ h.post('folders/'+a['id']+'/edit',{'name':'中文新目录'},session=owner);h.check(owner.get(h.url+'folders/'+a['id']).json()['name']=='中文新目录' and viewer.get(h.url+'folders/'+a['id']).status_code==403,'folder rename does not widen visibility')
  pending,data=h.create(b'pending fixture',name='pending.txt',session=owner,folder_id=a['id']);h.chunk(pending,b'pending fixture',0,session=owner)
- h.post('folders/'+a['id']+'/delete',session=owner);h.check(len(items('default'))==1 and len(items(b['id']))==1,'delete moves references to default without removing shared originals')
- history=owner.get(h.url+'tasks/page').json()['items'];row=next(x for x in history if x['id']==t['id']);h.check(row['folder_id']==a['id'] and row['effective_folder_id']=='default' and row['folder_name']=='默认文件夹' and row['folder_defaulted'] is True,'task history explicitly reports fallback when destination was deleted')
- h.post('uploads/'+pending['id']+'/complete',session=owner,status=202)
- for _ in range(150):
-  done=owner.get(h.url+'uploads/'+pending['id']).json()
-  if done['state']=='READY':break
-  time.sleep(.1)
- h.check(done['state']=='READY' and done['effective_folder_id']=='default' and done['folder_defaulted'],'pending upload to deleted folder finishes in default with an explicit notice')
- h.post('folders/default/move',{'asset_ids':[done['asset_id']],'target_id':b['id']},session=other,status=403);h.check(any(x['id']==done['asset_id'] for x in items('default')),'member cannot remove another contributor original from shared default')
- newer,_=h.create(payload,session=owner,folder_id=a['id']);h.check(newer['folder_defaulted'] and newer['state']=='READY','queued request for a deleted destination safely falls back to default')
+ h.post('folders/'+a['id']+'/delete',session=owner,status=409);h.post('folders/'+a['id']+'/remove',{'asset_ids':[asset],'confirm_access_change':True},session=owner);h.post('folders/'+a['id']+'/delete',session=owner);h.check(len(items('default'))==1 and len(items(b['id']))==1,'only empty directory deletion is permitted; moved originals remain')
+ history=owner.get(h.url+'tasks/page').json()['items'];row=next(x for x in history if x['id']==t['id']);h.check(row['folder_id']==a['id'] and row['effective_folder_id']==a['id'] and row['folder_defaulted'] is False,'deleted destination keeps frozen target instead of claiming fallback')
+ h.post('uploads/'+pending['id']+'/complete',session=owner,status=409)
+ with sqlite3.connect(h.home/'数据/catalog.db') as db:confirmed=db.execute('SELECT offset,folder_id FROM uploads WHERE id=?',(pending['id'],)).fetchone()
+ h.check(confirmed==(len(b'pending fixture'),a['id']),'deleted target blocks completion and preserves original confirmed bytes')
  h.check(h.admin.get(h.url+'assets/'+asset+'/original').content==payload,'all folder changes preserve original bytes')
- c=h.post('folders',{'name':'After restart'},session=owner,status=201);h.post('folders/'+c['id']+'/add',{'asset_ids':[asset]},session=owner)
+ c=h.post('folders',{'name':'After restart'},session=owner,status=201);h.post('folders/'+c['id']+'/add',{'confirm_access_change':True,'asset_ids':[asset]},session=owner)
  h.stop();h.start();h.check(len(items(c['id']))==1 and len(items(b['id']))==1,'folder links survive restart and are not reclassified into default')
  # Independent references permit normal files and stable 48-item paging.
  with sqlite3.connect(h.home/'数据/catalog.db') as db:
@@ -67,7 +62,7 @@ try:
  while True:
   page=owner.get(h.url+'folders',params={'before':before}).json();assert len(page['items'])<=48;seen.extend(x['id'] for x in page['items']);before=page['next']
   if not before:break
- h.check(len(seen)==len(set(seen))==53 and seen[0]=='default','folder list pages preserve default-first order and all visible owners')
+ h.check(len(seen)==len(set(seen))==52 and seen[0]=='default','folder list pages preserve default-first order and all visible owners')
  legacy,_=h.create(b'legacy default fixture',name='old-client.txt');h.chunk(legacy,b'legacy default fixture',0);legacy=h.finish(legacy);h.check(any(x['id']==legacy['asset_id'] for x in items('default')),'old clients omitting folder_id continue backing up into default')
  # Simulate a pre-folder catalog: only remove this feature's own schema and marker.
  h.stop()

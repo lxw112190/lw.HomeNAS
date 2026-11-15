@@ -11,7 +11,7 @@ fs::path Store::recycledThumbnail(const std::string& id,const Identity& who){
 json Store::recycledAsset(const std::string& id,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能查看回收站");
     auto rows=db.query("SELECT a.*,t.deleted_by FROM assets a JOIN asset_trash t ON t.asset_id=a.id WHERE a.id=? AND a.state IN ('READY','MISSING')",{id});
-    if(rows.empty()||(!who.admin&&rows[0]["deleted_by"]!=who.userId))throw Error(404,"TRASH_NOT_FOUND","回收站文件不存在或无权访问");return rows[0];
+    requireAssetAccess(id,who);if(rows.empty()||(!who.admin&&rows[0]["deleted_by"]!=who.userId))throw Error(404,"TRASH_NOT_FOUND","回收站文件不存在或无权访问");return rows[0];
 }
 json Store::recycle(const json& input,const Identity& who,bool restore){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能删除或恢复文件");
@@ -38,7 +38,7 @@ json Store::recycle(const json& input,const Identity& who,bool restore){
 json Store::recycled(const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能管理回收站");
     if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
-    Params params;std::string where=" WHERE a.state IN ('READY','MISSING','PURGING')";
+    Params params;std::string where=" WHERE a.state IN ('READY','MISSING','PURGING') AND "+assetAccessSql("a",who);
     if(!who.admin){where+=" AND t.deleted_by=?";params.push_back(who.userId);}
     if(type=="image"||type=="video"||type=="file"){where+=" AND a.category=?";params.push_back(type);}
     if(!search.empty()){where+=" AND a.name LIKE ?";params.push_back("%"+search+"%");}
