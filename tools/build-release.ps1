@@ -40,7 +40,8 @@ $notes=@"
 lw.HomeNAS automatic full package / CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
-v1.4.0: Up to 16 folder levels; inherited ACLs with child restrictions, full paths, subtree moves and confirmed permission changes. Private files are filtered across timeline, calendar, previews, albums and exports. Revoked/deleted targets stop without shared-default fallback. APK code26/native15, persistent signing unchanged.
+v1.4.1: Documentation and upgrade guidance refreshed; folder behavior is unchanged from v1.4.0.
+v1.4 features: Up to 16 folder levels; inherited ACLs with child restrictions, full paths, subtree moves and confirmed permission changes. Private files are filtered across timeline, calendar, previews, albums and exports. Revoked/deleted targets stop without shared-default fallback. Native protocol 15, persistent signing unchanged.
 v1.3 highlights: EXIF capture-time timeline with year/month/date navigation; consistent metadata snapshots and verified offline library migration; folders-first organization with statistics and batch moves; phone QR setup, recent servers and actionable connection checks. Chinese and English READMEs are included.
 Includes the fixed-signature APK, Web, deployment scripts and FFmpeg. UI: $($manifest.ui).
 APK and Windows built in parallel from the same commit. Android emulator and full ZIP acceptance passed; the final ZIP reuses the exact independently tested Windows executable. This does not replace physical-device testing.

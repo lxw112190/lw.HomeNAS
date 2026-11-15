@@ -1,6 +1,6 @@
 # lw.HomeNAS Android
 
-> 当前开发 **1.4.0 / code26 / nativeApi15**：16层目录、逐级导航、完整备份路径、默认继承与子目录收紧权限。固定签名保留，升级回内置页并保留队列；新APK、Robolectric、模拟器和真机仍待CI/设备验证。[说明](../docs/20261114-多级目录与权限继承.md)。
+> [v1.4.0 / code26](https://github.com/lxw112190/lw.HomeNAS/releases/tag/v1.4.0)已由[CI39](https://github.com/lxw112190/lw.HomeNAS/actions/runs/43659828054)通过构建、模拟器和完整包验收并发布；真机效果仍需设备验证。当前准备**1.4.1 / code27 / nativeApi15**，整理说明及发布版本，目录功能与1.4.0一致，签名和队列保留。新包仍须新CI验收。[发布说明](../docs/20261115-v1.4.1发布说明.md)。
 
 客户端使用Java原生队列、受信任本地页面和系统媒体接口；Windows后台不需要Android开发环境。源码包/部署包的实际发行状态以[Releases](https://github.com/lxw112190/lw.HomeNAS/releases)及对应Actions结果为准；历史开发记录见docs目录。
 
@@ -9,7 +9,7 @@
 1. 将本轮源码提交、推送到main。遵循用户约定，由用户执行git提交推送。
 2. 在[GitHub Actions → Build APK, server and Release](https://github.com/lxw112190/lw.HomeNAS/actions/workflows/android.yml)查看任务；首次推送会触发，也可点击Run workflow。
 3. 构建任务执行lint、JVM测试、assembleDebug；成功后下载 `lw.HomeNAS-Android-运行编号` Artifact并解压。
-4. 正常使用安装 `release/HomeNAS-1.4.0.apk`，调试可安装 `debug/HomeNAS-1.4.0-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
+4. 正常使用安装 `release/HomeNAS-1.4.1.apk`，调试可安装 `debug/HomeNAS-1.4.1-debug.apk`（后续随版本变化）。允许安装来源需由手机用户自行操作。Android 10及以上，建议使用较新的Android System WebView。
 5. 模拟器任务执行Android 15的页面、原生桥及Keystore冒烟检查，上传报告和截图。它不能替代你手机的相册、后台省电和电脑局域网联调。
 
 APK与后台并行构建，完整包需两边和模拟器全部通过；独立APK产物不等于整套发布通过。手动关闭emulator只生成独立产物，不生成完整包或Release。

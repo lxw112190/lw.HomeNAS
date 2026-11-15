@@ -4,18 +4,20 @@
 
 Turn a Windows PC into a home backup server for photos, videos, documents and recordings. The server uses **C++17 and cpp-httplib**, with a browser management UI and an Android client built around native Java and trusted local WebView pages.
 
-This source tree prepares **1.4.0 / Android versionCode 26 / native protocol 15**: up to 16 folder levels, inherited access and narrower child permissions, shared Web/APK navigation and permission management. New Android builds, emulator checks and the combined deployment ZIP still require CI. Signing identity is unchanged. See [implementation notes](docs/20261114-多级目录与权限继承.md).
+**Verified public release: [v1.4.0](https://github.com/lxw112190/lw.HomeNAS/releases/tag/v1.4.0)**, published by [CI39](https://github.com/lxw112190/lw.HomeNAS/actions/runs/43659828054), with the combined Windows ZIP, fixed-signature APK and SHA256 files. Android builds, emulator checks and full ZIP acceptance passed; target-phone testing remains necessary.
+
+**Next release prepared here: 1.4.1 / Android versionCode 27 / native protocol 15.** This edition refreshes usage, folder-permission and upgrade documentation, retaining 1.4.0 functionality, package identity and signing. It becomes public only after the new commit passes CI. See [release notes](docs/20261115-v1.4.1发布说明.md).
 
 ## Features
 
-- **Reliable uploads:** bounded streaming chunks, durable acknowledged offsets, pause/resume, SHA256 verification and content deduplication. A file is backed up only after the server confirms `READY`.
+- **Reliable uploads:** bounded streaming chunks, durable acknowledged offsets, pause/resume, SHA256 verification and content deduplication within the same accessible destination. A file is backed up only after the server confirms `READY`.
 - **Android backup:** select authorized photos/videos by item, day or month; select all and exclude individual items; choose a destination folder. Upload concurrency defaults to two and is capped at three. Automatic backup follows Android scheduling and power/network restrictions.
 - **Capture-time timeline:** valid EXIF `DateTimeOriginal` takes priority, followed by file modification time and finally import time. Old images are indexed in the background. Jump by year/month and filter an inclusive date range. Missing EXIF is never inferred from a filename.
 - **Folders first:** the primary organization view shows location breadcrumbs, item counts, photo/video counts and total bytes. Cross-page selections support batch moves. Folders support up to 16 levels with inherited permissions; thematic albums remain optional references across folders, without duplicating originals.
 - **Library backup and migration:** download a consistent SQLite/configuration/classification snapshot from the Web UI. Offline migration copies an entire instance to a new empty directory and verifies the database, relationships and every copied file. The source remains intact.
 - **Easier phone setup:** scan a connection QR from the Web settings page, keep up to five recently connected servers, and see actionable connection failures. Scanning fills an address draft; it never logs in, trusts a certificate or redirects an existing queue automatically.
 - **Preview and organization:** image zoom/pan, on-demand metadata, native Android audio/video playback, video thumbnails through bundled FFmpeg, rename, recycle/restore and Web batch ZIP export. Administrator-only permanent deletion requires explicit confirmation.
-- **Shared accounts:** administrator, member and viewer roles. Folder permissions limit visibility and editing. Administrators retain access to all data; viewer accounts cannot gain write access through folder grants.
+- **Accounts and folder access:** administrator, member and viewer roles. Folder permissions limit visibility and editing. Administrators retain access to all data; viewer accounts cannot gain write access through folder grants.
 
 ## Install
 
@@ -108,6 +110,14 @@ Existing folders retain legacy shared visibility on upgrade; the default folder 
 
 Revoked/deleted destinations stop transfers without switching them to the shared default. Durable offsets remain available when original access is restored. Selecting another target requires a new task. Deduplication is limited to the same accessible destination; repeated uploads to separate folders create independent records and stored originals to avoid exposing private content identities or filenames.
 
+## Upgrade an existing installation
+
+1. Stop the service or foreground process and keep a complete backup of the current configuration and data.
+2. Replace application files, Web assets, deployment tools and the bundled `client-release` directory. Preserve the existing `config` and `data`; fresh-install defaults must not overwrite existing accounts or settings.
+3. Start the server to migrate the catalog and publish the bundled APK. The 1.4 folder features require a 1.4.0 or newer server and the matching updated Android client; a Web-resource update alone cannot add the native bridge methods to an older APK.
+4. Install the same-signature APK over the previous version. Accounts and queues are retained; the new APK returns to its builtin UI once. An inaccessible destination stops rather than falling back to the shared default.
+5. Existing folders retain their old shared policy. Review membership before restricting access. Never reopen an upgraded catalog with an older server binary. Keep the old installation until the upgraded instance is verified.
+
 ## Build and CI
 
 Install Visual Studio 2022 with C++ desktop tools and a Windows SDK. Build `lw.HomeNAS.sln` as Release/x64 or run:
@@ -131,7 +141,7 @@ Main pushes generate artifacts. A previously unpublished `vVERSION` is published
 
 ## Limits and license
 
-No iOS client, RAID, end-to-end encryption or universal video transcoding is included. Device codecs determine playback support. Metadata snapshots are not full media backups. Recycle/restore is not a substitute for an independent second copy. Android physical-device behavior still needs testing on the target phone.
+No iOS client, RAID, end-to-end encryption or universal video transcoding is included. Folder ACLs do not provide separate disk quotas or encryption against server administrators. Device codecs determine playback support. Metadata snapshots are not full media backups. Recycle/restore is not a substitute for an independent second copy. Android physical-device behavior still needs testing on the target phone.
 
 Project license: [LICENSE](LICENSE). Third-party components, pinned source hashes and FFmpeg licensing/source information: [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). QR generation uses Project Nayuki's MIT library; Android scanning uses ZXing Embedded under Apache-2.0.
 
