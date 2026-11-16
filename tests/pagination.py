@@ -19,6 +19,17 @@ try:
    assert pages<500
   h.check(len(seen)==expected,route+' visits every row exactly once including same-timestamp boundaries')
  walk('assets?limit=48',10001);walk('tasks/page',10001)
+ last=h.admin.get(h.url+'assets',params={'limit':48,'before':'@last'}).json()
+ h.check(last['page_index']==208 and len(last['items'])==17 and not last['next'],'asset last page has the exact remainder without walking prior pages')
+ previous=h.admin.get(h.url+'assets',params={'limit':48,'before':'@page:207'}).json()
+ h.check(previous['page_index']==207 and len(previous['items'])==48 and not ({x['id'] for x in previous['items']}&{x['id'] for x in last['items']}),'jumping backward from last page keeps exact boundaries')
+ first=h.admin.get(h.url+'assets',params={'limit':48,'before':'@page:0'}).json()
+ h.check(first['items']==h.admin.get(h.url+'assets',params={'limit':48}).json()['items'],'first page jump agrees with normal cursor order')
+ last=h.admin.get(h.url+'tasks/page',params={'before':'@last'}).json()
+ h.check(last['page_index']==200 and len(last['items'])==1 and not last['next'],'server tasks support an exact last-page jump')
+ for cursor in ['@page:bad','@page:-1','@page:9999999999']:
+  h.check(h.admin.get(h.url+'assets',params={'before':cursor}).status_code==400,'invalid jump cursor rejected: '+cursor)
+
  h.check(h.admin.get(h.url+'assets',params={'limit':0}).status_code==400,'invalid page size rejected')
  h.check(h.admin.get(h.url+'assets',params={'before':'bad:cursor'}).status_code==400,'malformed asset cursor rejected')
  h.check(h.admin.get(h.url+'tasks/page',params={'before':'bad:cursor'}).status_code==400,'malformed task cursor rejected')

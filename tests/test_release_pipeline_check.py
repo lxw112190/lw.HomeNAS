@@ -77,7 +77,10 @@ class ReleaseChecks(unittest.TestCase):
     def test_workflow_keeps_manual_artifact_only_mode(self):
         workflow=workflows.validate((ROOT/'.github/workflows/android.yml').read_text(encoding='utf-8'))
         step=next(s for s in workflow['jobs']['select']['steps'] if s.get('id')=='source')
-        self.assertEqual(step['env']['INPUT_PUBLISH'],'${{ inputs.publish }}')
+        self.assertNotIn('INPUT_PUBLISH',step.get('env',{}))
+        self.assertEqual(workflow[True]['push']['tags'],['v*'])
+        self.assertIn("github.event_name == 'push'",workflow['jobs']['publish']['if'])
+        self.assertIn("startsWith(github.ref, 'refs/tags/v')",workflow['jobs']['publish']['if'])
         self.assertEqual(workflow['permissions']['contents'],'read');self.assertEqual(workflow['jobs']['publish']['permissions']['contents'],'write')
         self.assertIn("needs.select.outputs.publish == 'true'",workflow['jobs']['publish']['if'])
 

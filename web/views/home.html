@@ -87,6 +87,26 @@
    </small>
   </article>
  </div>
+ <div class="home-summary">
+  <article class="panel home-storage">
+   <div class="section-head"><h2>存储空间</h2><button class="link" id="home-refresh" type="button">刷新概览</button></div>
+   <strong id="home-disk-text">正在读取容量…</strong>
+   <progress id="home-disk-progress" max="100" value="0" aria-label="所在磁盘已用空间"></progress>
+   <p id="home-storage-note">磁盘已用空间包含其他应用和文件，原件占用单独统计。</p>
+   <p id="home-trash-text"></p>
+  </article>
+  <article class="panel">
+   <h2>资料库与任务</h2>
+   <div class="home-type-links">
+    <button type="button" class="secondary" data-home-type="image">照片 <strong id="home-photo-count">—</strong></button>
+    <button type="button" class="secondary" data-home-type="video">视频 <strong id="home-video-count">—</strong></button>
+    <button type="button" class="secondary" data-home-type="file">其他文件 <strong id="home-other-count">—</strong></button>
+   </div>
+   <p id="home-task-summary">正在读取任务状态…</p>
+   <div class="collection-actions"><button type="button" class="secondary" data-page="transfers">查看备份任务</button><button type="button" class="secondary" data-home-mode="folders">浏览文件夹</button><button type="button" class="secondary" data-home-mode="albums">查看图集</button><button type="button" class="secondary upload-only" data-home-mode="trash">回收站</button></div>
+   <p class="fine" id="home-overview-scope"></p>
+  </article>
+ </div>
  <div class="section-head">
   <h2>
    最近入库

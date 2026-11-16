@@ -1,11 +1,13 @@
 // Plan this run only. Job dependencies, not a search for old APKs, gate publication.
 module.exports = async ({github, context, core}) => {
   const {owner, repo} = context.repo;
-  if (!['push', 'workflow_dispatch'].includes(context.eventName) || context.ref !== 'refs/heads/main')
-    throw new Error('Only trusted main-branch push or manual runs may produce a full release.');
+  const tagPush=context.eventName==='push'&&context.ref.startsWith('refs/tags/v');
+  const mainBuild=['push','workflow_dispatch'].includes(context.eventName)&&context.ref==='refs/heads/main';
+  if (!tagPush&&!mainBuild)
+    throw new Error('Only trusted main builds or pushed version tags may produce a full package.');
   const {data: run} = await github.rest.actions.getWorkflowRun({owner, repo, run_id: context.runId});
   if (run.id !== context.runId || run.name !== 'Build APK, server and Release'
-      || run.path !== '.github/workflows/android.yml' || run.head_branch !== 'main'
+      || run.path !== '.github/workflows/android.yml' || run.head_branch !== (tagPush?context.ref.slice('refs/tags/'.length):'main')
       || run.head_repository?.full_name !== `${owner}/${repo}` || run.event !== context.eventName
       || !/^[a-f0-9]{40}$/.test(run.head_sha) || run.head_sha !== context.sha
       || !Number.isSafeInteger(run.run_number) || run.run_number < 1 || run.run_number > 2146483647)
@@ -17,7 +19,9 @@ module.exports = async ({github, context, core}) => {
   if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/.test(version))
     throw new Error('Invalid semantic VERSION.');
   const tag = `v${version}`;
-  let publish = context.eventName !== 'workflow_dispatch' || core.getInput('publish') !== 'false';
+  if(tagPush){if(context.ref!==`refs/tags/${tag}`)throw Error('Pushed tag must match VERSION.');
+    if(await require('./tag-commit.cjs')(github,owner,repo,tag)!==run.head_sha)throw Error('Tag does not match verified commit.');}
+  let publish = tagPush;
   if (publish) {
     try {
       const release = (await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;

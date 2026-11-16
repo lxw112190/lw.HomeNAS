@@ -14,6 +14,7 @@ vm.runInContext(source.slice(source.indexOf('let previewItem='),source.indexOf('
 const item={id:'a'.repeat(48),category:'file',mime:'audio/mpeg',size:'1000',name:'synthetic.mp3'};
 (async()=>{
  context.item=item;vm.runInContext('previewMedia(item)',context);
+ assert.equal(get('media-details').children[0].textContent,'文件名');assert.equal(get('media-details').children[1].textContent,item.name);
  let container=get('media-content').children[0],button=container.children[0];
  assert.equal(button.tagName,'BUTTON');assert.equal(button.textContent,'▶ 播放音频');assert.match(get('media-runtime').textContent,/点击播放/);
  await button.onclick();const play=calls.find(c=>c.action==='playMedia');assert.deepEqual(Object.keys(play.data),['id']);assert.equal(play.data.id,item.id);
@@ -22,7 +23,8 @@ const item={id:'a'.repeat(48),category:'file',mime:'audio/mpeg',size:'1000',name
  vm.runInContext('closeMedia()',context);assert.equal(audio.paused,true);assert.equal(audio.unloaded,true);assert.equal(audio.src,undefined);
  context.current.nativeMediaPlayback=true;context.item={...item,category:'video',mime:'video/mp4'};vm.runInContext('previewMedia(item)',context);
  assert.equal(get('media-content').children[0].children[0].textContent,'▶ 播放视频');
- context.item={...item,mime:'application/pdf'};vm.runInContext('previewMedia(item)',context);
+ context.item={...item,mime:'application/pdf',name:'long_filename_'.repeat(25)+'.pdf'};vm.runInContext('previewMedia(item)',context);
+ assert.equal(get('media-details').children[1].textContent,context.item.name);assert.equal(get('media-title').title,context.item.name);
  assert.equal(get('media-content').children[0].tagName,'P');assert.doesNotMatch(get('media-runtime').textContent,/正在加载/);
  console.log('Media preview UI: old file-category MP3, native video, ID-only bridge, audio cleanup and unsupported-state checks passed.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

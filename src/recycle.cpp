@@ -1,3 +1,4 @@
+#include "page_jump.hpp"
 #include "core.hpp"
 #include <set>
 
@@ -42,15 +43,15 @@ json Store::recycled(const std::string& before,const std::string& type,const std
     if(!who.admin){where+=" AND t.deleted_by=?";params.push_back(who.userId);}
     if(type=="image"||type=="video"||type=="file"){where+=" AND a.category=?";params.push_back(type);}
     if(!search.empty()){where+=" AND a.name LIKE ?";params.push_back("%"+search+"%");}
-    if(!before.empty()){
+    if(!before.empty()&&!isPageJump(before)){
         auto pos=before.find(':');auto time=before.substr(0,pos),id=pos==std::string::npos?"":before.substr(pos+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos||number(json{{"time",time}},"time")>static_cast<uint64_t>(INT64_MAX))throw Error(400,"INVALID_CURSOR","回收站分页游标无效");
         where+=" AND (t.deleted_at,a.id)<(CAST(? AS INTEGER),?)";params.insert(params.end(),{time,id});
     }
-    auto rows=db.query("SELECT a.id,a.name,a.size,a.category,a.mime,a.modified,a.created,a.sha256,a.preview,a.state,t.deleted_at FROM asset_trash t JOIN assets a ON a.id=t.asset_id"+where+" ORDER BY t.deleted_at DESC,a.id DESC LIMIT 49",params);
+    PageJump jump(before,db,"SELECT a.id FROM asset_trash t JOIN assets a ON a.id=t.asset_id"+where,params,48);auto rows=db.query("SELECT a.id,a.name,a.size,a.category,a.mime,a.modified,a.created,a.sha256,a.preview,a.state,t.deleted_at FROM asset_trash t JOIN assets a ON a.id=t.asset_id"+where+" ORDER BY t.deleted_at DESC,a.id DESC LIMIT 49"+jump.offset,params);
     for(auto& row:rows){row["can_purge"]=who.admin;row["can_restore"]=row["state"]=="READY";row["purging"]=row["state"]=="PURGING";}
     std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["deleted_at"].get<std::string>()+":"+rows.back()["id"].get<std::string>();}
-    return {{"items",rows},{"next",next}};
+    return jump.finish({{"items",rows},{"next",next}});
 }
 json Store::purgeAsset(const std::string& id,const json& input,const Identity& who){
     if(!who.admin)throw Error(403,"ADMIN_REQUIRED","彻底删除仅限管理员");

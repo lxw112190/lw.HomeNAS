@@ -2,7 +2,7 @@
 
 - 功能优先，Windows x64 / C++17 / VS2022 是当前实际目标。不要为开源预先扩展跨平台、插件框架或复杂 CI。
 - 用户自己执行提交和推送。可以初始化与配置 remote；后续只给命令，不自动 git add/commit/push/tag 或修改远程。
-- 正式版本由根VERSION标识，并与core.hpp、CMake、Android versionName一致；APK生产变更另递增versionCode。main每次推送均构建包，只有尚未公开的vVERSION发布正式Release，已有公开标签附件不可改写。版本门禁不替代Windows/固定签名APK/模拟器/完整ZIP验收，不把本机准备称为已在线发布。
+- 正式版本由根VERSION标识，并与core.hpp、CMake、Android versionName一致；APK生产变更另递增versionCode。main推送只构建检查和Artifact；只有push v*标签且标签匹配VERSION、指向本次提交并尚未公开时才发布正式Release，手动运行不发布，已有公开标签附件不可改写。版本门禁不替代Windows/固定签名APK/模拟器/完整ZIP验收，不把本机准备称为已在线发布。
 - 修改Actions工作流须运行tools/check-workflows.py及test_release_*check.py；SafeLoader解析成功不代表GitHub接受，重复YAML键可能被静默覆盖。checkout ref按具体job修改，不做跨整文件的模糊批量替换；select不可引用自身未来输出，package/publish仅引用已声明needs。校验工具的新Python依赖须在使用它的每个CI任务显式安装；本地结构检查仍不等于云端工作流执行通过。
 - Windows发布脚本要按CI实际的pwsh与部署现场Windows PowerShell 5.1分别验证；Add-Type自PowerShell 7.1起不支持ConsoleApplication/WindowsApplication。需要真实argv回显EXE时，用Windows自带.NET Framework csc.exe生成，不通过跳过执行断言或只换旧Shell掩盖问题。
 - APK媒体预览按可用视口分配固定头部/操作区及可收缩媒体区，不把多个vh高度与固定按钮高度相加。至少检查320px窄屏与横屏、长文件名、元数据展开、缩放及关闭；元数据可独立滚动，外层不能靠overflow:hidden裁掉仍需使用的按钮。资源布局验证不等于Android真机通过。

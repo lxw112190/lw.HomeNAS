@@ -300,3 +300,6 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible,select:foc
 .folder-tree-row{display:flex;align-items:center;gap:6px;margin:5px 0}
 .folder-tree-row button{white-space:normal;overflow-wrap:anywhere;text-align:left;min-width:0}
 .folder-tree-row button:first-child{flex:none}
+
+/* Full metadata values stay selectable and wrap without expanding the preview header. */
+#media-details dd{min-width:0;white-space:normal;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}

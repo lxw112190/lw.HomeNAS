@@ -1,3 +1,4 @@
+#include "page_jump.hpp"
 #include "core.hpp"
 #include <set>
 
@@ -18,26 +19,26 @@ json Store::album(const std::string& id,const Identity& who,bool edit){
     auto row=rows[0];row["item_count"]=db.query("SELECT count(*) AS n FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) AND "+assetAccessSql("s",who),{id})[0]["n"];bool allowed=who.canUpload()&&(who.admin||row["owner_id"]==who.userId);
     if(edit&&!allowed)throw Error(403,"ALBUM_OWNER_REQUIRED","只能管理自己创建的图集");
     row["can_edit"]=allowed;
-    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) AND "+assetAccessSql("s",who)+" ORDER BY (s.id=?) DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
+    auto covers=db.query("SELECT s.id,s.name,s.category,s.preview FROM assets s JOIN album_items i ON i.asset_id=s.id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) AND "+assetAccessSql("s",who)+" ORDER BY (s.id=?) DESC,(s.category='image') DESC,i.asset_id DESC LIMIT 1",{id,row["cover_id"]});
     row["cover"]=covers.empty()?json(nullptr):covers[0];row["cover_id"]=covers.empty()?json(""):covers[0]["id"];return row;
 }
 json Store::albums(const std::string& before,const Identity& who){
-    if(!before.empty()&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
-    auto ids=db.query("SELECT id FROM albums WHERE id<? ORDER BY id DESC LIMIT 49",{before.empty()?std::string(49,'f'):before});
+    if(!before.empty()&&!isPageJump(before)&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
+    const auto cursor=before.empty()||isPageJump(before)?std::string(49,'f'):before;PageJump jump(before,db,"SELECT id FROM albums WHERE id<?",{cursor},48);auto ids=db.query("SELECT id FROM albums WHERE id<? ORDER BY id DESC LIMIT 49"+jump.offset,{cursor});
     std::string next;if(ids.size()>48){ids.erase(ids.end()-1);next=ids.back()["id"];}
-    json rows=json::array();for(auto& id:ids)rows.push_back(album(id["id"],who));return {{"items",rows},{"next",next}};
+    json rows=json::array();for(auto& id:ids)rows.push_back(album(id["id"],who));return jump.finish({{"items",rows},{"next",next}});
 }
 json Store::albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     auto info=album(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
-    if(!before.empty()&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
+    if(!before.empty()&&!isPageJump(before)&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
     Params params{id};std::string sql="SELECT s.id,s.sha256,s.size,s.name,s.mime,s.category,s.created,s.modified,s.preview FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id)";
     sql+=" AND "+assetAccessSql("s",who);
-    if(!before.empty()){sql+=" AND i.asset_id<?";params.push_back(before);}
+    if(!before.empty()&&!isPageJump(before)){sql+=" AND i.asset_id<?";params.push_back(before);}
     if(type=="image"||type=="video"||type=="file"){sql+=" AND s.category=?";params.push_back(type);}
     if(!search.empty()){sql+=" AND s.name LIKE ?";params.push_back("%"+search+"%");}
-    auto rows=db.query(sql+" ORDER BY i.asset_id DESC LIMIT 49",params);std::string next;
+    PageJump jump(before,db,sql,params,48);auto rows=db.query(sql+" ORDER BY i.asset_id DESC LIMIT 49"+jump.offset,params);std::string next;
     if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}
-    assetPermissions(rows,who);return {{"album",info},{"items",rows},{"next",next}};
+    assetPermissions(rows,who);return jump.finish({{"album",info},{"items",rows},{"next",next}});
 }
 json Store::changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who){
     writer(who);std::string resultId=id;

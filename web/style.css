@@ -127,3 +127,6 @@
 /* Override full-width text-field rules for this upload checkbox. */
 .drop-zone label.preserve-folders{display:inline-flex;max-width:100%;margin:0 auto 12px;text-align:left;vertical-align:middle}
 .drop-zone label.preserve-folders input[type="checkbox"]{display:inline-block;width:16px;max-width:16px;height:16px;padding:0;margin:0;flex:0 0 16px;box-shadow:none}
+.media-thumb img.windows-icon,.collection-cover img.windows-icon{width:48px;height:48px;object-fit:contain}
+.folder-tree-row img.windows-icon,.folder-children img.windows-icon{width:24px;height:24px;object-fit:contain;flex:none}
+.home-summary{display:grid;grid-template-columns:1fr 1fr;gap:18px}.home-summary .panel{margin-bottom:8px;min-width:0}.home-summary .section-head{margin:0 0 18px}.home-type-links{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}.home-type-links button{flex:1;white-space:nowrap}.home-storage strong{display:block;font-size:17px}.home-storage progress{height:12px;margin:18px 0 8px}.home-storage.low-space progress{accent-color:#b96d25}.home-storage.low-space #home-storage-note{color:#a45b20}@media(max-width:900px){.home-summary{grid-template-columns:1fr}}@media(max-width:400px){.home-summary .panel{padding:18px}.home-type-links button{flex-basis:100%;justify-content:space-between}}

@@ -34,6 +34,7 @@ $exe=Join-Path $root 'build/app/Release/NasServer.exe'
 Invoke-ReleasePython @('tests/smoke.py','--exe',$exe)
 Invoke-ReleasePython @('tests/bundled_clients.py')
 Invoke-ReleasePython @('tests/parallel_uploads.py')
+Invoke-ReleasePython @('tests/pagination.py')
 Invoke-ReleasePython @('tests/albums.py')
 Invoke-ReleasePython @('tests/folders.py')
 Invoke-ReleasePython @('tests/folder_acl.py')

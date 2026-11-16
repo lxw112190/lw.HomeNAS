@@ -15,6 +15,8 @@ function assets(directory, sha, number){
 async function publish({github,context,core,directory,notes,sha,number}){
   const {manifest,wanted}=assets(directory,sha,number),{owner,repo}=context.repo,tag=`v${manifest.serverVersion}`;
   if(!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$/.test(manifest.serverVersion))throw new Error('Invalid release version.');
+  if(context.eventName!=='push'||context.ref!==`refs/tags/${tag}`)throw Error('Only a pushed matching version tag may publish.');
+  if(await require('./tag-commit.cjs')(github,owner,repo,tag)!==sha)throw Error('Existing tag does not match verified commit.');
   const prerelease=manifest.serverVersion.includes('-');
   let release;
   try{release=(await github.rest.repos.getReleaseByTag({owner,repo,tag})).data;}catch(error){if(error.status!==404)throw error;}
@@ -22,8 +24,6 @@ async function publish({github,context,core,directory,notes,sha,number}){
     if(release.target_commitish!==sha)throw new Error('Release tag belongs to another commit.');
     if(!release.draft){core.notice(`Already published: ${release.html_url}`);return;}
   }else{
-    // A pre-existing unrelated tag must not silently redirect a new release.
-    try{const ref=(await github.rest.git.getRef({owner,repo,ref:`tags/${tag}`})).data;if(ref.object.type!=='commit'||ref.object.sha!==sha)throw new Error('Existing tag does not match verified commit.');}catch(error){if(error.status!==404)throw error;}
     release=(await github.rest.repos.createRelease({owner,repo,tag_name:tag,target_commitish:sha,name:`lw.HomeNAS v${manifest.serverVersion}`,body:fs.readFileSync(notes,'utf8'),draft:true,prerelease})).data;
   }
   const existing=await github.paginate(github.rest.repos.listReleaseAssets,{owner,repo,release_id:release.id,per_page:100});

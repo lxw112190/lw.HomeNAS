@@ -3,6 +3,7 @@
 #include "httplib.h"
 #include "export.hpp"
 #include "connection.hpp"
+#include "shell_icons.hpp"
 #include <csignal>
 #include <iostream>
 #include <set>
@@ -111,6 +112,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     });
     server.set_error_handler([](const httplib::Request& request,httplib::Response& response){if(request.path.rfind("/api/",0)==0&&response.body.empty())reply(response,{{"code","HTTP_ERROR"},{"message","请求未能完成"}},response.status);});
     server.Get("/api/v1/server",[&store,insecureLan,https](const auto&,auto& response){reply(response,{{"name",store.config.name},{"server_id",store.serverId},{"version",Version},{"https",https},{"insecure_lan",!https&&insecureLan},{"allow_external_hosts",store.config.allowExternalHosts},{"backup_folders",true},{"folder_acl_version",1},{"folder_max_depth",16},{"automatic_backup",false},{"member_mode","folder_acl_accounts"},{"authentication","username_password"}});});
+    server.Get("/api/v1/icons/([a-z0-9]{1,16})",[](const auto& request,auto& response){response.set_content(shellIconPng(request.matches[1]),"image/png");response.set_header("Cache-Control","private, max-age=86400");});
     auto session=[https](httplib::Response& response,const json& data){
         response.set_header("Set-Cookie","nas_session="+data["token"].template get<std::string>()+"; Path=/; HttpOnly; SameSite=Strict; Max-Age="+(data["admin"].template get<bool>()?"86400":"604800")+(https?"; Secure":""));
     };
@@ -174,7 +176,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/admin/backups",[&store](const auto& request,auto& response){body(request);reply(response,store.metadataBackup(store.authenticate(token(request))),201);});
     server.Get("/api/v1/admin/backups/([a-f0-9]{48})/download",[&store](const auto& request,auto& response){auto folder=store.metadataBackupPath(request.matches[1],store.authenticate(token(request)));exportFiles(response,{{folder/"catalog.db","catalog.db"},{folder/"config/server.json","config/server.json"},{folder/"backup.json","backup.json"}},"HomeNAS-metadata-backup.zip");});
     maintenanceRoutes(server,store);
-    for(const auto& name:{"index.html","boot.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","timeline-tools.js","library-tools.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
+    for(const auto& name:{"index.html","boot.js","windows-icons.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","timeline-tools.js","library-tools.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
         const std::string file=name;auto path=store.config.web/fs::u8path(file);auto route=file=="index.html"?"/":"/"+file;
         server.Get(route,[path,file](const auto&,auto& response){auto type=file.size()>=5&&file.substr(file.size()-5)==".html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
     }

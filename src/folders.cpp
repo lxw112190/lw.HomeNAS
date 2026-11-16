@@ -1,3 +1,4 @@
+#include "page_jump.hpp"
 #include "core.hpp"
 #include <algorithm>
 #include <set>
@@ -40,18 +41,22 @@ void Store::attachFolder(const std::string& requested,const std::string& assetId
     db.exec("INSERT OR IGNORE INTO folder_items(folder_id,asset_id) VALUES(?,?)",{destination,assetId});
 }
 json Store::folders(const std::string& before,const Identity& who,const std::string& parent){
-    if(!before.empty()&&!folderId(before))throw Error(400,"INVALID_CURSOR","文件夹游标无效");
-    Params args;std::string where="WHERE deleted=0 AND "+folderAccessSql("folders.id",who)+">=1";if(parent!="*"){if(!parent.empty())folder(parent,who);where+=" AND parent_id=?";args.push_back(parent);}if(!before.empty()){where+=" AND id<>'default'";if(before!="default"){where+=" AND id<?";args.push_back(before);}}
-    auto ids=db.query("SELECT id FROM folders "+where+" ORDER BY (id='default') DESC,id DESC LIMIT 49",args);std::string next;if(ids.size()>48){ids.erase(ids.end()-1);next=ids.back()["id"];}
-    json items=json::array();for(auto row:ids)items.push_back(folder(row["id"],who));return {{"items",items},{"next",next},{"folder_acl_version",1},{"parent_id",parent}};
+    if(!before.empty()&&!isPageJump(before)&&!folderId(before))throw Error(400,"INVALID_CURSOR","文件夹游标无效");
+    Params args;std::string where="WHERE deleted=0 AND "+folderAccessSql("folders.id",who)+">=1";if(parent!="*"){if(!parent.empty())folder(parent,who);where+=" AND parent_id=?";args.push_back(parent);}if(!before.empty()&&!isPageJump(before)){where+=" AND id<>'default'";if(before!="default"){where+=" AND id<?";args.push_back(before);}}
+    PageJump jump(before,db,"SELECT id FROM folders "+where,args,48);auto ids=db.query("SELECT id FROM folders "+where+" ORDER BY (id='default') DESC,id DESC LIMIT 49"+jump.offset,args);std::string next;if(ids.size()>48){ids.erase(ids.end()-1);next=ids.back()["id"];}
+    json items=json::array();for(auto row:ids)items.push_back(folder(row["id"],who));return jump.finish({{"items",items},{"next",next},{"folder_acl_version",1},{"parent_id",parent}});
 }
 json Store::folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     auto info=folder(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
-    if(!before.empty()&&(before.size()!=48||before.find_first_not_of("0123456789abcdef")!=std::string::npos))throw Error(400,"INVALID_CURSOR","文件分页游标无效");
-    Params args{id};std::string sql="SELECT a.id,a.sha256,a.size,a.name,a.mime,a.category,a.created,a.modified,a.preview FROM folder_items i JOIN assets a ON a.id=i.asset_id WHERE i.folder_id=? AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id)";
-    sql+=" AND "+assetAccessSql("a",who);if(!before.empty()){sql+=" AND a.id<?";args.push_back(before);}if(type=="image"||type=="video"||type=="file"){sql+=" AND a.category=?";args.push_back(type);}if(!search.empty()){sql+=" AND a.name LIKE ?";args.push_back("%"+search+"%");}
-    auto rows=db.query(sql+" ORDER BY a.id DESC LIMIT 49",args);std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}assetPermissions(rows,who);
-    return {{"folder",info},{"items",rows},{"next",next},{"children",folders("",who,id)},{"folder_acl_version",1}};
+    if(!before.empty()&&!isPageJump(before)&&(before.size()!=48||before.find_first_not_of("0123456789abcdef")!=std::string::npos))throw Error(400,"INVALID_CURSOR","文件分页游标无效");
+    Params args{id};std::string sql="SELECT a.id,a.sha256,a.size,a.name,a.mime,a.category,a.created,a.modified,a.preview";
+    if(search.empty())sql+=" FROM folder_items i JOIN assets a ON a.id=i.asset_id WHERE i.folder_id=?";
+    else sql+=" FROM assets a WHERE EXISTS(SELECT 1 FROM folder_items i JOIN folder_tree ft ON ft.folder_id=i.folder_id WHERE i.asset_id=a.id AND ft.ancestor_id=?)";
+    sql+=" AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id)";
+    sql+=" AND "+assetAccessSql("a",who);if(!before.empty()&&!isPageJump(before)){sql+=" AND a.id<?";args.push_back(before);}if(type=="image"||type=="video"||type=="file"){sql+=" AND a.category=?";args.push_back(type);}if(!search.empty()){sql+=" AND a.name LIKE ?";args.push_back("%"+search+"%");}
+    PageJump jump(before,db,sql,args,48);auto rows=db.query(sql+" ORDER BY a.id DESC LIMIT 49"+jump.offset,args);std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}assetPermissions(rows,who);
+    if(!search.empty())for(auto& row:rows){auto sources=db.query("SELECT i.folder_id FROM folder_items i JOIN folder_tree ft ON ft.folder_id=i.folder_id WHERE i.asset_id=? AND ft.ancestor_id=? ORDER BY ft.depth,i.folder_id LIMIT 1",{row["id"],id});if(!sources.empty())row["source_folder"]=sources[0]["folder_id"];}
+    return jump.finish({{"folder",info},{"items",rows},{"next",next},{"children",folders("",who,id)},{"folder_acl_version",1}});
 }
 void Store::folderMembership(json& items,const std::string& folderId){
     Params args{folderId};std::string slots;for(auto row:items){if(!slots.empty())slots+=",";slots+="?";args.push_back(row["asset_id"]);}

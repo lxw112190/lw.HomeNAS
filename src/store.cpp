@@ -1,3 +1,4 @@
+#include "page_jump.hpp"
 #include "core.hpp"
 #include "sqlite3.h"
 #include <algorithm>
@@ -387,7 +388,7 @@ json Store::assets(const std::string& before,const std::string& type,const std::
     const std::string clock=timeline?TimelineClock:"created";
     Params params;std::string sql="SELECT id,sha256,size,name,mime,category,created,modified,preview,taken,taken_text,taken_zone,"+std::string(TimelineClock)+" AS timeline_time FROM assets INDEXED BY "+std::string(timeline?(filtered?"asset_category_capture_time":"asset_capture_time"):(filtered?"asset_category_timeline":"asset_ready_timeline"))+" WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id)";
     if(who)sql+=" AND "+assetAccessSql("assets",*who);
-    if(!before.empty()){
+    if(!before.empty()&&!isPageJump(before)){
         auto colon=before.find(':');if(colon==std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");auto time=before.substr(0,colon),id=before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
         if(number(json{{"cursor_time",time}},"cursor_time")>static_cast<uint64_t>(INT64_MAX))throw Error(400,"INVALID_CURSOR","分页时间超出范围");
@@ -400,11 +401,11 @@ json Store::assets(const std::string& before,const std::string& type,const std::
         sql+=" AND "+clock+">=CAST(? AS INTEGER) AND "+clock+"<CAST(? AS INTEGER)";params.insert(params.end(),{from,to});
     }
     if(!search.empty()){sql+=" AND name LIKE ?";params.push_back("%"+search+"%");}
-    sql+=" ORDER BY "+clock+" DESC,id DESC LIMIT "+std::to_string(limit+1);auto rows=db.query(sql,params);std::string next;
+    PageJump jump(before,db,sql,params,limit);sql+=" ORDER BY "+clock+" DESC,id DESC LIMIT "+std::to_string(limit+1)+jump.offset;auto rows=db.query(sql,params);std::string next;
     if(rows.size()>static_cast<size_t>(limit)){rows.erase(rows.end()-1);}
     else limit=0;
     if(limit>0){auto last=rows.back();next=last[timeline?"timeline_time":"created"].get<std::string>()+":"+last["id"].get<std::string>();}
-    for(auto& row:rows)row["time_source"]=number(row,"taken")?"exif":number(row,"modified")?"file":"import";json result={{"items",rows},{"next",next},{"order",order},{"timeline_version",2}};if(!from.empty()){result["from"]=from;result["to"]=to;}return result;
+    for(auto& row:rows)row["time_source"]=number(row,"taken")?"exif":number(row,"modified")?"file":"import";json result={{"items",rows},{"next",next},{"order",order},{"timeline_version",2}};if(!from.empty()){result["from"]=from;result["to"]=to;}return jump.finish(result);
 }
 json Store::sourceStatus(const json& input,const Identity& who) {
     if(!input.contains("task_ids")||!input["task_ids"].is_array()||input["task_ids"].empty()||input["task_ids"].size()>100)throw Error(400,"INVALID_BATCH","每次核对1至100项");
@@ -427,18 +428,20 @@ json Store::taskPage(const Identity& who,const std::string& before,const std::st
     else if(filter=="failed")sql+=" AND u.state IN ('ERROR','CANCELLED')";
     else if(filter=="ready")sql+=" AND u.state='READY'";
     else if(!filter.empty()&&filter!="all")throw Error(400,"INVALID_FILTER","任务筛选无效");
-    if(!before.empty()){
+    if(!before.empty()&&!isPageJump(before)){
         auto colon=before.find(':');auto time=before.substr(0,colon),id=colon==std::string::npos?std::string{}:before.substr(colon+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos)throw Error(400,"INVALID_CURSOR","分页游标无效");
         sql+=" AND (u.created,u.id)<(?,?)";values.insert(values.end(),{time,id});
     }
-    auto rows=db.query(sql+" ORDER BY u.created DESC,u.id DESC LIMIT 51",values);taskFolderFlags(rows);if(!who.admin)for(auto& row:rows)if(db.query("SELECT "+folderAccessSql("'"+row["folder_id"].get<std::string>()+"'",who)+" AS n")[0]["n"]=="0")row["folder_name"]="目标目录已不可访问";bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
-    std::string next;if(more)next=rows.back()["created"].get<std::string>()+":"+rows.back()["id"].get<std::string>();return {{"items",rows},{"next",next}};
+    PageJump jump(before,db,sql,values,50);auto rows=db.query(sql+" ORDER BY u.created DESC,u.id DESC LIMIT 51"+jump.offset,values);taskFolderFlags(rows);if(!who.admin)for(auto& row:rows)if(db.query("SELECT "+folderAccessSql("'"+row["folder_id"].get<std::string>()+"'",who)+" AS n")[0]["n"]=="0")row["folder_name"]="目标目录已不可访问";bool more=rows.size()>50;if(more)rows.erase(rows.end()-1);
+    std::string next;if(more)next=rows.back()["created"].get<std::string>()+":"+rows.back()["id"].get<std::string>();return jump.finish({{"items",rows},{"next",next}});
 }
 json Store::overview(const Identity& caller){
     auto counts=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(size),0) AS bytes,COALESCE(SUM(category='image'),0) AS images,COALESCE(SUM(category='video'),0) AS videos FROM assets WHERE state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=assets.id) AND "+assetAccessSql("assets",caller))[0];
     auto active=db.query("SELECT COUNT(*) AS active,COALESCE(SUM(size-offset),0) AS reserved FROM uploads WHERE state IN ('UPLOADING','VERIFYING','COMMITTING')"+std::string(caller.admin?"":" AND user_id=?"),caller.admin?Params{}:Params{caller.userId})[0];
     auto trash=db.query("SELECT COUNT(*) AS files,COALESCE(SUM(a.size),0) AS bytes FROM asset_trash t JOIN assets a ON a.id=t.asset_id WHERE "+assetAccessSql("a",caller))[0];
+    auto summary=db.query("SELECT COALESCE(sum(state='READY'),0) AS ready,COALESCE(sum(state IN ('ERROR','CANCELLED')),0) AS failed FROM uploads"+std::string(caller.admin?"":" WHERE user_id=?"),caller.admin?Params{}:Params{caller.userId})[0];
+    active["ready"]=summary["ready"];active["failed"]=summary["failed"];
     auto space=fs::space(config.data);
     json result={{"library",counts},{"trash",trash},{"transfers",active},{"capacity",std::to_string(space.capacity)},{"available",std::to_string(space.available)},{"chunk_bytes",std::to_string(config.chunkBytes)},
         {"data_dir",config.data.u8string()},{"addresses",ipv4Addresses()},{"http_port",config.httpPort},{"https_port",config.httpsPort},{"certificate_sha256",certificateFingerprint(config.data/"server-cert.pem")}};

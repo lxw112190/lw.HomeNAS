@@ -137,7 +137,7 @@ The **Build APK, server and Release** workflow in `.github/workflows/android.yml
 - `lw.HomeNAS-server-ciN`: standalone Windows package, without an APK.
 - **`lw.HomeNAS-full-ciN`: recommended combined deployment package.**
 
-Main pushes generate artifacts. A previously unpublished `vVERSION` is published only after all required checks pass; public Releases are never overwritten. Manual `publish=false` builds artifacts only. Disabling emulator tests skips the combined package and Release. The four persistent Android signing Secrets remain unchanged.
+Main pushes generate artifacts. A previously unpublished `vVERSION` is published only on a matching pushed version tag after all required checks pass; public Releases are never overwritten. Manual runs build artifacts only. Disabling emulator tests skips the combined package and Release. The four persistent Android signing Secrets remain unchanged.
 
 ## Limits and license
 
@@ -164,3 +164,13 @@ Inside Photos & Files, use Upload to current folder or Authorization (directory 
 ### Web folder promotion and demotion (1.4.4)
 
 Open a manageable folder in Photos & Files. Promote moves it one level up; Demote lets you select a manageable sibling as its new parent. Descendants move together. Top-level folders cannot be promoted, and the default folder cannot be relocated. Confirmation shows the destination and warns about inherited access changes. The server rejects name conflicts, insufficient permissions, and nesting beyond 16 levels.
+
+### Icons, scoped search and tag releases (1.4.5)
+
+Web folders and files without thumbnails use Windows shell icons from the NAS host, resolved by synthetic extension without opening uploaded originals. Albums without a manual cover use the first visible photo; inaccessible and trashed photos are excluded. Root filename search is global, folder search includes descendants, and album search stays inside the selected album. Clearing search restores normal browsing.
+
+Main pushes and manual runs only build/verify artifacts. Release publication requires pushing a `v*` tag matching VERSION and the tested commit (for example, `git tag v1.4.5` followed by `git push origin v1.4.5`). Lightweight and annotated tags are supported. Published releases remain immutable.
+
+First/last navigation now covers the library, folders, albums, trash, and upload tasks. The server seeks the last page within current filters and permissions without sending the entire library to the browser. The overview adds disk capacity, low-space indication, category counts, scoped task states, and shortcuts. Disk usage explicitly includes other applications.
+
+APK preview metadata now starts with the full, wrapping and selectable filename. The header keeps its compact ellipsis layout so preview and close controls remain accessible.
