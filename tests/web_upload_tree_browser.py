@@ -35,6 +35,22 @@ try:
         page.locator('dialog[open]').get_by_role('button', name='取消', exact=True).click()
         page.get_by_role('button', name='上传到当前文件夹', exact=True).click()
         assert page.locator('#upload-folder-name').inner_text() == '目录树测试'
+        for width, height in [(1440,900), (1100,800), (320,640), (640,320)]:
+            page.set_viewport_size({'width':width, 'height':height})
+            layout = page.locator('#preserve-folders').evaluate('''input=>{
+                const box=input.getBoundingClientRect(), label=input.closest('label');
+                const range=document.createRange();range.selectNodeContents(label.lastChild);
+                const text=range.getBoundingClientRect(), row=label.getBoundingClientRect();
+                return {boxWidth:box.width,boxHeight:box.height,textWidth:text.width,textHeight:text.height,
+                    gap:text.left-box.right,centerDifference:Math.abs((text.top+text.bottom-box.top-box.bottom)/2),
+                    left:row.left,right:row.right};
+            }''')
+            assert 12 <= layout['boxWidth'] <= 20 and 12 <= layout['boxHeight'] <= 20, (width,layout)
+            assert layout['textWidth'] > 120 and layout['textHeight'] < 50, (width,layout)
+            assert 0 <= layout['gap'] <= 12 and layout['centerDifference'] < 12, (width,layout)
+            assert 0 <= layout['left'] < layout['right'] <= width, (width,layout)
+            page.screenshot(path=str(h.home/f'upload-option-{width}.png'))
+        page.set_viewport_size({'width':1100, 'height':800})
         page.locator('#choose-upload-folder').click()
         dialog = page.locator('dialog[open]')
         dialog.get_by_role('button', name='展开 目录树测试', exact=True).click()

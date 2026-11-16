@@ -124,3 +124,6 @@
 .collection-dialog .local-file-choice input,.collection-dialog .preserve-folders input,.preserve-folders input{width:16px;height:16px;padding:0;margin:0;flex:none;box-shadow:none}
 .folder-tree summary .local-file-choice{display:inline-flex;margin:4px 0;max-width:calc(100% - 24px)}
 .preserve-folders,.collection-dialog label.preserve-folders{display:flex;flex-direction:row;align-items:center;gap:8px}
+/* Override full-width text-field rules for this upload checkbox. */
+.drop-zone label.preserve-folders{display:inline-flex;max-width:100%;margin:0 auto 12px;text-align:left;vertical-align:middle}
+.drop-zone label.preserve-folders input[type="checkbox"]{display:inline-block;width:16px;max-width:16px;height:16px;padding:0;margin:0;flex:0 0 16px;box-shadow:none}

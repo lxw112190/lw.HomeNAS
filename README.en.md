@@ -158,3 +158,5 @@ If this project helps you, you can support its maintenance:
 ### Web folder-tree uploads (1.4.2)
 
 Inside Photos & Files, use Upload to current folder or Authorization (directory managers only). Destination pickers expand and load folders by level. Selecting a local folder opens a tree with file/subtree checkboxes. Preserve original folders is enabled by default and includes the selected root folder; disabling it flattens the selection into the destination. Empty directories are omitted. The existing 16-level limit and ACLs apply; creating children requires parent management permission. Matching directories are reused, failures retain already queued files, and queued destinations stay fixed. Refreshing requires selecting the same files again to resume.
+
+1.4.3 fixes the Web upload option layout: the preserve-folders checkbox keeps its compact size beside its label instead of inheriting full-width text-input styling.
