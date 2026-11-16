@@ -160,3 +160,7 @@ If this project helps you, you can support its maintenance:
 Inside Photos & Files, use Upload to current folder or Authorization (directory managers only). Destination pickers expand and load folders by level. Selecting a local folder opens a tree with file/subtree checkboxes. Preserve original folders is enabled by default and includes the selected root folder; disabling it flattens the selection into the destination. Empty directories are omitted. The existing 16-level limit and ACLs apply; creating children requires parent management permission. Matching directories are reused, failures retain already queued files, and queued destinations stay fixed. Refreshing requires selecting the same files again to resume.
 
 1.4.3 fixes the Web upload option layout: the preserve-folders checkbox keeps its compact size beside its label instead of inheriting full-width text-input styling.
+
+### Web folder promotion and demotion (1.4.4)
+
+Open a manageable folder in Photos & Files. Promote moves it one level up; Demote lets you select a manageable sibling as its new parent. Descendants move together. Top-level folders cannot be promoted, and the default folder cannot be relocated. Confirmation shows the destination and warns about inherited access changes. The server rejects name conflicts, insufficient permissions, and nesting beyond 16 levels.
