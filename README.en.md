@@ -4,19 +4,20 @@
 
 Turn a Windows PC into a home backup server for photos, videos, documents and recordings. The server uses **C++17 and cpp-httplib**, with a browser management UI and an Android client built around native Java and trusted local WebView pages.
 
-**Verified public release: [v1.4.0](https://github.com/lxw112190/lw.HomeNAS/releases/tag/v1.4.0)**, published by [CI39](https://github.com/lxw112190/lw.HomeNAS/actions/runs/43659828054), with the combined Windows ZIP, fixed-signature APK and SHA256 files. Android builds, emulator checks and full ZIP acceptance passed; target-phone testing remains necessary.
+**Current source: 1.4.5 · Android versionCode 31 · native protocol 15.** Download publicly available packages from [Releases](https://github.com/lxw112190/lw.HomeNAS/releases). Source version, successful CI builds and target-phone verification are separate states.
 
-**Next release prepared here: 1.4.1 / Android versionCode 27 / native protocol 15.** This edition refreshes usage, folder-permission and upgrade documentation, retaining 1.4.0 functionality, package identity and signing. It becomes public only after the new commit passes CI. See [release notes](docs/20261115-v1.4.1发布说明.md).
+[Downloads](https://github.com/lxw112190/lw.HomeNAS/releases) · [Actions and APKs](https://github.com/lxw112190/lw.HomeNAS/actions) · [Web usage](#web-usage) · [Deployment](deploy/README.md) · [API](docs/API.md)
 
 ## Features
 
 - **Reliable uploads:** bounded streaming chunks, durable acknowledged offsets, pause/resume, SHA256 verification and content deduplication within the same accessible destination. A file is backed up only after the server confirms `READY`.
 - **Android backup:** select authorized photos/videos by item, day or month; select all and exclude individual items; choose a destination folder. Upload concurrency defaults to two and is capped at three. Automatic backup follows Android scheduling and power/network restrictions.
 - **Capture-time timeline:** valid EXIF `DateTimeOriginal` takes priority, followed by file modification time and finally import time. Old images are indexed in the background. Jump by year/month and filter an inclusive date range. Missing EXIF is never inferred from a filename.
+- **Web overview and search:** disk capacity, low-space indication, file-category counts, scoped task states and shortcuts. Search follows the current location; folder searches include descendants. Lists provide first, previous, next and last navigation.
 - **Folders first:** the primary organization view shows location breadcrumbs, item counts, photo/video counts and total bytes. Cross-page selections support batch moves. Folders support up to 16 levels with inherited permissions; thematic albums remain optional references across folders, without duplicating originals.
 - **Library backup and migration:** download a consistent SQLite/configuration/classification snapshot from the Web UI. Offline migration copies an entire instance to a new empty directory and verifies the database, relationships and every copied file. The source remains intact.
 - **Easier phone setup:** scan a connection QR from the Web settings page, keep up to five recently connected servers, and see actionable connection failures. Scanning fills an address draft; it never logs in, trusts a certificate or redirects an existing queue automatically.
-- **Preview and organization:** image zoom/pan, on-demand metadata, native Android audio/video playback, video thumbnails through bundled FFmpeg, rename, recycle/restore and Web batch ZIP export. Administrator-only permanent deletion requires explicit confirmation.
+- **Preview and organization:** image zoom/pan, on-demand metadata with the full wrapping filename on Android, native Android audio/video playback, video thumbnails through bundled FFmpeg, rename, recycle/restore and Web batch ZIP export. Administrator-only permanent deletion requires explicit confirmation.
 - **Accounts and folder access:** administrator, member and viewer roles. Folder permissions limit visibility and editing. Administrators retain access to all data; viewer accounts cannot gain write access through folder grants.
 
 ## Install
@@ -68,6 +69,41 @@ Open the library's **Timeline** view to jump by year/month or apply a date range
 
 The default organization entry is **Folders**. Moving between logical folders does not rewrite or duplicate the stored original. Files can have multiple folder references; a move changes the selected source association and retains other associations. Optional **Thematic albums** are for cross-folder topics; their deletion removes references, not original files. Advanced album actions are under **More organization** when selecting from the timeline.
 
+## Web usage
+
+### Overview
+
+The overview shows committed files, retained-original bytes, free disk space and unfinished tasks, with shortcuts to photos, videos, other files, folders, albums, trash and backup tasks. **Refresh overview** updates the statistics and recent files.
+
+File and trash counts follow the current account's visibility. Administrators see task records for all accounts; other users see only their own. The disk bar includes other applications and files, so it is separate from NAS original-file usage. A warning appears below 5% free space. Completed task records do not mean every file on a phone has been backed up.
+
+### Select and upload folders
+
+1. Open a destination in **Photos & Files**, then select **Upload to current folder**. Alternatively, choose the destination from the expandable folder tree in Backup tasks.
+2. Select individual files or a local folder. A local folder opens a tree where individual files or entire branches can be included or excluded.
+3. **Preserve original folders** is enabled by default and includes the selected root folder: `Trip/Day1/a.jpg` goes under `Trip → Day1` inside the destination. Disable it to flatten selected files into that destination.
+4. Confirm the selection and keep the page open. The server verifies the complete SHA256 before committing a file. After refreshing, reselect the same files to resume.
+
+Empty directories are omitted. The existing 16-level limit applies, and creating children requires parent management permission. Matching directories are reused; inaccessible directories stop import while retaining already queued files. Changing the target affects new tasks only; queued tasks and retries keep their original target.
+
+### Filename search and pagination
+
+| Current location | Search scope |
+| --- | --- |
+| Root folder or album list | All accessible files |
+| Inside a folder | That folder and all accessible descendants, recursively |
+| Inside an album | Accessible files belonging to that album only |
+
+Clear the query to return to normal browsing. The default folder is a specific folder, not the global root. Search never expands permissions. Trashed files stay out of the active library; the Trash view searches deleted items separately.
+
+Library, folder, album, trash and upload-task lists provide **First / Previous / Next / Last** navigation. Jumps retain current filters and search. The server seeks the last page within those filters and permissions without downloading the whole catalog to the browser. Preview's previous/next file controls still use the currently loaded page only.
+
+### System icons and album covers
+
+Web folders use the Windows shell folder icon from the NAS host. Files without thumbnails use extension-associated shell icons where available; these depend on software installed on the **server**, not on the phone or browser PC. Icon lookup does not open uploaded originals.
+
+A manually selected album cover takes priority. Otherwise, the first accessible, non-trashed photo in album display order is used. Empty albums and unavailable thumbnails show a placeholder.
+
 ## Back up and move a library
 
 ### Database and classification snapshot
@@ -102,7 +138,18 @@ Extract its ZIP, retain the original files in the current source library, stop t
 
 The snapshot restores the database/configuration and classifications while originals come from the current source data directory. Missing or changed originals fail verification; metadata alone cannot recreate a deleted photo. Unfinished tasks from a metadata snapshot must be retried, with files reselected if authorization has expired; use full migration to preserve resumable upload progress. Restoration never overwrites the current library. Verification manifests describe the copy at migration time; a used, changing library will no longer match that old snapshot byte for byte.
 
+## APK preview filenames
+
+Open **File and capture information** to read the full filename in the first row. It wraps, supports long-press text selection, and updates after renaming. The top title retains its compact ellipsis layout so long names cannot crowd out the preview or close button. Expanded metadata scrolls independently.
+
 ## Folder permissions
+
+On the Web, open a manageable folder to adjust its level:
+
+- **Promote folder** moves it one level up: `A/B` becomes root-level `B`. Root folders cannot be promoted again.
+- **Demote folder** selects a manageable sibling as the new parent: moving `A/B` under sibling `C` produces `A/C/B`.
+
+Descendants move together, preserving folder IDs, originals and queued upload targets. The default folder cannot be relocated. Confirmation shows the destination and inherited-access implications. Name conflicts, insufficient permissions, cycles and nesting beyond 16 levels are rejected. Use **Authorization** on the Web or **Folder permissions** in the APK to manage access.
 
 New root folders are private to their owner. Children inherit by default and can narrow access to selected users. Permissions are read, organize or manage; child grants cannot exceed the parent or the account role. Breadcrumbs, subtree moves, full backup destination paths and per-folder direct-file statistics are supported. Only empty folders can be deleted.
 
@@ -115,7 +162,7 @@ Revoked/deleted destinations stop transfers without switching them to the shared
 1. Stop the service or foreground process and keep a complete backup of the current configuration and data.
 2. Replace application files, Web assets, deployment tools and the bundled `client-release` directory. Preserve the existing `config` and `data`; fresh-install defaults must not overwrite existing accounts or settings.
 3. Start the server to migrate the catalog and publish the bundled APK. The 1.4 folder features require a 1.4.0 or newer server and the matching updated Android client; a Web-resource update alone cannot add the native bridge methods to an older APK.
-4. Install the same-signature APK over the previous version. Accounts and queues are retained; the new APK returns to its builtin UI once. An inaccessible destination stops rather than falling back to the shared default.
+4. The current matching client source is 1.4.5 / code31 / nativeApi15. Install the same-signature APK over the previous version. Accounts and queues are retained; the new APK returns to its builtin UI once. An inaccessible destination stops rather than falling back to the shared default.
 5. Existing folders retain their old shared policy. Review membership before restricting access. Never reopen an upgraded catalog with an older server binary. Keep the old installation until the upgraded instance is verified.
 
 ## Build and CI
@@ -137,9 +184,29 @@ The **Build APK, server and Release** workflow in `.github/workflows/android.yml
 - `lw.HomeNAS-server-ciN`: standalone Windows package, without an APK.
 - **`lw.HomeNAS-full-ciN`: recommended combined deployment package.**
 
-Main pushes generate artifacts. A previously unpublished `vVERSION` is published only on a matching pushed version tag after all required checks pass; public Releases are never overwritten. Manual runs build artifacts only. Disabling emulator tests skips the combined package and Release. The four persistent Android signing Secrets remain unchanged.
+| Trigger | Result |
+| --- | --- |
+| Push to `main` | Build, verify and upload Actions artifacts; no Release publication |
+| Pull request | Compile and check; no distributed signed APK or Release |
+| Manual run | Artifacts only; disabling `emulator` skips the combined ZIP; no Release |
+| **Push a `v*` tag** | Publish an unpublished version only when the tag matches VERSION and the tested commit, after all required checks pass |
+
+After committing the source:
+
+```powershell
+python tools/check-version.py
+git push origin main
+git tag -a v1.4.5 -m "Release v1.4.5"
+git push origin v1.4.5
+```
+
+Lightweight and annotated tags are supported. Published releases and assets remain unchanged; do not reuse published tags. Assets are uploaded to a draft and made public only after verification. Failed jobs can be retried within the same run; expired artifacts require a fresh complete build.
+
+Keep VERSION, CMake, the server version and Android versionName aligned, and increment versionCode for APK native or builtin-page changes. The four persistent Android signing Secrets remain unchanged: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. Optional `UI_SIGNING_KEY_BASE64` signs UI resource bundles; otherwise the combined package uses the APK's builtin pages. Keep private keys and real library data out of Git.
 
 ## Limits and license
+
+Version 1.4.5 has local Windows-build, synthetic-library regression and real-Chrome page checks, including APK production-page layouts with long filenames at 320px and in landscape. These do not establish cloud-release, Android-build, emulator or physical-device success; consult the corresponding CI run and test the target phone.
 
 No iOS client, RAID, end-to-end encryption or universal video transcoding is included. Folder ACLs do not provide separate disk quotas or encryption against server administrators. Device codecs determine playback support. Metadata snapshots are not full media backups. Recycle/restore is not a substitute for an independent second copy. Android physical-device behavior still needs testing on the target phone.
 
@@ -154,23 +221,3 @@ Project license: [LICENSE](LICENSE). Third-party components, pinned source hashe
 If this project helps you, you can support its maintenance:
 
 <img src="assets/sponsor.jpg" alt="Support maintenance" width="220">
-
-### Web folder-tree uploads (1.4.2)
-
-Inside Photos & Files, use Upload to current folder or Authorization (directory managers only). Destination pickers expand and load folders by level. Selecting a local folder opens a tree with file/subtree checkboxes. Preserve original folders is enabled by default and includes the selected root folder; disabling it flattens the selection into the destination. Empty directories are omitted. The existing 16-level limit and ACLs apply; creating children requires parent management permission. Matching directories are reused, failures retain already queued files, and queued destinations stay fixed. Refreshing requires selecting the same files again to resume.
-
-1.4.3 fixes the Web upload option layout: the preserve-folders checkbox keeps its compact size beside its label instead of inheriting full-width text-input styling.
-
-### Web folder promotion and demotion (1.4.4)
-
-Open a manageable folder in Photos & Files. Promote moves it one level up; Demote lets you select a manageable sibling as its new parent. Descendants move together. Top-level folders cannot be promoted, and the default folder cannot be relocated. Confirmation shows the destination and warns about inherited access changes. The server rejects name conflicts, insufficient permissions, and nesting beyond 16 levels.
-
-### Icons, scoped search and tag releases (1.4.5)
-
-Web folders and files without thumbnails use Windows shell icons from the NAS host, resolved by synthetic extension without opening uploaded originals. Albums without a manual cover use the first visible photo; inaccessible and trashed photos are excluded. Root filename search is global, folder search includes descendants, and album search stays inside the selected album. Clearing search restores normal browsing.
-
-Main pushes and manual runs only build/verify artifacts. Release publication requires pushing a `v*` tag matching VERSION and the tested commit (for example, `git tag v1.4.5` followed by `git push origin v1.4.5`). Lightweight and annotated tags are supported. Published releases remain immutable.
-
-First/last navigation now covers the library, folders, albums, trash, and upload tasks. The server seeks the last page within current filters and permissions without sending the entire library to the browser. The overview adds disk capacity, low-space indication, category counts, scoped task states, and shortcuts. Disk usage explicitly includes other applications.
-
-APK preview metadata now starts with the full, wrapping and selectable filename. The header keeps its compact ellipsis layout so preview and close controls remain accessible.
