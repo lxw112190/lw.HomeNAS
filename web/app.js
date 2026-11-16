@@ -162,7 +162,43 @@ async function chooseUploadDestination(){
  catch(e){if(revision===state.uploadRevision)error(e.message);}finally{button.disabled=false;}
 }
 function openUpload(){navigate('transfers');$('choose-files').focus();}
+function openUploadToFolder(folder){
+ if(!state.me?.can_upload||!folder?.can_write)return;
+ state.uploadFolder={id:folder.id,name:folder.full_path||folder.name};renderUploadDestination();openUpload();
+}
+function uploadPath(file){
+ const path=file.webkitRelativePath||file.name,parts=path.split('/');parts.pop();
+ if(parts.some(p=>!p||p==='.'||p==='..'||/[\\\x00-\x1f]/.test(p)||[...p].length>50))throw Error('原文件夹名称不合法或超过50字：'+path);
+ return parts;
+}
+function folderUploadResolver(base,valid){
+ const pages=new Map();
+ async function children(parent,refresh=false){
+  if(!refresh&&pages.has(parent))return pages.get(parent);
+  const items=[],seen=new Set();let before='';do{valid();const r=await api('folders?'+new URLSearchParams({parent_id:parent,before}));valid();items.push(...r.items);before=r.next||'';if(before&&seen.has(before))throw Error('目录分页重复，请重试');seen.add(before);}while(before);pages.set(parent,items);return items;
+ }
+ return async file=>{let folder=base;for(const name of uploadPath(file)){
+  valid();let parent=folder.id,items=await children(parent),matches=items.filter(f=>f.name.toLowerCase()===name.toLowerCase());
+  if(matches.length>1)throw Error('存在多个同名目标目录，请手动选择：'+name);
+  let next=matches[0];if(!next){try{next=await post('folders',{name,parent_id:parent});valid();items.push(next);}catch(e){if(e.status!==409)throw e;items=await children(parent,true);next=items.find(f=>f.name.toLowerCase()===name.toLowerCase());if(!next)throw e;}}
+  valid();if(!next.can_write)throw Error('无法写入原目录对应的文件夹：'+name);folder={...next,name:next.full_path||folder.name+' / '+name};
+ }return folder;};
+}
 function uploadQueueKey(task){return JSON.stringify([task.folderId||'default',task.key]);}
+async function chooseLocalFolderFiles(files){
+ if(!files.length)return;const owner=state.me?.user_id,revision=state.uploadRevision,folder={...state.uploadFolder};
+ const d=node('dialog','collection-dialog'),tree=node('div','folder-tree'),footer=node('div','collection-actions'),summary=node('p'),selected=new Set(files.map((_,i)=>i)),root={children:new Map(),indices:[]},checks=[];
+ const preserve=node('input');preserve.type='checkbox';preserve.checked=$('preserve-folders').checked;const option=node('label','preserve-folders','按原文件夹目录上传（包含所选文件夹）');option.prepend(preserve);
+ for(let i=0;i<files.length;i++){let branch=root;branch.indices.push(i);for(const part of (files[i].webkitRelativePath||files[i].name).split('/').slice(0,-1)){if(!branch.children.has(part))branch.children.set(part,{children:new Map(),indices:[]});branch=branch.children.get(part);branch.indices.push(i);}if(!branch.files)branch.files=[];branch.files.push(i);}
+ function update(){summary.textContent=`已选 ${selected.size} / ${files.length} 项；保存到「${folder.name}」`;for(const {input,indices} of checks){const count=indices.reduce((n,i)=>n+selected.has(i),0);input.checked=count===indices.length;input.indeterminate=count>0&&count<indices.length;}ok.disabled=!selected.size;}
+ function checkbox(parent,label,indices){const row=node('label','local-file-choice'),input=node('input');input.type='checkbox';input.onchange=()=>{for(const i of indices)if(input.checked)selected.add(i);else selected.delete(i);update();};checks.push({input,indices});row.append(input,document.createTextNode(label));parent.append(row);}
+ function render(branch,box){for(const [name,child] of branch.children){const details=node('details'),heading=node('summary'),content=node('div','folder-tree-children');checkbox(heading,name+' · '+child.indices.length+' 项',child.indices);details.append(heading,content);details.ontoggle=()=>{if(details.open&&!details.dataset.loaded){details.dataset.loaded='true';render(child,content);update();}};box.append(details);}let at=0;const more=node('button','secondary','更多文件');more.type='button';function page(){for(const i of (branch.files||[]).slice(at,at+100))checkbox(box,files[i].name,[i]);at+=100;more.remove();if(at<(branch.files||[]).length)box.append(more);update();}more.onclick=page;page();}
+ const ok=node('button','primary','上传所选文件'),cancel=node('button','secondary','取消');ok.type=cancel.type='button';cancel.onclick=()=>d.close();ok.onclick=()=>d.close('upload');footer.append(cancel,ok);d.append(node('h3','','选择文件 · 目录树'),summary,option,tree,footer);document.body.append(d);render(root,tree);update();
+ const confirmed=await new Promise(resolve=>{d.addEventListener('close',()=>{resolve(d.returnValue==='upload');d.remove();},{once:true});d.showModal();});
+ if(!confirmed||owner!==state.me?.user_id||revision!==state.uploadRevision)return;
+ if(folder.id!==state.uploadFolder.id){toast('目标文件夹已改变，请重新选择文件。');return;}
+ await addFiles(files.filter((_,i)=>selected.has(i)),{preserveFolders:preserve.checked});
+}
 function checkUploadContext(task,signal){
  if(signal.aborted||state.paused||!state.me?.can_upload||task.owner!==state.me.user_id||task.revision!==state.uploadRevision)throw new DOMException('Paused','AbortError');
 }
@@ -174,12 +210,14 @@ function acceptUploadDestination(task,remote){
  task.effectiveFolderName=remote.folder_name||(actual==='default'?'默认文件夹':task.folderName);
  task.folderWarning=remote.folder_defaulted?'原目标已删除，已转存默认文件夹':'';
 }
-async function addFiles(files){
+async function addFiles(files,options={}){
  if(!state.me?.can_upload){toast('当前账号为只读，不能上传。');return;}if(state.importing){toast('正在整理上一批文件，请稍候再添加。');return;}
  if(!files.length)return;const folder={...state.uploadFolder},owner=state.me.user_id,revision=state.uploadRevision;
- state.importing=true;let count=0;const known=new Map(state.files.map(t=>[uploadQueueKey(t),t]));
- try{navigate('transfers');for(let i=0;i<files.length;i++){if(owner!==state.me?.user_id||revision!==state.uploadRevision)break;const file=files[i],key=`${file.webkitRelativePath||file.name}|${file.size}|${file.lastModified}`,queueKey=uploadQueueKey({folderId:folder.id,key}),old=known.get(queueKey);if(old&&!['ERROR','CANCELLED'].includes(old.state))continue;const task={file,key,folderId:folder.id,folderName:folder.name,owner,revision,state:'UPLOADING',offset:0,percent:0,active:false,message:'等待开始',retried:!!old};state.files.push(task);known.set(queueKey,task);count++;if(i%200===0){renderLocal();await sleep(0);}}}
- finally{state.importing=false;}if(owner!==state.me?.user_id||revision!==state.uploadRevision)return;if(count){state.paused=false;renderLocal();kick();toast(`已加入 ${count} 项，保存到「${folder.name}」。请保持页面打开。`);}else toast('这些文件已在当前文件夹的上传队列中。');
+ state.importing=true;let count=0,failure=null;const known=new Map(state.files.map(t=>[uploadQueueKey(t),t]));
+ const valid=()=>{if(owner!==state.me?.user_id||revision!==state.uploadRevision||!state.me?.can_upload)throw Error('账号已改变，已停止整理上传目录');},resolve=folderUploadResolver(folder,valid);
+ try{navigate('transfers');if(options.preserveFolders){const base=await api('folders/'+folder.id);valid();for(const file of files)if(Number(base.depth||1)+uploadPath(file).length>16)throw Error('上传目录超过16层，请选择更浅的目标目录');}
+ for(let i=0;i<files.length;i++){valid();const file=files[i],destination=options.preserveFolders?await resolve(file):folder;valid();const key=`${file.webkitRelativePath||file.name}|${file.size}|${file.lastModified}`,queueKey=uploadQueueKey({folderId:destination.id,key}),old=known.get(queueKey);if(old&&!['ERROR','CANCELLED'].includes(old.state))continue;const task={file,key,folderId:destination.id,folderName:destination.name,owner,revision,state:'UPLOADING',offset:0,percent:0,active:false,message:'等待开始',retried:!!old};state.files.push(task);known.set(queueKey,task);count++;if(i%200===0){renderLocal();await sleep(0);}}}
+ catch(e){failure=e;}finally{state.importing=false;}if(owner!==state.me?.user_id||revision!==state.uploadRevision)return;if(count){state.paused=false;renderLocal();kick();toast(`已加入 ${count} 项，保存到「${folder.name}」${options.preserveFolders?'并保留原目录':''}。请保持页面打开。`);}else if(!failure)toast('这些文件已在当前文件夹的上传队列中。');if(failure)error(`已加入 ${count} 项；其余未加入，可重新选择重试：${failure.message}`);
 }
 function pause(){state.paused=true;state.files.forEach(t=>t.controller?.abort());toast('本次前台上传已暂停，服务器已确认的进度会保留。');}
 async function resume(){if(state.paused)while(state.active)await sleep(50);state.paused=false;state.nextCandidate=0;for(const t of state.files)if(['PAUSED','ERROR'].includes(t.state)){if(t.state==='ERROR')t.taskId=null;t.state='UPLOADING';t.message='';}renderLocal();kick();}
@@ -241,7 +279,7 @@ $('edit-user-form').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.
 $('logout').onclick=async()=>{state.paused=true;state.files.forEach(t=>t.controller?.abort());try{await post('logout');}catch{}showAuth();};
 $('profile-logout').onclick=$('logout').onclick;
 document.querySelectorAll('[data-page]').forEach(b=>b.onclick=()=>navigate(b.dataset.page));
-for(const id of ['file-input','folder-input'])$(id).onchange=e=>{addFiles(Array.from(e.target.files));e.target.value='';};
+for(const id of ['file-input','folder-input'])$(id).onchange=e=>{const files=Array.from(e.target.files);e.target.value='';(id==='folder-input'?chooseLocalFolderFiles(files):addFiles(files)).catch(e=>error(e.message));};
 for(const id of ['hero-upload','open-upload'])$(id).onclick=openUpload;
 $('choose-files').onclick=()=>$('file-input').click();
 $('choose-upload-folder').onclick=chooseUploadDestination;$('reset-upload-folder').onclick=resetUploadDestination;

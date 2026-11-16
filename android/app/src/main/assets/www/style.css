@@ -295,3 +295,8 @@ input:focus,input:focus-visible,textarea:focus,textarea:focus-visible,select:foc
 #page-library>.collection-tools.options-open>.library-quick{grid-column:1/-1;width:100%}
 
 .folder-children{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;padding:10px 0;border-bottom:1px solid #dce6df}.collection-dialog select{display:block;width:100%;min-height:40px;padding:8px;margin:8px 0 14px;border:1px solid #dce6df;border-radius:8px;background:#f6faf7;font:inherit}
+.folder-tree{max-height:55vh;overflow:auto;text-align:left;margin:12px 0}
+.folder-tree-children{margin-left:16px;padding-left:8px;border-left:1px solid var(--border,#ddd)}
+.folder-tree-row{display:flex;align-items:center;gap:6px;margin:5px 0}
+.folder-tree-row button{white-space:normal;overflow-wrap:anywhere;text-align:left;min-width:0}
+.folder-tree-row button:first-child{flex:none}

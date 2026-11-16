@@ -41,6 +41,18 @@ async function run(){
   await batch.w.addFiles(Array.from({length:205},(_,i)=>new batch.w.File(['x'],'file-'+i+'.txt',{lastModified:1})));
   assert.equal(batch.w.state.files.length,205);assert(batch.w.state.files.every(t=>t.folderId===folderA.id),'Large batch must freeze target before yielding');
  }finally{batch.dom.window.close();}
- console.log('Web upload folders: default/picker, frozen batch, per-folder dedup and task identity, retry, fallback notice, response validation, account-change guards passed.');
+ const hierarchy=fixture();try{
+  const w=hierarchy.w;w.state.uploadFolder={...folderA};const directories=[{...folderA,depth:1,can_write:true}],created=[];
+  w.api=async path=>{if(path==='folders/'+folderA.id)return directories[0];const q=new URLSearchParams(path.split('?')[1]);return {items:directories.filter(f=>f.parent_id===q.get('parent_id')),next:''};};
+  w.post=async(path,value)=>{assert.equal(path,'folders');const f={id:String(directories.length).padStart(48,'0'),...value,can_write:true};directories.push(f);created.push(value);return f;};
+  function local(name,path){const f=new w.File(['x'],name,{lastModified:1});Object.defineProperty(f,'webkitRelativePath',{value:path});return f;}
+  const first=local('a.txt','旅行/第一天/a.txt'),second=local('b.txt','旅行/第二天/b.txt');
+  await w.addFiles([first,second],{preserveFolders:true});assert.equal(created.length,3);assert.equal(created[0].parent_id,folderA.id);assert.equal(created[1].parent_id,directories[1].id);assert.notEqual(w.state.files[0].folderId,w.state.files[1].folderId);
+  await w.addFiles([first,second],{preserveFolders:true});assert.equal(created.length,3,'Retry reuses existing directory hierarchy');assert.equal(w.state.files.length,2);
+  await w.addFiles([first]);assert.equal(w.state.files.at(-1).folderId,folderA.id,'Flatten mode retains selected target');
+  const before=created.length;await w.addFiles([local('x','旅行/../x')],{preserveFolders:true});assert.equal(created.length,before,'Invalid paths fail before directory mutations');assert.match(hierarchy.errors.at(-1),/不合法/);
+  directories[2].can_write=false;await w.addFiles([local('c.txt','旅行/第一天/c.txt')],{preserveFolders:true});assert.match(hierarchy.errors.at(-1),/无法写入/);assert.equal(w.state.files.length,3,'Denied folder never enqueues files or falls back');
+ }finally{hierarchy.dom.window.close();}
+ console.log('Web upload folders: frozen destinations, retry identity, account isolation, original hierarchy/reuse, flatten mode, invalid paths and ACL rejection passed.');
 }
 run().catch(e=>{console.error(e);process.exitCode=1;});

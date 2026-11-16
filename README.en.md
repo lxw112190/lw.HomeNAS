@@ -154,3 +154,7 @@ Project license: [LICENSE](LICENSE). Third-party components, pinned source hashe
 If this project helps you, you can support its maintenance:
 
 <img src="assets/sponsor.jpg" alt="Support maintenance" width="220">
+
+### Web folder-tree uploads (1.4.2)
+
+Inside Photos & Files, use Upload to current folder or Authorization (directory managers only). Destination pickers expand and load folders by level. Selecting a local folder opens a tree with file/subtree checkboxes. Preserve original folders is enabled by default and includes the selected root folder; disabling it flattens the selection into the destination. Empty directories are omitted. The existing 16-level limit and ACLs apply; creating children requires parent management permission. Matching directories are reused, failures retain already queued files, and queued destinations stay fixed. Refreshing requires selecting the same files again to resume.
