@@ -2,6 +2,12 @@
 #include "core.hpp"
 namespace nas {
 inline bool isPageJump(const std::string& before){return before=="@last"||before.rfind("@page:",0)==0;}
+inline std::string fileSort(const std::string& sort,const std::string& alias,const std::string& before){
+    if(sort.empty())return "";
+    if(!before.empty()&&!isPageJump(before))throw Error(400,"INVALID_CURSOR","排序已改变，请从首页重新加载");
+    static const std::map<std::string,std::string> fields={{"name_asc","name COLLATE NOCASE ASC"},{"name_desc","name COLLATE NOCASE DESC"},{"modified_desc","modified DESC"},{"size_desc","size DESC"},{"size_asc","size ASC"}};
+    auto it=fields.find(sort);if(it==fields.end())throw Error(400,"INVALID_SORT","排序方式无效");return alias+it->second+","+alias+"id DESC";
+}
 struct PageJump {
     long long index=-1;std::string offset;
     PageJump(const std::string& before,Database& db,const std::string& sql,const Params& args,unsigned size){

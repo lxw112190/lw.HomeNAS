@@ -46,15 +46,16 @@ json Store::folders(const std::string& before,const Identity& who,const std::str
     PageJump jump(before,db,"SELECT id FROM folders "+where,args,48);auto ids=db.query("SELECT id FROM folders "+where+" ORDER BY (id='default') DESC,id DESC LIMIT 49"+jump.offset,args);std::string next;if(ids.size()>48){ids.erase(ids.end()-1);next=ids.back()["id"];}
     json items=json::array();for(auto row:ids)items.push_back(folder(row["id"],who));return jump.finish({{"items",items},{"next",next},{"folder_acl_version",1},{"parent_id",parent}});
 }
-json Store::folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
+json Store::folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who,const std::string& sort){
+    auto ordered=fileSort(sort,"a.",before);
     auto info=folder(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
     if(!before.empty()&&!isPageJump(before)&&(before.size()!=48||before.find_first_not_of("0123456789abcdef")!=std::string::npos))throw Error(400,"INVALID_CURSOR","文件分页游标无效");
     Params args{id};std::string sql="SELECT a.id,a.sha256,a.size,a.name,a.mime,a.category,a.created,a.modified,a.preview";
     if(search.empty())sql+=" FROM folder_items i JOIN assets a ON a.id=i.asset_id WHERE i.folder_id=?";
     else sql+=" FROM assets a WHERE EXISTS(SELECT 1 FROM folder_items i JOIN folder_tree ft ON ft.folder_id=i.folder_id WHERE i.asset_id=a.id AND ft.ancestor_id=?)";
     sql+=" AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id)";
-    sql+=" AND "+assetAccessSql("a",who);if(!before.empty()&&!isPageJump(before)){sql+=" AND a.id<?";args.push_back(before);}if(type=="image"||type=="video"||type=="file"){sql+=" AND a.category=?";args.push_back(type);}if(!search.empty()){sql+=" AND a.name LIKE ?";args.push_back("%"+search+"%");}
-    PageJump jump(before,db,sql,args,48);auto rows=db.query(sql+" ORDER BY a.id DESC LIMIT 49"+jump.offset,args);std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}assetPermissions(rows,who);
+    sql+=" AND "+assetAccessSql("a",who);if(!before.empty()&&!isPageJump(before)){sql+=" AND a.id<?";args.push_back(before);}if(type=="image"||type=="video"||type=="file"){sql+=" AND a.category=?";args.push_back(type);}if(!search.empty()){sql+=" AND a.name LIKE ? ESCAPE '\\'";args.push_back(literalSearch(search));}
+    PageJump jump(!sort.empty()&&before.empty()?"@page:0":before,db,sql,args,48);auto rows=db.query(sql+" ORDER BY "+(ordered.empty()?"a.id DESC":ordered)+" LIMIT 49"+jump.offset,args);std::string next;if(rows.size()>48){rows.erase(rows.end()-1);next=sort.empty()?rows.back()["id"].get<std::string>():"@page:"+std::to_string(jump.index+1);}assetPermissions(rows,who);
     if(!search.empty())for(auto& row:rows){auto sources=db.query("SELECT i.folder_id FROM folder_items i JOIN folder_tree ft ON ft.folder_id=i.folder_id WHERE i.asset_id=? AND ft.ancestor_id=? ORDER BY ft.depth,i.folder_id LIMIT 1",{row["id"],id});if(!sources.empty())row["source_folder"]=sources[0]["folder_id"];}
     return jump.finish({{"folder",info},{"items",rows},{"next",next},{"children",folders("",who,id)},{"folder_acl_version",1}});
 }
@@ -84,7 +85,7 @@ json Store::folderMoveOptions(const json& input,const Identity& who){
 }
 json Store::changeFolder(const std::string& id,const std::string& action,const json& input,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能修改文件夹");std::string resultId=id;
-    db.transaction([&]{
+    db.transaction([&]{auto operation=[&]{
         auto now=std::to_string(millis());
         if(id.empty()||action=="edit"){
             if(!id.empty()){if(!folder(id,who)["can_manage"].get<bool>())throw Error(403,"FOLDER_MANAGE_REQUIRED","需要目录管理权限");if(id=="default")throw Error(403,"DEFAULT_FOLDER","默认文件夹不能改名");}
@@ -115,7 +116,7 @@ json Store::changeFolder(const std::string& id,const std::string& action,const j
             if(id=="default"&&!who.admin){auto rows=json::array({asset(assetId)});assetPermissions(rows,who);if(!rows[0]["can_rename"].get<bool>())throw Error(403,"ASSET_OWNER_REQUIRED","普通用户只能从默认文件夹移动自己上传过的文件");}
             if(id!=target){if(!input.value("confirm_access_change",false))throw Error(409,"ACCESS_CONFIRM_REQUIRED","移动或添加可能改变可见范围，请确认");attachFolder(target,assetId);db.exec("DELETE FROM folder_items WHERE folder_id=? AND asset_id=?",{id,assetId});}
         }
-    });return action=="delete"?json{{"deleted",true}}:folder(resultId,who);
+    };operation();audit(who,"folder."+action,resultId,input.contains("asset_ids")?std::to_string(input["asset_ids"].size()):"");});return action=="delete"?json{{"deleted",true}}:folder(resultId,who);
 }
 }
 
@@ -143,7 +144,7 @@ json Store::folderPolicy(const std::string& id,const json* input,const Identity&
   auto grants=input->value("grants",json::array());if(!grants.is_array()||grants.size()>200)throw Error(400,"INVALID_GRANTS","每个目录最多授权200个账号");db.exec("DELETE FROM folder_acl WHERE folder_id=?",{id});std::set<std::string> seen;
   if(policy=="restricted")for(const auto& g:grants){auto user=text(g,"user_id",48);auto level=number(g,"level");if(level<1||level>3||!seen.insert(user).second||db.query("SELECT id FROM users WHERE id=? AND enabled=1",{user}).empty())throw Error(400,"INVALID_GRANTS","授权账号或权限无效");if(info["parent_id"]!=""){auto p=db.query("SELECT username,display_name,role FROM users WHERE id=?",{user})[0];Identity recipient{user,p["username"],p["display_name"],p["role"],p["role"]=="admin"};auto cap=std::stoi(db.query("SELECT "+folderAccessSql("'"+info["parent_id"].get<std::string>()+"'",recipient)+" AS n")[0]["n"].get<std::string>());if(level>static_cast<uint64_t>(cap))throw Error(400,"PARENT_PERMISSION_LIMIT","子目录授权不能超过父目录，请先调整父目录");}db.exec("INSERT INTO folder_acl(folder_id,user_id,level) VALUES(?,?,?)",{id,user,std::to_string(level)});}
   db.exec("UPDATE folders SET policy=?,updated=? WHERE id=?",{policy,std::to_string(millis()),id});if(number(db.query("SELECT "+folderAccessSql("'"+id+"'",who)+" AS level")[0],"level")<3)throw Error(409,"SELF_ACCESS_REQUIRED","请保留自己的管理权限，或由所有者/管理员调整");
- });info=folder(id,who);}
+ audit(who,"folder.permissions",id);});info=folder(id,who);}
  info["grants"]=db.query("SELECT g.user_id,g.level,u.display_name FROM folder_acl g JOIN users u ON u.id=g.user_id WHERE g.folder_id=?",{id});info["people"]=folderPeople(who)["items"];return info;
 }
 }

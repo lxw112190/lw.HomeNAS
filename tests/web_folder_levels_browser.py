@@ -67,8 +67,9 @@ try:
         # A target name conflict must leave the original hierarchy and bytes intact.
         conflict = h.post('folders', {'name':'子目录C'}, status=201)
         promote.click()
-        dialog.get_by_role('button',name='确定',exact=True).click()
+        # The new permission preview rejects a name conflict before confirmation.
         page.locator('#global-error:not(.hidden)').wait_for()
+        assert not page.locator('dialog[open]').count()
         check_tree(a['id'], a['id'])
         assert info(conflict)['parent_id'] == ''
         page.set_viewport_size({'width':320,'height':640})

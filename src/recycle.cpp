@@ -34,7 +34,7 @@ json Store::recycle(const json& input,const Identity& who,bool restore){
             if(!trash.empty())throw Error(409,"TRASH_CHANGED","文件已在回收站，请刷新");
             db.exec("INSERT INTO asset_trash(asset_id,deleted_at,deleted_by) VALUES(?,?,?)",{id,std::to_string(millis()),who.userId});
         }
-    }});return {{"count",ids.size()},{"restored",restore}};
+    }audit(who,restore?"asset.restore":"asset.trash","",std::to_string(ids.size()));});return {{"count",ids.size()},{"restored",restore}};
 }
 json Store::recycled(const std::string& before,const std::string& type,const std::string& search,const Identity& who){
     if(!who.canUpload())throw Error(403,"READ_ONLY","只读账号不能管理回收站");
@@ -42,7 +42,7 @@ json Store::recycled(const std::string& before,const std::string& type,const std
     Params params;std::string where=" WHERE a.state IN ('READY','MISSING','PURGING') AND "+assetAccessSql("a",who);
     if(!who.admin){where+=" AND t.deleted_by=?";params.push_back(who.userId);}
     if(type=="image"||type=="video"||type=="file"){where+=" AND a.category=?";params.push_back(type);}
-    if(!search.empty()){where+=" AND a.name LIKE ?";params.push_back("%"+search+"%");}
+    if(!search.empty()){where+=" AND a.name LIKE ? ESCAPE '\\'";params.push_back(literalSearch(search));}
     if(!before.empty()&&!isPageJump(before)){
         auto pos=before.find(':');auto time=before.substr(0,pos),id=pos==std::string::npos?"":before.substr(pos+1);
         if(time.empty()||time.size()>19||time.find_first_not_of("0123456789")!=std::string::npos||id.size()!=48||id.find_first_not_of("0123456789abcdef")!=std::string::npos||number(json{{"time",time}},"time")>static_cast<uint64_t>(INT64_MAX))throw Error(400,"INVALID_CURSOR","回收站分页游标无效");
@@ -64,7 +64,7 @@ json Store::purgeAsset(const std::string& id,const json& input,const Identity& w
         if(rows[0]["deleted_at"]!=deletedAt)throw Error(409,"TRASH_CHANGED","回收站记录已改变，请重新确认");
         if(rows[0]["state"]!="READY"&&rows[0]["state"]!="MISSING"&&rows[0]["state"]!="PURGING")throw Error(409,"ASSET_BUSY","文件正在处理，请稍后重试");
         if(!db.query("SELECT id FROM uploads WHERE asset_id=? AND state IN ('VERIFYING','COMMITTING')",{id}).empty())throw Error(409,"ASSET_BUSY","文件正在入库，请稍后重试");
-        db.exec("UPDATE assets SET state='PURGING' WHERE id=?",{id});
+        db.exec("UPDATE assets SET state='PURGING' WHERE id=?",{id});audit(who,"asset.purge_requested",id);
     });
     finishPurge(id);return {{"id",id},{"purged",true}};
 }

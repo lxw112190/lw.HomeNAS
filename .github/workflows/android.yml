@@ -205,7 +205,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install verification dependencies
-        run: python -m pip install requests pillow cryptography PyYAML
+        run: python -m pip install requests pillow cryptography PyYAML playwright
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

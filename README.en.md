@@ -4,9 +4,19 @@
 
 Turn a Windows PC into a home backup server for photos, videos, documents and recordings. The server uses **C++17 and cpp-httplib**, with a browser management UI and an Android client built around native Java and trusted local WebView pages.
 
-**Current source: 1.4.5 · Android versionCode 31 · native protocol 15.** Download publicly available packages from [Releases](https://github.com/lxw112190/lw.HomeNAS/releases). Source version, successful CI builds and target-phone verification are separate states.
+**Current source: 1.5.0 · Android versionCode 32 · native protocol 15.** Download publicly available packages from [Releases](https://github.com/lxw112190/lw.HomeNAS/releases). Source version, successful CI builds and target-phone verification are separate states.
 
 [Downloads](https://github.com/lxw112190/lw.HomeNAS/releases) · [Actions and APKs](https://github.com/lxw112190/lw.HomeNAS/actions) · [Web usage](#web-usage) · [Deployment](deploy/README.md) · [API](docs/API.md)
+
+## Reliability and maintenance in 1.5.0
+
+- Fixes stale responses after account changes, queue collisions between different content with identical file attributes, single-file move confirmation, long Unicode folder uploads, task-filter races, literal underscore/percent search, and trash count scope.
+- Web task identity includes the content digest and resumes matching legacy tasks in the same destination. Re-uploading a trashed original explicitly requires restoration; it never silently restores it.
+- Grid/list layouts and file sorting by name, modification time and size; custom sorting displays a plain file list. Folder/album container ordering is unchanged. Preview shows full source paths and can open a source folder. Folder imports show progress/cancellation, preserving queued items, with failed-only retry and JSON failure export. Albums can return to automatic covers. Folder relocation previews permission changes for up to 200 accounts and rechecks permissions on execution.
+- **Administrator → Storage and settings → Library health and maintenance** offers a read-only, 1–256 MiB/s scan of original sizes/SHA256, folder links and the existence of generated thumbnails. Pause/resume/cancel are supported. Restart marks an interrupted run for explicit resumption; an unfinished file is rehashed. The inventory is frozen at start (READY/MISSING including trash, excluding pending uploads and later additions). Issues are paged and the current page can be exported as JSON. No original is repaired or deleted.
+- **Scheduled metadata snapshots** are off by default: 1–720 hour intervals and 1–100 retained automatic snapshots (default 7). The server must run; failures retry after about five minutes. Only old automatic snapshots are pruned; manual snapshots and originals remain. Snapshots live under the data directory's `backups`, contain no originals, and do not replace an independent backup.
+- **Operation history** retains the latest 10,000 folder, album, permission, rename, trash and maintenance events for administrators. No passwords, tokens or file contents are logged. Permanent deletion records a request rather than proof of completion. Undo is not provided.
+- Android 1.5.0 / versionCode 32 recognises trashed upload responses; nativeApi remains 15. New native tests still require CI compilation and device verification.
 
 ## Features
 
@@ -162,7 +172,7 @@ Revoked/deleted destinations stop transfers without switching them to the shared
 1. Stop the service or foreground process and keep a complete backup of the current configuration and data.
 2. Replace application files, Web assets, deployment tools and the bundled `client-release` directory. Preserve the existing `config` and `data`; fresh-install defaults must not overwrite existing accounts or settings.
 3. Start the server to migrate the catalog and publish the bundled APK. The 1.4 folder features require a 1.4.0 or newer server and the matching updated Android client; a Web-resource update alone cannot add the native bridge methods to an older APK.
-4. The current matching client source is 1.4.5 / code31 / nativeApi15. Install the same-signature APK over the previous version. Accounts and queues are retained; the new APK returns to its builtin UI once. An inaccessible destination stops rather than falling back to the shared default.
+4. The current matching client source is 1.5.0 / code32 / nativeApi15. Install the same-signature APK over the previous version. Accounts and queues are retained; the new APK returns to its builtin UI once. An inaccessible destination stops rather than falling back to the shared default.
 5. Existing folders retain their old shared policy. Review membership before restricting access. Never reopen an upgraded catalog with an older server binary. Keep the old installation until the upgraded instance is verified.
 
 ## Build and CI
@@ -196,8 +206,8 @@ After committing the source:
 ```powershell
 python tools/check-version.py
 git push origin main
-git tag -a v1.4.5 -m "Release v1.4.5"
-git push origin v1.4.5
+git tag -a v1.5.0 -m "Release v1.5.0"
+git push origin v1.5.0
 ```
 
 Lightweight and annotated tags are supported. Published releases and assets remain unchanged; do not reuse published tags. Assets are uploaded to a draft and made public only after verification. Failed jobs can be retried within the same run; expired artifacts require a fresh complete build.
@@ -206,7 +216,7 @@ Keep VERSION, CMake, the server version and Android versionName aligned, and inc
 
 ## Limits and license
 
-Version 1.4.5 has local Windows-build, synthetic-library regression and real-Chrome page checks, including APK production-page layouts with long filenames at 320px and in landscape. These do not establish cloud-release, Android-build, emulator or physical-device success; consult the corresponding CI run and test the target phone.
+Version 1.5.0 has local Windows-build, synthetic-library regression and real-Chrome page checks, including APK production-page layouts with long filenames at 320px and in landscape. These do not establish cloud-release, Android-build, emulator or physical-device success; consult the corresponding CI run and test the target phone.
 
 No iOS client, RAID, end-to-end encryption or universal video transcoding is included. Folder ACLs do not provide separate disk quotas or encryption against server administrators. Device codecs determine playback support. Metadata snapshots are not full media backups. Recycle/restore is not a substitute for an independent second copy. Android physical-device behavior still needs testing on the target phone.
 

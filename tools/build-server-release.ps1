@@ -45,6 +45,12 @@ Invoke-ReleasePython @('tests/library_ux.py')
 if($LASTEXITCODE -ne 0){throw 'Permanent deletion UI confirmation checks failed'}
 Invoke-ReleasePython @('tests/rename.py')
 Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
+Invoke-ReleasePython @('tests/library_maintenance.py','--exe',$exe)
+Invoke-ReleasePython @('tests/review_regressions.py','--exe',$exe)
+Invoke-ReleasePython @('tests/web_upload_tree_browser.py','--exe',$exe)
+Invoke-ReleasePython @('tests/web_folder_levels_browser.py','--exe',$exe)
+Invoke-ReleasePython @('tests/web_library_overview_browser.py','--exe',$exe)
+Invoke-ReleasePython @('tests/apk_preview_layout_browser.py')
 & (Join-Path $root 'tests/check-service-scripts.ps1')
 if($LASTEXITCODE -ne 0){throw 'Service/firewall plans failed'}
 & (Join-Path $root 'tests/deployment-scripts.ps1')

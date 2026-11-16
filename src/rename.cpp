@@ -27,7 +27,7 @@ json Store::renameAsset(const std::string& id,const json& input,const Identity& 
         if(!row["can_rename"].get<bool>())throw Error(403,"ASSET_OWNER_REQUIRED","普通用户只能重命名自己已上传的文件");
         if(row["name"]!=previous)throw Error(409,"NAME_CHANGED","文件名称已被修改，请刷新后重试");
         if(suffix(name)!=suffix(row["name"]))throw Error(400,"EXTENSION_CHANGED","重命名时请保留原扩展名");
-        db.exec("UPDATE assets SET name=? WHERE id=?",{name,id});row["name"]=name;row.erase("path");result=row;
+        db.exec("UPDATE assets SET name=? WHERE id=?",{name,id});row["name"]=name;row.erase("path");result=row;audit(who,"asset.rename",id);
     });
     return result;
 }

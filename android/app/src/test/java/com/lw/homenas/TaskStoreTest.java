@@ -24,6 +24,20 @@ public class TaskStoreTest {
         assertEquals(-1,store.enqueue(scope,"same-source","content://photos/1","fixture.jpg","Camera",100,200,folder,"旅行"));
         try(android.database.Cursor row=store.getReadableDatabase().rawQuery("SELECT folder_id,state FROM tasks WHERE id=?",new String[]{Long.toString(first)})){assertTrue(row.moveToFirst());assertEquals("default",row.getString(0));assertEquals("READY",row.getString(1));}
     }
+    @Test public void readyResponseInTrashIsNotConfirmedAsAnActiveBackup() throws Exception {
+        Context context=RuntimeEnvironment.getApplication();TaskStore store=TaskStore.get(context);
+        long id=store.enqueue("trash-scope","source","content://fixture/1","fixture.txt","",4,1);
+        store.hashed(id,4,"f".repeat(64));TaskStore.Task task=store.next("trash-scope");
+        JSONObject remote=new JSONObject().put("id","a".repeat(48)).put("asset_id","b".repeat(48))
+            .put("sha256","f".repeat(64)).put("size","4").put("offset","4").put("state","READY")
+            .put("folder_id","default").put("effective_folder_id","default").put("trashed",true);
+        java.lang.reflect.Method confirm=BackupEngine.class.getDeclaredMethod("confirm",TaskStore.Task.class,JSONObject.class,String.class,long.class);confirm.setAccessible(true);
+        confirm.invoke(new BackupEngine(context),task,remote,"f".repeat(64),4L);
+        assertFalse(store.ready(id));assertEquals("ERROR",remote.getString("state"));
+        assertTrue(remote.getString("error").contains("回收站"));
+        remote.put("state","READY").put("trashed",false).put("error","");
+        confirm.invoke(new BackupEngine(context),task,remote,"f".repeat(64),4L);assertTrue(store.ready(id));
+    }
     @Test public void versionOneQueueMigrationRetainsOffsetAndClientIdentity() throws Exception {
         Context context=RuntimeEnvironment.getApplication();java.io.File file=context.getDatabasePath("backup-queue.db");assertTrue(file.getParentFile().isDirectory()||file.getParentFile().mkdirs());
         try(android.database.sqlite.SQLiteDatabase old=android.database.sqlite.SQLiteDatabase.openOrCreateDatabase(file,null)){

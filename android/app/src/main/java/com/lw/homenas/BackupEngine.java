@@ -113,6 +113,7 @@ final class BackupEngine {
             ||!java.util.Arrays.asList("UPLOADING","VERIFYING","COMMITTING","READY","ERROR","CANCELLED").contains(state))
             throw new IOException("服务器任务摘要、长度或状态不一致，未确认备份成功");
         if(remote.optBoolean("folder_defaulted")){settings.fallbackFolder(task.scope,task.folderId);settings.message("目标文件夹已删除，本任务保存到默认文件夹；后续备份改用默认文件夹");}
+        if(state.equals("READY")&&remote.optBoolean("trashed"))remote.put("state","ERROR").put("error","文件已在回收站，请在电脑回收站恢复；原件保留");
         if(tasks.confirmed(task.id,remote))Diagnostics.event("task.confirmed","task="+task.id+" state="+state+" offset="+offset+" size="+size);
     }
     private void send(TaskStore.Task task,Settings.Session session,NativeApi api,int block,RunControl control,Progress progress) throws Exception {

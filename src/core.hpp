@@ -19,8 +19,11 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.4.5";
+constexpr const char* Version = "1.5.0";
 inline constexpr const char* TimelineClock = "(CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END)";
+inline std::string literalSearch(const std::string& value) {
+    std::string result="%";for(char c:value){if(c=='%'||c=='_'||c=='\\')result+='\\';result+=c;}return result+'%';
+}
 
 struct Error : std::runtime_error {
     int status;
@@ -110,17 +113,26 @@ public:
                     const std::function<bool(const std::function<bool(const char*, size_t)>&)>& reader);
     json complete(const std::string& id, const Identity& who);
     json cancel(const std::string& id, const Identity& who);
-    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="",const Identity* who=nullptr);
+    json assets(const std::string& before, const std::string& category, const std::string& search, int limit = 60, const std::string& order = "created",const std::string& from="",const std::string& to="",const Identity* who=nullptr,const std::string& sort="");
     json calendar(const std::string& type,const std::string& search,int offset,const Identity* who=nullptr);
     json metadataBackup(const Identity& who);
     json metadataBackups(const Identity& who);
     fs::path metadataBackupPath(const std::string& id,const Identity& who);
+    void initializeMaintenance();
+    json libraryMaintenance(const Identity& who);
+    json healthAction(const std::string& action,const json& input,const Identity& who);
+    json healthResults(const std::string& before,const Identity& who);
+    json backupSchedule(const json& input,const Identity& who);
+    void pruneScheduledBackups(unsigned keep);
+    json relocationImpact(const std::string& id,const json& input,const Identity& who);
+    void audit(const Identity& who,const std::string& action,const std::string& object,const std::string& detail="");
+    json auditPage(const std::string& before,const Identity& who);
     void albumMembership(json& items,const std::string& id,const Identity& who);
     json recycledAsset(const std::string& id,const Identity& who);
     fs::path recycledThumbnail(const std::string& id,const Identity& who);
     json albums(const std::string& before,const Identity& who);
     json album(const std::string& id,const Identity& who,bool edit=false);
-    json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
+    json albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who,const std::string& sort="");
     json changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who);
     json folders(const std::string& before,const Identity& who,const std::string& parent="*");
     void rebuildFolderTree();
@@ -131,7 +143,7 @@ public:
     json folderPeople(const Identity& who);
     json folderPolicy(const std::string& id,const json* input,const Identity& who);
     json folder(const std::string& id,const Identity& who,bool write=false);
-    json folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who);
+    json folderItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who,const std::string& sort="");
     json changeFolder(const std::string& id,const std::string& action,const json& input,const Identity& who);
     json folderMoveOptions(const json& input,const Identity& who);
     std::string resolveFolder(const std::string& id,const Identity& who);
@@ -150,7 +162,13 @@ public:
     std::atomic<bool> stopping{false};
     std::atomic<unsigned> activeUploads{0};
 private:
-    std::thread worker_, videoWorker_, metadataWorker_;
+    std::thread worker_, videoWorker_, metadataWorker_, maintenanceWorker_, scheduleWorker_;
+    std::mutex maintenanceStateMutex_;
+    json healthState_, backupSchedule_;
+    std::atomic<unsigned> healthEpoch_{0};
+    void maintenanceWorker();
+    void scheduleWorker();
+    void checkHealthItem(const json& item,unsigned epoch,unsigned rate);
     std::mutex backupMutex_;
     void initializeTimeline();
     void updateCaptureTime(const json& row);

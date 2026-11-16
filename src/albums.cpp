@@ -28,21 +28,22 @@ json Store::albums(const std::string& before,const Identity& who){
     std::string next;if(ids.size()>48){ids.erase(ids.end()-1);next=ids.back()["id"];}
     json rows=json::array();for(auto& id:ids)rows.push_back(album(id["id"],who));return jump.finish({{"items",rows},{"next",next}});
 }
-json Store::albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who){
+json Store::albumItems(const std::string& id,const std::string& before,const std::string& type,const std::string& search,const Identity& who,const std::string& sort){
+    auto ordered=fileSort(sort,"s.",before);
     auto info=album(id,who);if(search.size()>256)throw Error(400,"SEARCH_TOO_LONG","搜索文字过长");
     if(!before.empty()&&!isPageJump(before)&&!albumId(before))throw Error(400,"INVALID_CURSOR","图集分页游标无效");
     Params params{id};std::string sql="SELECT s.id,s.sha256,s.size,s.name,s.mime,s.category,s.created,s.modified,s.preview FROM album_items i JOIN assets s ON s.id=i.asset_id WHERE i.album_id=? AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id)";
     sql+=" AND "+assetAccessSql("s",who);
     if(!before.empty()&&!isPageJump(before)){sql+=" AND i.asset_id<?";params.push_back(before);}
     if(type=="image"||type=="video"||type=="file"){sql+=" AND s.category=?";params.push_back(type);}
-    if(!search.empty()){sql+=" AND s.name LIKE ?";params.push_back("%"+search+"%");}
-    PageJump jump(before,db,sql,params,48);auto rows=db.query(sql+" ORDER BY i.asset_id DESC LIMIT 49"+jump.offset,params);std::string next;
-    if(rows.size()>48){rows.erase(rows.end()-1);next=rows.back()["id"];}
+    if(!search.empty()){sql+=" AND s.name LIKE ? ESCAPE '\\'";params.push_back(literalSearch(search));}
+    PageJump jump(!sort.empty()&&before.empty()?"@page:0":before,db,sql,params,48);auto rows=db.query(sql+" ORDER BY "+(ordered.empty()?"i.asset_id DESC":ordered)+" LIMIT 49"+jump.offset,params);std::string next;
+    if(rows.size()>48){rows.erase(rows.end()-1);next=sort.empty()?rows.back()["id"].get<std::string>():"@page:"+std::to_string(jump.index+1);}
     assetPermissions(rows,who);return jump.finish({{"album",info},{"items",rows},{"next",next}});
 }
 json Store::changeAlbum(const std::string& id,const std::string& action,const json& input,const Identity& who){
     writer(who);std::string resultId=id;
-    db.transaction([&]{
+    db.transaction([&]{auto operation=[&]{
         const auto now=std::to_string(millis());
         if(id.empty()){
             auto name=text(input,"name",160),description=text(input,"description",1000,true);
@@ -56,7 +57,7 @@ json Store::changeAlbum(const std::string& id,const std::string& action,const js
             if(name.find_first_not_of(" \t\r\n")==std::string::npos)throw Error(400,"INVALID_NAME","请填写图集名称");
             db.exec("UPDATE albums SET name=?,description=?,updated=? WHERE id=?",{name,description,now,id});
         }else if(action=="cover"){
-            auto assetId=text(input,"asset_id",48);requireAssetAccess(assetId,who);
+            auto assetId=text(input,"asset_id",48,true);if(assetId.empty()){db.exec("UPDATE albums SET cover_id='',updated=? WHERE id=?",{now,id});return;}requireAssetAccess(assetId,who);
             if(db.query("SELECT i.asset_id FROM album_items i JOIN assets s ON s.id=i.asset_id AND s.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=s.id) WHERE i.album_id=? AND i.asset_id=?",{id,assetId}).empty())throw Error(400,"NOT_ALBUM_MEMBER","请从图集内选择封面");
             db.exec("UPDATE albums SET cover_id=?,updated=? WHERE id=?",{assetId,now,id});
         }else if(action=="add"||action=="remove"){
@@ -69,7 +70,7 @@ json Store::changeAlbum(const std::string& id,const std::string& action,const js
             }
             db.exec("UPDATE albums SET updated=?,cover_id=CASE WHEN EXISTS(SELECT 1 FROM album_items WHERE album_id=? AND asset_id=cover_id) THEN cover_id ELSE '' END WHERE id=?",{now,id,id});
         }else throw Error(400,"INVALID_ACTION","不支持的图集操作");
-    });
+    };operation();audit(who,"album."+action,resultId,input.contains("asset_ids")?std::to_string(input["asset_ids"].size()):"");});
     return action=="delete"?json{{"ok",true}}:album(resultId,who);
 }
 }

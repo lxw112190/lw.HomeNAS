@@ -34,10 +34,24 @@ json Store::metadataBackup(const Identity& who){
     db.backupTo(folder/"catalog.db");writeText(folder/"config/server.json",portableConfig(config.file).dump(2));json manifest={{"schema",1},{"kind","metadata"},{"id",id},{"created",std::to_string(millis())},{"version",Version},{"server_id",serverId},{"contains_originals",false},{"restores_active_uploads",false},{"files",json::object()}};
     {Database copy(folder/"catalog.db");integrity(copy);manifest["counts"]=counts(copy);}
     for(const auto* name:{"catalog.db","config/server.json"}){auto path=folder/fs::u8path(name);manifest["files"][name]={{"size",std::to_string(fs::file_size(path))},{"sha256",hashFile(path)}};}
-    writeText(folder/"backup.json",manifest.dump(2));return manifest;
+    manifest["automatic"]=who.userId=="system";writeText(folder/"backup.json",manifest.dump(2));audit(who,"backup.created",id);return manifest;
 }
 fs::path Store::metadataBackupPath(const std::string& id,const Identity& who){requireAdmin(who);if(!idValid(id))throw Error(400,"INVALID_BACKUP","备份编号无效");auto folder=config.data/"backups"/id;if(!fs::is_regular_file(folder/"backup.json"))throw Error(404,"BACKUP_NOT_FOUND","备份不存在或未完成");validateSnapshot(folder);return folder;}
 json Store::metadataBackups(const Identity& who){requireAdmin(who);json items=json::array();auto root=config.data/"backups";if(fs::is_directory(root))for(const auto& entry:fs::directory_iterator(root)){if(!idValid(entry.path().filename().u8string())||reparse(entry.path()))continue;try{auto value=json::parse(readText(entry.path()/"backup.json"));if(value.value("id","")==entry.path().filename().u8string()&&value.value("kind","")=="metadata"&&value.contains("created"))items.push_back(value);}catch(...){}}std::sort(items.begin(),items.end(),[](const json& a,const json& b){return a["created"]>b["created"];});if(items.size()>100)items.erase(items.begin()+100,items.end());return {{"items",items}};}
+void Store::pruneScheduledBackups(unsigned keep){
+    std::lock_guard<std::mutex> lock(backupMutex_);auto root=config.data/"backups";if(!fs::is_directory(root)||reparse(root))return;
+    std::vector<json> items;for(const auto& entry:fs::directory_iterator(root)){
+        auto id=entry.path().filename().u8string();if(!idValid(id)||reparse(entry.path()))continue;
+        try{auto manifest=json::parse(readText(entry.path()/"backup.json"));if(manifest.value("automatic",false)&&manifest.value("id","")==id&&manifest.value("kind","")=="metadata")items.push_back(manifest);}catch(...){}
+    }
+    std::sort(items.begin(),items.end(),[](const json& a,const json& b){return number(a,"created")>number(b,"created");});
+    for(size_t i=keep;i<items.size();++i){
+        auto folder=root/items[i]["id"].get<std::string>();validateSnapshot(folder);
+        // Only known metadata files; never recursively remove a directory or follow links.
+        for(const auto* name:{"catalog.db","config/server.json","backup.json"}){auto path=safePath(folder,name);fs::remove(path);}
+        std::error_code ec;fs::remove(folder/"config",ec);fs::remove(folder,ec);
+    }
+}
 json verifyLibrary(const fs::path& supplied){
     auto target=fs::absolute(supplied).lexically_normal();if(reparse(target)||reparse(target/"data"))throw std::runtime_error("Linked migration directories are not supported");if(!fs::is_directory(target/"data"))throw std::runtime_error("Missing migrated data directory");Instance instance(target/"data");auto manifest=json::parse(readText(target/"migration.json"));if(manifest.value("schema",0)!=1||manifest.value("kind","")!="full-library")throw std::runtime_error("Invalid migration manifest");
     if(hashFile(target/"files.jsonl")!=manifest["inventory_sha256"])throw std::runtime_error("Migration inventory has changed");

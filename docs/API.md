@@ -155,3 +155,25 @@ policy为private/restricted/public/inherit，一级不接受inherit。restricted
 去重只复用同一目标目录中本人可读取的READY记录；跨目标相同内容建立独立记录及物理原件。在线快照与完整迁移含folder_acl和folder_tree，不支持用旧程序重开升级后的库。
 
 使用与验证边界见[多级目录说明](20261114-多级目录与权限继承.md)。
+
+
+## 1.5.0 补充
+
+- `GET assets`、`GET folders/{id}/items`、`GET albums/{id}/items` 支持 `sort=name_asc|name_desc|modified_desc|size_desc|size_asc`；省略保持原顺序。自定义排序使用 `before=@page:N` 或 `@last`，返回 `page_index` 与下一页游标。搜索 `q` 按字面子串匹配，`_`、`%` 无通配含义。
+- `POST uploads` 可传 `legacy_client_task_id`，仅复用当前用户、相同摘要/大小/目标且非 ERROR/CANCELLED 的旧任务。任务查询/创建响应增加 `trashed` 布尔字段；READY 且 trashed=true 不表示文件已恢复到活动资料库。
+- `POST albums/{id}/cover` 传 `asset_id:""` 恢复自动封面；仍校验图集管理权限。
+- `POST folders/{id}/relocation-impact` 传 `parent_id`（根为 `""`），返回子树目录数、最多200账号的 before/after readable/writable/manageable 目录数及 truncated。仅源/目标管理者可调用；预览不持久修改目录，执行仍需 confirm_access_change。
+- `GET overview` 的 trash 代表可管理回收站范围；retained_trash 为有目录访问权的保留原件，用于占用统计。
+
+以下维护接口均只允许管理员：
+
+| 接口 | 输入/输出 |
+| --- | --- |
+| `GET admin/library-maintenance` | health 当前轮状态、counts、schedule |
+| `POST admin/health/start` | 可选 rate_mib 1–256，默认32；固定本轮 READY/MISSING 清单 |
+| `POST admin/health/pause`、`resume`、`cancel` | 空JSON；无匹配状态返回409 |
+| `GET admin/health/results?before=...` | 异常结果每页100项，next 为 asset_id；仅最新一轮 |
+| `POST admin/backup-schedule` | enabled 布尔、interval_hours 1–720、keep 1–100（默认7） |
+| `GET admin/history?before=...` | 最新操作每页50条，next 为序号；最多保留10000条 |
+
+健康检查状态：IDLE/RUNNING/PAUSED/INTERRUPTED/CANCELLED/COMPLETED。检查只报告，不改原件；重启的 RUNNING 转 INTERRUPTED，需显式 resume。定时快照默认关闭；保留策略只处理 automatic=true 的数据库快照，不处理手动快照和原件。
