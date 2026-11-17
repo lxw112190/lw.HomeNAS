@@ -19,7 +19,7 @@ namespace nas {
 namespace fs = std::filesystem;
 using json = nlohmann::json;
 using Params = std::vector<std::string>;
-constexpr const char* Version = "1.5.0";
+constexpr const char* Version = "1.5.1";
 inline constexpr const char* TimelineClock = "(CASE WHEN taken>0 THEN taken WHEN modified>0 THEN modified ELSE created END)";
 inline std::string literalSearch(const std::string& value) {
     std::string result="%";for(char c:value){if(c=='%'||c=='_'||c=='\\')result+='\\';result+=c;}return result+'%';

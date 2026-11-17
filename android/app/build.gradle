@@ -8,8 +8,8 @@ android {
         applicationId 'com.lxw.homenas'
         minSdk 29
         targetSdk 35
-        versionCode 33
-        versionName '1.5.0'
+        versionCode 34
+        versionName '1.5.1'
         buildConfigField 'String', 'BUILD_REF', '"' + (System.getenv('GITHUB_SHA') ?: 'local').take(12).replaceAll('[^A-Za-z0-9_.-]', '') + '"'
         buildConfigField 'String', 'CI_RUN', '"' + (System.getenv('GITHUB_RUN_NUMBER') ?: 'local').replaceAll('[^A-Za-z0-9_.-]', '') + '"'
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'

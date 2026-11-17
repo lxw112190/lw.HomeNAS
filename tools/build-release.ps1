@@ -40,6 +40,15 @@ $notes=@"
 lw.HomeNAS automatic full package / CI $CiNumber
 
 Windows $($result.version), Android Release $($apk.versionName) / code $($apk.versionCode), commit $CiSha.
+
+v1.5.1 更新：
+- 新增 Web 精确重复文件查找，支持全库可见范围或目录递归，按 SHA256 与大小分组。
+- 手动选择保留项和多余副本，清理前复核权限、目录/图集关联和原件摘要；仅移入可恢复回收站，暂不释放空间。
+- 上传展示重复跳过统计、已有文件详情与目录入口，跨目录副本仍独立保存。
+- 统一 Web 全局下拉框样式，修复 Web/Android 共享控制器未同步导致的 CI 失败。
+Exact duplicates only: recompressed/cropped/watermarked images are not matched. Cleanup preserves references for restore and does not remove phone files.
+Inherited from v1.5.0: library health checks, scheduled metadata snapshots and operation history. Metadata snapshots do not contain photo/video originals; keep an independent backup.
+
 v1.4.1: Documentation and upgrade guidance refreshed; folder behavior is unchanged from v1.4.0.
 v1.4 features: Up to 16 folder levels; inherited ACLs with child restrictions, full paths, subtree moves and confirmed permission changes. Private files are filtered across timeline, calendar, previews, albums and exports. Revoked/deleted targets stop without shared-default fallback. Native protocol 15, persistent signing unchanged.
 v1.3 highlights: EXIF capture-time timeline with year/month/date navigation; consistent metadata snapshots and verified offline library migration; folders-first organization with statistics and batch moves; phone QR setup, recent servers and actionable connection checks. Chinese and English READMEs are included.
