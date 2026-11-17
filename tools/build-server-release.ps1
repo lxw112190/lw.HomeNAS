@@ -26,6 +26,8 @@ if($LASTEXITCODE -ne 0){throw 'APK backup picker DOM checks failed'}
 if($LASTEXITCODE -ne 0){throw 'Timeline and connection UI checks failed'}
 & node (Join-Path $root 'tests/folder-hierarchy-dom.cjs')
 if($LASTEXITCODE -ne 0){throw 'Folder hierarchy UI checks failed'}
+& node (Join-Path $root 'tests/duplicates-ui.cjs')
+if($LASTEXITCODE -ne 0){throw 'Exact duplicate cleanup UI checks failed'}
 & node (Join-Path $root 'tests/backup-summary-dom.cjs')
 if($LASTEXITCODE -ne 0){throw 'APK backup summary DOM checks failed'}
 & (Join-Path $PSScriptRoot 'build.ps1')
@@ -46,6 +48,7 @@ if($LASTEXITCODE -ne 0){throw 'Permanent deletion UI confirmation checks failed'
 Invoke-ReleasePython @('tests/rename.py')
 Invoke-ReleasePython @('tests/timeline.py','--exe',$exe)
 Invoke-ReleasePython @('tests/library_maintenance.py','--exe',$exe)
+Invoke-ReleasePython @('tests/duplicates.py','--exe',$exe)
 Invoke-ReleasePython @('tests/review_regressions.py','--exe',$exe)
 Invoke-ReleasePython @('tests/web_upload_tree_browser.py','--exe',$exe)
 Invoke-ReleasePython @('tests/web_folder_levels_browser.py','--exe',$exe)

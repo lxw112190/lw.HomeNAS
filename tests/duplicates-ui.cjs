@@ -1,0 +1,23 @@
+const fs=require('node:fs'),assert=require('node:assert/strict'),{JSDOM}=require('./dom/node_modules/jsdom');
+const dom=new JSDOM('<body></body>',{runScripts:'outside-only',url:'http://localhost'}),w=dom.window,d=w.document;
+w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+w.state={me:{user_id:'admin'},uploadRevision:1};w.bytes=String;w.date=String;w.toast=()=>{};w.refreshOverview=async()=>{};
+let confirm=true,posts=[],pending=null;
+w.collectionView={confirm:async()=>confirm};
+const item=(id)=>({id,name:'photo-'+id,created:'1',size:'5',can_rename:true,category:'file',references:{folders:[{name:'folder',full_path:'folder/path'}],stamp:'stamp-'+id,has_album_references:false,truncated:false}});
+w.api=async path=>{if(pending)return new Promise(resolve=>pending=resolve);if(path.startsWith('duplicates/members')){const second=path.includes('%40page%3A1');return {items:second?[item('c')]:[item('a'),item('b')],recommended_id:'a',page_index:second?1:0,next:second?'':'@page:1'};}return {items:[{sha256:'hash',size:'5',copies:'3'}],page_index:0,next:''};};
+w.post=async(path,payload)=>{posts.push({path,payload});return {count:1};};
+w.eval(fs.readFileSync('web/duplicates.js','utf8'));
+const tick=async()=>{for(let i=0;i<5;i++)await new Promise(r=>setTimeout(r,0));};
+const button=text=>[...d.querySelectorAll('button')].find(n=>n.textContent===text);
+(async()=>{
+ w.HomeNasDuplicates.open({id:'folder',name:'Folder'});await tick();button('查看并整理').click();await tick();
+ let radios=d.querySelectorAll('input[type=radio]'),checks=d.querySelectorAll('input[type=checkbox]');assert(radios[0].checked&&checks[0].disabled&&!checks[1].disabled);
+ radios[1].click();assert(checks[1].disabled&&!checks[0].disabled);radios[0].click();checks[1].click();
+ button('下一页').click();await tick();assert(d.querySelector('.duplicate-selection').textContent.includes('1 份'));assert(!button('上一页').disabled&&button('下一页').disabled);
+ button('上一页').click();await tick();assert(d.querySelectorAll('input[type=checkbox]')[1].checked);
+ confirm=false;button('确认清理所选副本').click();await tick();assert.equal(posts.length,0);
+ confirm=true;button('确认清理所选副本').click();await tick();assert.equal(posts.length,1);assert.equal(posts[0].payload.keep_id,'a');assert.equal(posts[0].payload.remove[0].id,'b');assert.equal(posts[0].payload.folder_id,'folder');
+ w.HomeNasDuplicates.reset();pending=true;w.HomeNasDuplicates.open(null);await tick();const resolve=pending;w.state.uploadRevision++;w.HomeNasDuplicates.reset();resolve({items:[{sha256:'secret'}]});await tick();assert.equal(d.querySelectorAll('dialog').length,0);
+ dom.window.close();console.log('Duplicate UI: keeper switching, cross-page selection, disabled paging, cancel, frozen payload and logout during pending response passed');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -1,5 +1,14 @@
 # API v1（0.5.0 备份文件夹）
 
+## 精确查重（Web）
+
+- `GET duplicates?folder_id=&type=image&before=@page:0`：按SHA256＋大小聚合独立资产，每页12组，返回items（sha256、size、copies、earliest）、page_index及next。folder_id留空查所有可见资产，指定目录则递归；type为image/video/file/all，默认image。回收站和非READY资产排除，权限过滤在分组之前完成。
+- `GET duplicates/members?sha256=...&size=...&folder_id=&type=image&before=@page:0`：同一范围内的组成员每页48份，按created、id升序，返回recommended_id、成员的can_rename和references。references包含最多16个完整目录、是否有图集关联、是否截断及不透明stamp；不返回隐藏图集名称或成员ID。
+- `POST duplicates/trash`：`{folder_id,type,keep_id,keep_stamp,remove:[{id,stamp}],confirm_references:true}`。仅可写账号，每次1–20份，禁止包含保留项或重复ID。重新检查范围、权限、关联与完整原件SHA256；全部通过才在单事务内移入回收站。失败整批不写；409表示资料或关联变化/原件异常。返回count、keep_id及space_released:false，不自动转移引用或永久删除。
+- `POST uploads`的响应新增already_present（当前目标已有相同内容，跳过传输）及other_copy_count（当前可见其他目录的活动副本数，仅新建任务返回）；回收站文件不会被标记为成功去重。
+
+查重结果是实时分页而非冻结快照。超16个目录或图集关联的资产不可通过本接口清理。哈希复核时按asset ID排序加锁，事务内再次检查保留项及所有副本状态，防止并发互相清理导致两份均被删除。现有客户端可忽略上传响应的新字段。
+
 同源网页使用 HttpOnly 会话 Cookie；原生客户端可使用 `Authorization: Bearer <会话令牌>`。统一采用用户名与密码登录，普通网页登录不在JSON中返回令牌；原生客户端在登录JSON中设置 `client:"native"` 才取得令牌。当前为共享家庭资料库，文件不按用户隔离，上传任务按账号归属。
 
 角色：`admin` 管理账号及全部任务；`member` 浏览、下载及上传/管理自己的任务；`viewer` 仅浏览下载。所有写接口均在服务端检查权限。

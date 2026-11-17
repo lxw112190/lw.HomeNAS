@@ -25,6 +25,7 @@ function createCollectionView(){
  const add=button(actions,'添加内容',()=>{target={...detail,kind:kind()};detail=null;mode.value='timeline';selecting=true;selected.clear();loadLibrary(false);update();if(mobile)syncChoices();});
  const erase=button(actions,'删除',async()=>{const k=kind();if(await confirmDialog('删除'+title(k)+'？',k==='folders'?'其中的文件归入默认文件夹，原件保留。':'只删除图集及其关联，原件保留。')){await change(k,'delete',{},detail.id);detail=null;selecting=false;selected.clear();await load();}});
  const sub=button(actions,'新建子文件夹',()=>editForm(null,'folders')),policy=button(actions,'目录权限',()=>policyForm()),relocate=button(actions,'移动目录',()=>relocateFolder());
+ const duplicates=mobile?null:button(actions,'重复文件',()=>globalThis.HomeNasDuplicates.open(mode.value==='folders'?detail:null));
  const moreTools=button(actions,'更多整理',()=>{extraTools=!extraTools;update();});
  const uploadHere=mobile?null:button(actions,'上传到当前文件夹',()=>openUploadToFolder(detail));
  const grantHere=mobile?null:button(actions,'授权',()=>policyForm());
@@ -79,7 +80,7 @@ function createCollectionView(){
  function policyLabel(item){return ({private:'仅所有者',restricted:'指定成员',public:item.parent_id?'父级范围内只读':'所有账号只读',inherit:'继承父目录',legacy:'兼容共享'})[item.policy]||'以服务器权限为准';}
  function active(){return ['folders','albums'].includes(mode.value);}
  function ensureSelected(){context();if(!selected.size)throw new Error('请先选择文件');if(selected.size>1000)throw new Error('每次最多选择1000项');}
- function update(){sub.hidden=!(mode.value==='folders'&&detail?.can_manage&&Number(detail.depth||1)<16);policy.hidden=relocate.hidden=!(mode.value==='folders'&&detail?.can_manage&&!detail.is_default);globalThis.HomeNasTimeline?.visibility?.(mode.value==='timeline');const k=kind(),on=active(),edit=!!detail?.can_edit,manage=k==='folders'?!!detail?.can_write:edit;for(const n of area.querySelectorAll('[data-item]'))if(selected.has(n.dataset.assetId))selected.set(n.dataset.assetId,JSON.parse(n.dataset.item));
+ function update(){if(duplicates)duplicates.hidden=mode.value==='trash'||!!target;sub.hidden=!(mode.value==='folders'&&detail?.can_manage&&Number(detail.depth||1)<16);policy.hidden=relocate.hidden=!(mode.value==='folders'&&detail?.can_manage&&!detail.is_default);globalThis.HomeNasTimeline?.visibility?.(mode.value==='timeline');const k=kind(),on=active(),edit=!!detail?.can_edit,manage=k==='folders'?!!detail?.can_write:edit;for(const n of area.querySelectorAll('[data-item]'))if(selected.has(n.dataset.assetId))selected.set(n.dataset.assetId,JSON.parse(n.dataset.item));
   if(uploadHere)uploadHere.hidden=!(mode.value==='folders'&&detail?.can_write&&writable());if(grantHere)grantHere.hidden=!(mode.value==='folders'&&detail?.can_manage&&!detail.is_default);if(!mobile)policy.hidden=true;
   if(promote){promote.hidden=demote.hidden=!(mode.value==='folders'&&detail?.can_manage&&!detail.is_default);promote.title=detail?.parent_id?'移到父目录的上一级，子目录一起移动':'当前已是一级文件夹';demote.title='移入一个有管理权限的同级文件夹，子目录一起移动';}
   for(const b of tabs.children){b.hidden=b.dataset.mode==='trash'&&!writable();b.classList.toggle('active',b.dataset.mode===mode.value);b.setAttribute('aria-pressed',String(b.dataset.mode===mode.value));}

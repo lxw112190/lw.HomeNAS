@@ -228,7 +228,7 @@ json Store::createUpload(const json& input,const Identity& who) {
                     row=taskRow(row["id"]);
                 }
             }
-            result=cleanTask(taskRow(row["id"]));return;
+            result=cleanTask(taskRow(row["id"]));result["already_present"]=row["state"]=="READY"&&!result["trashed"].get<bool>();return;
         }
         auto assets=db.query("SELECT * FROM assets WHERE sha256=? AND size=? AND state='READY' AND "+assetAccessSql("assets",who)+" AND EXISTS(SELECT 1 FROM folder_items i WHERE i.asset_id=assets.id AND i.folder_id=?)",{hash,std::to_string(size),requested});
         std::string assetId;
@@ -249,8 +249,14 @@ json Store::createUpload(const json& input,const Identity& who) {
             {id,client,who.userId,who.userId,name,hash,std::to_string(size),assetId.empty()?"0":std::to_string(size),assetId.empty()?"UPLOADING":"READY",assetId,source,album,std::to_string(modified),now,now,requested});
         if(!assetId.empty())db.exec("INSERT OR IGNORE INTO sources(device_id,source_key,asset_id,name,album,modified) VALUES(?,?,?,?,?,?)",{who.userId,source,assetId,name,album,std::to_string(modified)});
         if(!assetId.empty())attachFolder(requested,assetId);
-        result=cleanTask(taskRow(id));
-    });return result;
+        result=cleanTask(taskRow(id));result["already_present"]=!assetId.empty()&&!result["trashed"].get<bool>();
+        result["other_copy_count"]=db.query("SELECT count(*) AS n FROM assets a WHERE a.sha256=? AND a.size=? AND a.state='READY' AND NOT EXISTS(SELECT 1 FROM asset_trash t WHERE t.asset_id=a.id) AND "+assetAccessSql("a",who)+" AND NOT EXISTS(SELECT 1 FROM folder_items i WHERE i.asset_id=a.id AND i.folder_id=?)",{hash,std::to_string(size),requested})[0]["n"];
+    });
+    if(result.value("already_present",false)){
+        auto rows=db.query("SELECT a.name FROM assets a WHERE a.id=? AND "+assetAccessSql("a",who),{result["asset_id"]});
+        if(!rows.empty())result["existing_name"]=rows[0]["name"];
+    }
+    return result;
 }
 json Store::writeChunk(const std::string& id,const Identity& who,uint64_t offset,uint64_t size,const std::string& digest,
     const std::function<bool(const std::function<bool(const char*,size_t)>&)>& reader) {

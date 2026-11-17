@@ -12,7 +12,7 @@
     <ClCompile Include="src\windows.cpp" />
     <ClCompile Include="src\store.cpp" />
     <ClCompile Include="src\albums.cpp" />
-    <ClCompile Include="src\rename.cpp" /><ClCompile Include="src\recycle.cpp" />
+    <ClCompile Include="src\rename.cpp" /><ClCompile Include="src\recycle.cpp" /><ClCompile Include="src\duplicates.cpp" />
     <ClCompile Include="src\folders.cpp" />
     <ClCompile Include="src\thumbnail.cpp" />
     <ClCompile Include="src\server.cpp" />

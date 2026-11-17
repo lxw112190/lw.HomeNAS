@@ -161,6 +161,8 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
         exportArchive(store,response,input,store.authenticate(token(request)));
     });
     server.Get("/api/v1/trash/([a-f0-9]{48})/thumbnail",[&store](const auto& request,auto& response){auto path=store.recycledThumbnail(request.matches[1],store.authenticate(token(request)));serveFile(request,response,path,"image/jpeg","",false);});
+    for(const auto& path:{std::string("/api/v1/duplicates"),std::string("/api/v1/duplicates/members")})server.Get(path,[&store,path](const auto& request,auto& response){json input;for(const auto& key:{"folder_id","type","before","sha256","size"})input[key]=request.get_param_value(key);reply(response,store.duplicates(input,store.authenticate(token(request)),path.find("/members")!=std::string::npos));});
+    server.Post("/api/v1/duplicates/trash",[&store](const auto& request,auto& response){reply(response,store.cleanDuplicates(body(request),store.authenticate(token(request))));});
     server.Post("/api/v1/assets/trash",[&store](const auto& request,auto& response){reply(response,store.recycle(body(request),store.authenticate(token(request)),false));});
     server.Post("/api/v1/assets/restore",[&store](const auto& request,auto& response){reply(response,store.recycle(body(request),store.authenticate(token(request)),true));});
     server.Post("/api/v1/assets/([a-f0-9]{48})/purge",[&store](const auto& request,auto& response){reply(response,store.purgeAsset(request.matches[1],body(request),store.authenticate(token(request))));});
@@ -182,7 +184,7 @@ void routes(httplib::Server& server,Store& store,bool https,bool insecureLan,con
     server.Post("/api/v1/admin/backups",[&store](const auto& request,auto& response){body(request);reply(response,store.metadataBackup(store.authenticate(token(request))),201);});
     server.Get("/api/v1/admin/backups/([a-f0-9]{48})/download",[&store](const auto& request,auto& response){auto folder=store.metadataBackupPath(request.matches[1],store.authenticate(token(request)));exportFiles(response,{{folder/"catalog.db","catalog.db"},{folder/"config/server.json","config/server.json"},{folder/"backup.json","backup.json"}},"HomeNAS-metadata-backup.zip");});
     maintenanceRoutes(server,store);
-    for(const auto& name:{"index.html","boot.js","windows-icons.js","library-maintenance.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","timeline-tools.js","library-tools.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
+    for(const auto& name:{"index.html","boot.js","windows-icons.js","library-maintenance.js","duplicates.js","app.js","library-collections.js","photo-viewer.js","style.css","sha256.js","hash-worker.js","timeline-tools.js","library-tools.js","views/login.html","views/home.html","views/library.html","views/transfers.html","views/users.html","views/settings.html","views/dialogs.html"}){
         const std::string file=name;auto path=store.config.web/fs::u8path(file);auto route=file=="index.html"?"/":"/"+file;
         server.Get(route,[path,file](const auto&,auto& response){auto type=file.size()>=5&&file.substr(file.size()-5)==".html"?"text/html; charset=utf-8":file=="style.css"?"text/css; charset=utf-8":"text/javascript; charset=utf-8";response.set_content(readText(path,2*1024*1024),type);response.set_header("Cache-Control","no-cache");});
     }

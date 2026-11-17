@@ -114,6 +114,16 @@ Web folders use the Windows shell folder icon from the NAS host. Files without t
 
 A manually selected album cover takes priority. Otherwise, the first accessible, non-trashed photo in album display order is used. Empty albums and unavailable thumbnails show a placeholder.
 
+## Exact duplicate cleanup (Web)
+
+Open **Photos & Files → Duplicate files** to inspect all assets visible to the current account, or the current folder and its descendants. Photos are selected by default; videos, other files and all types are also available. Administrators can inspect the full library.
+
+- Groups use stored SHA256 and file size. Renaming does not affect detection; recompressed, cropped, watermarked or metadata-modified images are not exact duplicates. Multiple folder/album references to one asset count once. Trash and unfinished uploads are excluded.
+- Results contain 12 groups per page and 48 copies per group page. Inspect thumbnails, full folder paths, album-reference warnings and edit permissions. The oldest imported copy is recommended for retention. Select copies explicitly, across pages, with at most 20 removals per request.
+- Cleanup rechecks scope, permissions and reference stamps, then fully hashes the retained original and every selected copy. Missing/corrupted originals or stale references reject the entire request. Assets with more than 16 folder or album references require manual management.
+- Copies move to the recoverable recycle bin without transferring references or changing phone files. They disappear from all related folders/albums for other members too. This does not release disk space; permanent deletion remains a separate administrator action.
+- Web uploads report duplicate skips in the queue summary. Identical content already in the same accessible destination skips transmission. Cross-folder copies remain independent; visible copies elsewhere are reported when detected.
+
 ## Back up and move a library
 
 ### Database and classification snapshot

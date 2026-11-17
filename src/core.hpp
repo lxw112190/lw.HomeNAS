@@ -152,6 +152,10 @@ public:
     json asset(const std::string& id);
     void assetPermissions(json& rows,const Identity& who);
     json renameAsset(const std::string& id,const json& input,const Identity& who);
+    std::string duplicateWhere(const json& input,const Identity& who,Params& args);
+    json duplicateReferences(const std::string& id,const Identity& who);
+    json duplicates(const json& input,const Identity& who,bool members);
+    json cleanDuplicates(const json& input,const Identity& who);
     json recycle(const json& input,const Identity& who,bool restore);
     json recycled(const std::string& before,const std::string& type,const std::string& search,const Identity& who);
     json purgeAsset(const std::string& id,const json& input,const Identity& who);

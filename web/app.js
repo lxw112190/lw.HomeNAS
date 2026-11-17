@@ -7,7 +7,7 @@ function bytes(value){let n=Number(value||0);const units=['B','KB','MB','GB','TB
 function date(value){const n=Number(value);if(!Number.isFinite(n)||n<=0)return '未记录';const d=new Date(n);return Number.isNaN(d.getTime())?'未记录':d.toLocaleDateString('zh-CN');}
 function toast(message){$('toast').textContent=message;$('toast').classList.remove('hidden');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.add('hidden'),4500);}
 function error(message){$('global-error').textContent=message;$('global-error').classList.remove('hidden');}
-function showAuth(){globalThis.HomeNasMaintenance?.reset();globalThis.HomeNasTimeline?.reset();globalThis.HomeNasLibraryTools?.reset();cancelRename();collectionView.reset();state.uploadRevision++;resetUploadDestination();state.paused=true;state.files.forEach(t=>t.controller?.abort());state.files=[];state.nextCandidate=0;state.localPage=0;taskCursors=[''];taskIndex=0;taskNext='';renderLocal();$('server-tasks').replaceChildren();$('user-list').replaceChildren();state.editingUser=null;if($('preview').open)closePreview();if($('user-editor').open)$('user-editor').close();$('edit-password').value='';$('password').value='';$('create-user-form').reset();$('password-form').reset();state.me=null;$('recent').replaceChildren();$('library').replaceChildren();$('shell').classList.add('hidden');$('auth').classList.remove('hidden');}
+function showAuth(){globalThis.HomeNasDuplicates?.reset();globalThis.HomeNasMaintenance?.reset();globalThis.HomeNasTimeline?.reset();globalThis.HomeNasLibraryTools?.reset();cancelRename();collectionView.reset();state.uploadRevision++;resetUploadDestination();state.paused=true;state.files.forEach(t=>t.controller?.abort());state.files=[];state.nextCandidate=0;state.localPage=0;taskCursors=[''];taskIndex=0;taskNext='';renderLocal();$('server-tasks').replaceChildren();$('user-list').replaceChildren();state.editingUser=null;if($('preview').open)closePreview();if($('user-editor').open)$('user-editor').close();$('edit-password').value='';$('password').value='';$('create-user-form').reset();$('password-form').reset();state.me=null;$('recent').replaceChildren();$('library').replaceChildren();$('shell').classList.add('hidden');$('auth').classList.remove('hidden');}
 async function api(path,options={}){
   const {signal,timeout=20000,...rest}=options,controller=new AbortController();
   const abort=()=>controller.abort();if(signal?.aborted)throw new DOMException('Paused','AbortError');signal?.addEventListener('abort',abort,{once:true});
@@ -122,6 +122,10 @@ function taskElement(task,local){
   const row=node('div','task'),left=node('div'),right=node('div','task-state');left.append(node('strong','',local?task.file.name:task.name));
   if(local||task.folder_name)left.append(node('small','task-destination','保存到：'+(local?task.effectiveFolderName||task.folderName||'默认文件夹':task.folder_name)+(local?task.folderWarning?' · '+task.folderWarning:'':task.folder_defaulted?' · 原目标已删除，已转存默认文件夹':'')));
   left.append(node('small','',local?`${bytes(task.offset)} / ${bytes(task.file.size)}${task.message?' · '+task.message:''}`:`${bytes(task.offset)} / ${bytes(task.size)} · ${date(task.updated)}${task.error?' · '+task.error:''}`));
+  if(local&&task.duplicate&&task.state==='READY'){
+    const detail=node('details','duplicate-upload-info'),summary=node('summary','','查看重复文件');detail.append(summary,node('small','',task.file.name+' → '+(task.existingName||'已有文件')+' · '+(task.effectiveFolderName||task.folderName||'默认文件夹')));
+    const open=node('button','link','打开已有文件所在目录');open.type='button';open.onclick=()=>collectionView.openFolder(task.folderId);detail.append(open);left.append(detail);
+  }
   const progress=document.createElement('progress');progress.max=100;progress.value=local?task.percent:Math.min(100,100*Number(task.offset)/Math.max(1,Number(task.size)));left.append(progress);
   right.textContent=labels[task.state]||task.state;
   if(!local&&task.state==='UPLOADING'&&state.me?.can_upload){
@@ -135,8 +139,8 @@ function renderLocal(){clearTimeout(state.renderTimer);state.renderTimer=setTime
 function drawLocal(){
  const area=$('local-tasks'),filter=$('local-filter').value,items=state.files.filter(t=>filter==='all'||(filter==='ready'?t.state==='READY':filter==='failed'?['ERROR','CANCELLED','TRASHED'].includes(t.state):!['READY','ERROR','CANCELLED','TRASHED'].includes(t.state)));
  state.localPage=Math.min(state.localPage||0,Math.max(0,Math.ceil(items.length/50)-1));area.replaceChildren();for(const t of items.slice(state.localPage*50,state.localPage*50+50))area.append(taskElement(t,true));if(!items.length)empty(area,'当前筛选下没有文件。');
- const ready=state.files.filter(t=>t.state==='READY').length,failed=state.files.filter(t=>t.state==='ERROR').length;
- $('queue-summary').textContent=`共 ${state.files.length} 项 · 已完成 ${ready} · 失败 ${failed} · 当前筛选 ${items.length} 项`;
+ const ready=state.files.filter(t=>t.state==='READY').length,duplicates=state.files.filter(t=>t.state==='READY'&&t.duplicate).length,failed=state.files.filter(t=>t.state==='ERROR').length;
+ $('queue-summary').textContent=`共 ${state.files.length} 项 · 已完成 ${ready}（重复跳过 ${duplicates}） · 失败 ${failed} · 当前筛选 ${items.length} 项`;
  $('local-page').textContent=`第 ${state.localPage+1} / ${Math.max(1,Math.ceil(items.length/50))} 页`;$('local-prev').disabled=!state.localPage;$('local-next').disabled=(state.localPage+1)*50>=items.length;if($('local-first'))$('local-first').disabled=$('local-prev').disabled;if($('local-last'))$('local-last').disabled=$('local-next').disabled;
 }
 let taskCursors=[''],taskIndex=0,taskNext='',taskBusy=false,taskGeneration=0,taskFilter='';
@@ -240,7 +244,7 @@ async function uploadFile(task){
     if(!task.taskId){task.taskId=source;if(task.retried)task.taskId+='-'+Date.now();}
     let remote=await post('uploads',{client_task_id:task.taskId,...(!task.retried?{legacy_client_task_id:legacy}:{}),name:task.file.name,size:String(task.file.size),sha256:task.digest,source_key:'web:'+new NasSha256().update(new TextEncoder().encode(task.key)).digestHex(),modified:String(task.file.lastModified),album:'',folder_id:task.folderId},{signal});
     checkUploadContext(task,signal);acceptUploadDestination(task,remote);
-    task.uploadId=remote.id;
+    task.uploadId=remote.id;task.duplicate=!!remote.already_present;task.otherCopies=remote.other_copy_count||'0';task.existingAssetId=remote.asset_id||'';task.existingName=remote.existing_name||'';
     if(['ERROR','CANCELLED'].includes(remote.state)){task.retried=true;throw new Error(`先前任务需要重建：${remote.error||'已取消'}。点击“继续上传”可重新建立任务。`);}
     let failures=0;
     while(remote.state==='UPLOADING'&&Number(remote.offset)<task.file.size){
@@ -264,7 +268,7 @@ async function uploadFile(task){
     }
     checkUploadContext(task,signal);acceptUploadDestination(task,remote);
     if(remote.trashed){task.state='TRASHED';task.message='文件已在回收站，请在回收站恢复后再查看';task.offset=task.file.size;task.percent=100;renderLocal();return;}
-    task.state='READY';task.offset=task.file.size;task.percent=100;task.message='SHA256 校验通过';renderLocal();
+    task.state='READY';task.offset=task.file.size;task.percent=100;task.message=task.duplicate?'内容相同，已跳过重复传输':Number(task.otherCopies)>0?'SHA256 校验通过；其他目录有相同内容，已保留当前目录副本':'SHA256 校验通过';renderLocal();
     scheduleTransferRefresh();
   }catch(e){task.state=task.cancelled?'CANCELLED':signal.aborted||state.paused||e.name==='AbortError'?'PAUSED':'ERROR';task.message=task.state==='PAUSED'?'可继续上传':task.cancelled?'服务器任务取消后可重新选择文件':e.message;renderLocal();}
   finally{task.hashWorker?.terminate();task.hashWorker=null;task.controller=null;}
